@@ -37,7 +37,7 @@ export async function load({ signal } = {}) {
     });
     if (!response.ok) throw new Error('HTTP status ' + response.status);
     const type = response.headers.get('content-type') || '';
-    if (!/^application\\/json(?:\\s*;|$)/i.test(type)) throw new Error('Expected JSON response');
+    if (type.split(';', 1)[0].trim().toLowerCase() !== 'application/json') throw new Error('Expected JSON response');
     const reader = response.body?.getReader();
     if (!reader) throw new Error('Streaming response required');
     const chunks = []; let length = 0;
@@ -64,7 +64,7 @@ export async function load({ signal } = {}) {
         if (!Object.prototype.hasOwnProperty.call(row, field.name)) throw new Error('Missing field');
         const v = row[field.name];
         if (field.kind === 'text' && (typeof v !== 'string' || Array.from(v).length > 1024 ||
-            Array.from(v).some(c => c.codePointAt(0) < 32 && c !== '\\n' && c !== '\\t')))
+            Array.from(v).some(c => c.codePointAt(0) < 32 && c.codePointAt(0) !== 9 && c.codePointAt(0) !== 10)))
           throw new Error('Invalid text field');
         if (field.kind === 'int32' && (!Number.isInteger(v) || v < -2147483648 || v > 2147483647))
           throw new Error('Invalid int32 field');
