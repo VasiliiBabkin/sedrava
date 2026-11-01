@@ -32,7 +32,7 @@ class ApiService:
         try:
             ip = ipaddress.ip_address(host)
         except ValueError:
-            if not re.fullmatch(r"[a-zA-Z0-9-]+(?:\\.[a-zA-Z0-9-]+)+", host):
+            if not re.fullmatch(r"[a-zA-Z0-9-]+(?:[.][a-zA-Z0-9-]+)+", host):
                 raise ValueError("API origin requires a valid public DNS hostname")
             if any(not part or part.startswith("-") or part.endswith("-") for part in host.split(".")):
                 raise ValueError("Invalid DNS label")
