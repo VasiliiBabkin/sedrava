@@ -30,7 +30,7 @@ Issues = "https://github.com/VasiliiBabkin/sedrava/issues"
 sedrava = "sedrava_cli:main"
 
 [tool.setuptools]
-py-modules = ["sedrava", "sedrava_version", "sedrava_android_identity", "sedrava_core", "sedrava_navigation", "sedrava_navigation_web", "sedrava_navigation_android", "sedrava_records", "sedrava_records_codegen", "sedrava_collections", "sedrava_cli", "android_codegen", "android_codegen_v03", "web_codegen"]
+py-modules = ["sedrava", "sedrava_version", "sedrava_android_identity", "sedrava_core", "sedrava_navigation", "sedrava_navigation_web", "sedrava_navigation_android", "sedrava_records", "sedrava_records_codegen", "sedrava_collections", "sedrava_cli", "android_codegen", "android_codegen_v03", "web_codegen", "sedrava_http", "sedrava_http_parser", "sedrava_http_codegen", "sedrava_http_page", "sedrava_http_embed", "sedrava_http_inline"]
 
 # Installed examples and references are available under sys.prefix/share/sedrava.
 [tool.setuptools.data-files]
