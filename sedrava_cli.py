@@ -44,8 +44,11 @@ def main(argv=None):
     build.add_argument("target", choices=("web", "android", "api-web", "api-page"))
     build.add_argument("source", type=Path)
     build.add_argument("--output", type=Path)
+    build.add_argument("--service", type=Path, help="Experimental read-only API0 service for Web output directory")
     build.add_argument("--application-id", help="Stable Android package identity (lowercase reverse-domain name)")
     args = parser.parse_args(argv)
+    if args.command == "build" and args.service is not None and args.target != "web":
+        parser.error("--service is only supported for build web")
     if args.command == "build" and args.application_id is not None and args.target != "android":
         parser.error("--application-id is only supported for build android")
     try:
@@ -116,8 +119,27 @@ def main(argv=None):
             from web_codegen import generate
             output = args.output or Path("build/web/index.html")
             result = generate(source)
+            if args.service is not None:
+                from sedrava_http_parser import parse_service
+                from sedrava_http_codegen import generate_fetch_module
+                from sedrava_http_embed import embed_api_panel
+                if args.service.stat().st_size > 32768:
+                    raise ValueError("API declaration exceeds source limit")
+                service_source = args.service.read_text(encoding="utf-8")
+                service, schema = parse_service(service_source)
+                if output.suffix.lower() != ".html":
+                    raise ValueError("Web output with --service must be an HTML file")
+                module_path = output.parent / "service.mjs"
+                if module_path.resolve() in (args.source.resolve(), args.service.resolve()):
+                    raise ValueError("Generated API module must differ from source files")
+                if output.resolve() == args.service.resolve():
+                    raise ValueError("Web output must differ from service declaration")
+                result = embed_api_panel(result, service.name)
+                module = generate_fetch_module(service, schema)
             if output.resolve() == args.source.resolve():
                 raise ValueError("Web output must differ from the source file")
+            if args.service is not None:
+                atomic_write_text(module_path, module)
             atomic_write_text(output, result)
             print(output)
         else:
