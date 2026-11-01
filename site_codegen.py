@@ -154,9 +154,21 @@ def generate_site(source,source_dir='.'):
 </head><body><a class="s-skip" href="#content">'''+('К содержимому' if page.lang.startswith('ru') else 'Skip to content')+'''</a><main id="content" class="s-page" tabindex="-1">'''+body+'''</main></body></html>
 '''
         files[page_file(page)]=content.encode('utf-8')
+    # Keep the established dark rendering, but do not overlay dark-only effects on light themes.
+    bg=site.theme['background'].lstrip('#')
+    rgb=tuple(int(bg[i:i+2],16)/255 for i in (0,2,4))
+    linear=tuple(v/12.92 if v<=0.04045 else ((v+0.055)/1.055)**2.4 for v in rgb)
+    light_theme=sum(a*b for a,b in zip(linear,(0.2126,0.7152,0.0722)))>0.179
+    page_css=CSS
+    if light_theme:
+        page_css=page_css.replace('html{color-scheme:dark;', 'html{color-scheme:light;')
+        page_css=page_css.replace('background:radial-gradient(ellipse at 12% 0%,#292039 0%,transparent 48rem),var(--background)', 'background:var(--background)')
+        page_css=page_css.replace('background:linear-gradient(125deg,#302541,var(--surface))', 'background:var(--surface)')
+    if light_theme:
+        files={name:data.replace(b'<meta name="color-scheme" content="dark">',b'<meta name="color-scheme" content="light">') for name,data in files.items()}
     theme=':root{'+''.join('--'+key+':'+value+';' for key,value in site.theme.items())+'}\n'
     files['favicon.svg']=('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><rect width="48" height="48" rx="12" fill="'+site.theme['background']+'"/><path d="M24 7L40 24L24 41L8 24Z" fill="'+site.theme['accent']+'"/><circle cx="24" cy="24" r="5" fill="'+site.theme['gold']+'"/></svg>\n').encode('utf-8')
-    files['site.css']=(theme+CSS+'\n'+'\n'.join(styles)+'\n').encode('utf-8')
+    files['site.css']=(theme+page_css+'\n'+'\n'.join(styles)+'\n').encode('utf-8')
     files.update(assets.files)
     return files,assets.paths
 
