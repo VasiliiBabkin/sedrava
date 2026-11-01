@@ -1,0 +1,11 @@
+# Experimental API0 standalone service declaration; not yet app/site syntax.
+service articles:
+    origin "https://jsonplaceholder.typicode.com"
+    path "/posts/1"
+    timeout 5000
+    max-bytes 16384
+    response one:
+        userId int32
+        id int32
+        title text
+        body text
