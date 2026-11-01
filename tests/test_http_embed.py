@@ -17,6 +17,12 @@ class HttpEmbedTests(unittest.TestCase):
         self.assertIn("&lt;script&gt;", page)
         self.assertNotIn("<h2><script>", page)
 
+    def test_invalid_display_fields_rejected(self):
+        for fields in ([], ["title", "title"], ["<script>"], ["a"] * 65, "title"):
+            with self.subTest(fields=fields):
+                with self.assertRaises(ValueError):
+                    embed_api_panel("<body></body>", "Articles", fields)
+
     def test_missing_body_rejected(self):
         with self.assertRaises(ValueError):
             embed_api_panel("<html></html>", "Articles", ["title"])
