@@ -23,11 +23,25 @@ One declarative source describes **state + actions + rules + screens + UI bindin
 7. Generated JS must be local, CSP-compatible and dependency-free for the first interactive slice. No inline event handlers, eval, remote scripts or runtime code generation.
 8. Accessibility is part of the contract: explicit labels, focus and keyboard operation, live validation messages, reduced motion, contrast and touch targets.
 
+## Extensibility: imports, services and platform bridges
+
+A language that cannot integrate with other code and services is constrained to its built-in feature set. Extensibility is a **product requirement**, not evidence that any connector is implemented today.
+
+- **M1: modules/imports.** Resolve local modules at compile time, deterministic dependency graph, explicit exports, cycle and duplicate-name diagnostics, reproducible builds. No arbitrary code execution during compilation.
+- **M2: typed HTTP connector.** Explicit origins, methods, request/response schemas, bounded payloads, timeout/cancellation, safe error values and tests with mocked endpoints. Network effects are asynchronous and must never be disguised as atomic local mutations.
+- **M3: platform bridges.** Explicit capability declarations for browser APIs and Android SDK integrations. Provide a safe generated adapter interface; unsupported targets must fail clearly, never silently drop behavior.
+- **M4: packages and ecosystem.** Versioned dependency manifest, lockfile and provenance/integrity verification, then a public component/connector catalog. Package execution permissions and supply-chain risks need a separate review.
+- **M5: server-side connectors.** Database drivers, authentication and private credentials only behind a trusted server boundary. Never bundle API secrets into client JavaScript.
+
+**Proposed first end-to-end connector acceptance:** a task manager can fetch a typed public JSON endpoint (e.g. sample data), display loading/error/success, retain accepted local data if offline, and recover on retry. The demo must use a controlled mock endpoint in CI. No external service is required to run unit tests.
+
+**Dependency:** ship the B1 state/event adapter before HTTP effects; specify module grammar alongside B0 so app structure is not locked to a single source file. Do not make arbitrary JavaScript injection the default escape hatch.
+
 ## Delivery slices and gates
 
 ### B0 — contract and executable task-manager fixture
 
-- Specify app UI syntax, binding types, action dispatch, validation, errors and persistence.
+- Specify app UI syntax, binding types, action dispatch, validation, errors and persistence. Specify import/export grammar and module resolution contract without claiming runtime support.
 - Add one task-manager fixture and golden diagnostics for unsupported constructs.
 - Acceptance: syntax and safety review, 0.10 regressions unchanged.
 
@@ -44,7 +58,7 @@ One declarative source describes **state + actions + rules + screens + UI bindin
 - Reusable UI components, layout templates, empty/loading/error states, accessible dialog and responsive navbar.
 - Acceptance: refresh/deep-link/back/forward and state restoration, no stale selected item.
 
-### B3 — client data and network
+### B3 — client data, modules and network
 
 - Explicit `storage` selection, versioned data migrations, safe import/export and quota/error behavior.
 - Explicit HTTP client with origin allowlist, typed response parsing, timeouts, cancellation, loading/error/retry.
