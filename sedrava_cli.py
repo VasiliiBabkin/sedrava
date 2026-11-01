@@ -41,7 +41,7 @@ def main(argv=None):
     test = commands.add_parser("test", help="Run embedded Sedrava tests")
     test.add_argument("source", type=Path)
     build = commands.add_parser("build", help="Generate an application")
-    build.add_argument("target", choices=("web", "android"))
+    build.add_argument("target", choices=("web", "android", "api-web"))
     build.add_argument("source", type=Path)
     build.add_argument("--output", type=Path)
     build.add_argument("--application-id", help="Stable Android package identity (lowercase reverse-domain name)")
@@ -54,7 +54,11 @@ def main(argv=None):
         with args.source.open(encoding="utf-8") as handle:
             source = handle.read(MAX_SOURCE_CHARS + 1)
         if args.command == "check":
-            parse(source)
+            if source.lstrip().startswith("service "):
+                from sedrava_http_parser import parse_service
+                parse_service(source)
+            else:
+                parse(source)
             print(f"OK: {args.source}")
         elif args.command == "run":
             program = parse(source)
@@ -82,6 +86,15 @@ def main(argv=None):
         elif args.command == "test":
             count = run(parse(source))
             print(f"PASS: {count} Sedrava tests")
+        elif args.command == "build" and args.target == "api-web":
+            from sedrava_http_parser import parse_service
+            from sedrava_http_codegen import generate_fetch_module
+            service, schema = parse_service(source)
+            output = args.output or Path("build/api-web/service.mjs")
+            if output.resolve() == args.source.resolve():
+                raise ValueError("API output must differ from the source file")
+            atomic_write_text(output, generate_fetch_module(service, schema))
+            print(output)
         elif args.target == "web":
             from web_codegen import generate
             output = args.output or Path("build/web/index.html")
