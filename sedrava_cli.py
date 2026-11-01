@@ -41,7 +41,7 @@ def main(argv=None):
     test = commands.add_parser("test", help="Run embedded Sedrava tests")
     test.add_argument("source", type=Path)
     build = commands.add_parser("build", help="Generate an application")
-    build.add_argument("target", choices=("web", "android", "api-web"))
+    build.add_argument("target", choices=("web", "android", "api-web", "api-page"))
     build.add_argument("source", type=Path)
     build.add_argument("--output", type=Path)
     build.add_argument("--application-id", help="Stable Android package identity (lowercase reverse-domain name)")
@@ -95,6 +95,23 @@ def main(argv=None):
                 raise ValueError("API output must differ from the source file")
             atomic_write_text(output, generate_fetch_module(service, schema))
             print(output)
+        elif args.command == "build" and args.target == "api-page":
+            from sedrava_http_parser import parse_service
+            from sedrava_http_codegen import generate_fetch_module
+            from sedrava_http_page import generate_api_page
+            service, schema = parse_service(source)
+            output = args.output or Path("build/api-page")
+            html_path = output / "index.html"
+            module_path = output / "service.mjs"
+            if output.exists() and not output.is_dir():
+                raise ValueError("API page output must be a directory")
+            if html_path.resolve() == args.source.resolve() or module_path.resolve() == args.source.resolve():
+                raise ValueError("API page output must differ from the source file")
+            module = generate_fetch_module(service, schema)
+            page = generate_api_page(service, schema)
+            atomic_write_text(module_path, module)
+            atomic_write_text(html_path, page)
+            print(html_path)
         elif args.target == "web":
             from web_codegen import generate
             output = args.output or Path("build/web/index.html")
