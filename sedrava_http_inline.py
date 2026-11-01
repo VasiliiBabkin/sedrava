@@ -20,6 +20,6 @@ def split_app_service(source: str):
     offset = headers[0]
     app = "".join(lines[:offset]).rstrip() + "\n"
     service = "".join(lines[offset:])
-    from sedrava_http_parser import parse_service
+    from sedrava_http_display import parse_display_service as parse_service
     parse_service(service)
     return app, service
