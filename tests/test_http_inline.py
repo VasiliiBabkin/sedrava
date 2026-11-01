@@ -38,6 +38,19 @@ class InlineApiTests(unittest.TestCase):
             self.assertIn("https://api.example.com/posts",
                           (output.parent / "service.mjs").read_text(encoding="utf-8"))
 
+    def test_one_file_declarative_card_projection(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            original = Path("examples/task_manager_navigation.sdr").read_text(encoding="utf-8")
+            source = folder / "cards.sdr"
+            source.write_text(original.rstrip() + "\n\n" + SERVICE +
+                              "    display cards:\n        title\n", encoding="utf-8")
+            output = folder / "site" / "index.html"
+            self.assertEqual(main(["check", str(source)]), 0)
+            self.assertEqual(main(["build", "web", str(source), "--output", str(output)]), 0)
+            html = output.read_text(encoding="utf-8")
+            self.assertIn('const visibleFields = ["title"];', html)
+
     def test_conflicting_inline_and_external_service_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             folder = Path(tmp)
