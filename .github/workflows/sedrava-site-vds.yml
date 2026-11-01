@@ -22,7 +22,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Build from actual Sedrava source
-        run: python -m sedrava_cli build site examples/web_ui_011_landing.sdr --output build/site
+        run: python -m sedrava_cli build site examples/sedrava_public_showcase.sdr --output build/site
       - name: Verify site
         run: |
           test -s build/site/index.html
@@ -40,7 +40,7 @@ jobs:
           SSH_HOST: ${{ secrets.SEDRAVA_DEPLOY_HOST }}
           SSH_USER: ${{ secrets.SEDRAVA_DEPLOY_USER }}
           SSH_KNOWN_HOSTS: ${{ secrets.SEDRAVA_DEPLOY_KNOWN_HOSTS }}
-          DEPLOY_PATH: ${{ vars.SEDRAVA_DEPLOY_PATH }}
+          DEPLOY_PATH: /var/www/virtreal_ru_usr27/data/www/virtreal.ru/dev
         run: |
           set -eu
           test -n "$SSH_KEY"
@@ -48,7 +48,7 @@ jobs:
           test -n "$SSH_USER"
           test -n "$SSH_KNOWN_HOSTS"
           test -n "$DEPLOY_PATH"
-          case "$DEPLOY_PATH" in /srv/www/*|/var/www/*) ;; *) echo 'Unsafe deployment path' >&2; exit 1;; esac
+          test "$DEPLOY_PATH" = '/var/www/virtreal_ru_usr27/data/www/virtreal.ru/dev'
           install -m 700 -d "$HOME/.ssh"
           printf '%s\n' "$SSH_KEY" > "$HOME/.ssh/id_ed25519"
           chmod 600 "$HOME/.ssh/id_ed25519"
@@ -65,4 +65,4 @@ jobs:
           set -eu
           PORT="${SSH_PORT:-22}"
           case "$PORT" in *[!0-9]*|'') exit 1;; esac
-          rsync -az --delete --no-owner --no-group -e "ssh -i $HOME/.ssh/id_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=yes -p $PORT" build/site/ "$SSH_USER@$SSH_HOST:$DEPLOY_PATH/"
+          rsync -az --no-owner --no-group -e "ssh -i $HOME/.ssh/id_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=yes -p $PORT" build/site/ "$SSH_USER@$SSH_HOST:$DEPLOY_PATH/"
