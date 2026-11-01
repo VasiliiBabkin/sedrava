@@ -1,0 +1,72 @@
+name: Sedrava site build and optional VDS deploy
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Deploy to configured VDS (false = build artifact only)'
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: sedrava-site-deploy
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - name: Build from actual Sedrava source
+        run: python -m sedrava_cli build site examples/sedrava_public_showcase.sdr --output build/site
+      - name: Verify site
+        run: |
+          test -s build/site/index.html
+          test -s build/site/site.css
+          test -s build/site/sedrava-site.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: sedrava-site-preview
+          path: build/site/
+          if-no-files-found: error
+      - name: Prepare SSH for explicit deployment
+        if: ${{ inputs.publish }}
+        env:
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+          DEPLOY_PATH: /var/www/virtreal_ru_usr27/data/www/virtreal.ru/dev
+        run: |
+          set -eu
+          test -n "$SSH_KEY"
+          test -n "$SSH_HOST"
+          test -n "$SSH_USER"
+          test -n "$SSH_KNOWN_HOSTS"
+          test -n "$DEPLOY_PATH"
+          test "$DEPLOY_PATH" = '/var/www/virtreal_ru_usr27/data/www/virtreal.ru/dev'
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$SSH_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+      - name: Publish via tar over SSH (matching sedrava-site)
+        if: ${{ inputs.publish }}
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          DEPLOY_PATH: /var/www/virtreal_ru_usr27/data/www/virtreal.ru/dev
+        run: |
+          set -euo pipefail
+          PORT="${SSH_PORT:-22}"
+          case "$PORT" in *[!0-9]*|'') exit 1;; esac
+          SSH_OPTS=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes -p "$PORT")
+          ssh "${SSH_OPTS[@]}" "$SSH_USER@$SSH_HOST" "test -d '$DEPLOY_PATH' && test -w '$DEPLOY_PATH' && command -v tar >/dev/null"
+          tar -C build/site -cf - . | ssh "${SSH_OPTS[@]}" "$SSH_USER@$SSH_HOST" "tar -C '$DEPLOY_PATH' -xf -"
+          ssh "${SSH_OPTS[@]}" "$SSH_USER@$SSH_HOST" "test -s '$DEPLOY_PATH/index.html' && test -s '$DEPLOY_PATH/site.css'"
+          echo "Preview uploaded and checked (unrelated files preserved)."

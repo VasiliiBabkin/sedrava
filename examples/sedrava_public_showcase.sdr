@@ -1,0 +1,91 @@
+# Sedrava public-facing showcase — built with Sedrava Web UI 0.11
+site "Sedrava — идеи становятся приложениями"
+theme:
+    background "#F5F0E8"
+    surface "#FFFFFF"
+    foreground "#231A35"
+    accent "#583C82"
+    gold "#D5AD60"
+    muted "#62596D"
+    border "#DED5E5"
+
+style tile:
+    padding 32
+    radius 24
+    shadow soft
+
+page home at "/":
+    title "Sedrava — от идеи к приложению"
+    description "Sedrava — экспериментальный язык для создания приложений и сайтов. Понятный подход к цифровым продуктам."
+    lang "ru"
+    container max 1200 padding 24 md-padding 40 id top:
+        column gap 64 md-gap 96:
+            row justify between gap 20:
+                row gap 12 align center:
+                    image "assets/sedrava-mark.svg" alt "Фирменный знак Sedrava" width 58
+                    paragraph "Sedrava" variant brand size 30
+                row gap 20:
+                    link "Идея" to "#idea" variant quiet
+                    link "Возможности" to "#features" variant quiet
+                    link "Развитие" to "#future" variant quiet
+            grid columns 2 gap 44 align center:
+                column gap 26:
+                    paragraph "НОВЫЙ ВЗГЛЯД НА СОЗДАНИЕ ПРОГРАММ" variant eyebrow
+                    heading "От идеи\nк приложению." variant display
+                    paragraph "Технологии становятся сложнее. Мы исследуем другой путь: описать, что должно делать приложение, и получить работающий результат." variant lead
+                    row gap 12:
+                        button "Узнать о проекте" to "#idea"
+                        button "Посмотреть разработку ↗" to "https://github.com/VasiliiBabkin/sedrava" variant secondary
+                    paragraph "Открытый исходный код · Экспериментальная разработка" variant muted size 13
+                card style tile variant highlight:
+                    column gap 24:
+                        image "assets/sedrava-mark.svg" alt "Знак Sedrava — аметистовые формы и золотая лента" width 240
+                        paragraph "SED RAVA / A NEW WAY TO BUILD" variant eyebrow
+                        heading "Сначала смысл.\nПотом технология." size 34
+                        paragraph "Простая идея: человеку не обязательно думать о каждой технической детали, чтобы создавать полезные цифровые вещи." variant lead
+            column gap 26 id idea:
+                paragraph "ЗАЧЕМ ЭТО НУЖНО" variant eyebrow
+                heading "Меньше барьеров между замыслом и результатом."
+                paragraph "Sedrava — язык программирования, в котором главное место занимают данные, действия и правила. Он разрабатывается для того, чтобы описание приложения было короче и понятнее." variant lead
+                grid columns 3 gap 20:
+                    card style tile:
+                        column gap 16:
+                            paragraph "01 / ПОНЯТНО" variant eyebrow
+                            heading "Суть важнее деталей." size 27
+                            paragraph "В центре — то, что приложение хранит, делает и должно соблюдать." variant muted
+                    card style tile:
+                        column gap 16:
+                            paragraph "02 / ГИБКО" variant eyebrow
+                            heading "От простого к сложному." size 27
+                            paragraph "Новые компоненты и возможности расширяют язык, сохраняя единый подход." variant muted
+                    card style tile:
+                        column gap 16:
+                            paragraph "03 / ОТКРЫТО" variant eyebrow
+                            heading "Разработка на виду." size 27
+                            paragraph "Исходный код, изменения и результаты проверок доступны в GitHub." variant muted
+            column gap 28 id features:
+                paragraph "ЧТО УЖЕ МОЖНО ПОПРОБОВАТЬ" variant eyebrow
+                heading "Не только концепция."
+                grid columns 2 gap 20:
+                    card style tile:
+                        column gap 14:
+                            heading "Приложения" size 30
+                            paragraph "Sedrava умеет описывать состояние, действия и правила, а затем генерировать Web-приложения и Android-проекты." variant muted
+                            link "Открыть репозиторий ↗" to "https://github.com/VasiliiBabkin/sedrava"
+                    card style tile:
+                        column gap 14:
+                            heading "Сайты" size 30
+                            paragraph "Экспериментальный Web UI 0.11 уже генерирует адаптивные статические страницы из файлов .sdr. Эта страница — пример." variant muted
+                            link "Посмотреть исходники ↗" to "https://github.com/VasiliiBabkin/sedrava/pull/22"
+            card style tile id future:
+                column gap 20:
+                    paragraph "КУДА ДВИЖЕМСЯ" variant eyebrow
+                    heading "Сегодня — сайты. Дальше — больше."
+                    paragraph "Ближайшая цель — расширить набор компонентов и сделать создание современных сайтов ещё удобнее. В перспективе — собственный редактор Sedrava. Это планы, а не обещание готовых функций." variant lead
+                    row gap 14:
+                        button "Следить за развитием ↗" to "https://github.com/VasiliiBabkin/sedrava"
+                        button "Техническая документация ↗" to "https://github.com/VasiliiBabkin/sedrava/tree/main/docs" variant secondary
+            divider
+            row justify between gap 16:
+                paragraph "Sedrava · Экспериментальный проект с открытым кодом" variant muted size 13
+                link "Наверх ↑" to "#top" variant quiet
