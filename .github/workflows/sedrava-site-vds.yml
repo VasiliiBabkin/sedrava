@@ -36,10 +36,10 @@ jobs:
       - name: Prepare SSH for explicit deployment
         if: ${{ inputs.publish }}
         env:
-          SSH_KEY: ${{ secrets.SEDRAVA_DEPLOY_SSH_KEY }}
-          SSH_HOST: ${{ secrets.SEDRAVA_DEPLOY_HOST }}
-          SSH_USER: ${{ secrets.SEDRAVA_DEPLOY_USER }}
-          SSH_KNOWN_HOSTS: ${{ secrets.SEDRAVA_DEPLOY_KNOWN_HOSTS }}
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
           DEPLOY_PATH: /var/www/virtreal_ru_usr27/data/www/virtreal.ru/dev
         run: |
           set -eu
@@ -54,15 +54,19 @@ jobs:
           chmod 600 "$HOME/.ssh/id_ed25519"
           printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/known_hosts"
-      - name: Publish via SSH and rsync
+      - name: Publish via tar over SSH (matching sedrava-site)
         if: ${{ inputs.publish }}
         env:
-          SSH_HOST: ${{ secrets.SEDRAVA_DEPLOY_HOST }}
-          SSH_USER: ${{ secrets.SEDRAVA_DEPLOY_USER }}
-          SSH_PORT: ${{ vars.SEDRAVA_DEPLOY_SSH_PORT }}
-          DEPLOY_PATH: ${{ vars.SEDRAVA_DEPLOY_PATH }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          DEPLOY_PATH: /var/www/virtreal_ru_usr27/data/www/virtreal.ru/dev
         run: |
-          set -eu
+          set -euo pipefail
           PORT="${SSH_PORT:-22}"
           case "$PORT" in *[!0-9]*|'') exit 1;; esac
-          rsync -az --no-owner --no-group -e "ssh -i $HOME/.ssh/id_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=yes -p $PORT" build/site/ "$SSH_USER@$SSH_HOST:$DEPLOY_PATH/"
+          SSH_OPTS=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes -p "$PORT")
+          ssh "${SSH_OPTS[@]}" "$SSH_USER@$SSH_HOST" "test -d '$DEPLOY_PATH' && test -w '$DEPLOY_PATH' && command -v tar >/dev/null"
+          tar -C build/site -cf - . | ssh "${SSH_OPTS[@]}" "$SSH_USER@$SSH_HOST" "tar -C '$DEPLOY_PATH' -xf -"
+          ssh "${SSH_OPTS[@]}" "$SSH_USER@$SSH_HOST" "test -s '$DEPLOY_PATH/index.html' && test -s '$DEPLOY_PATH/site.css'"
+          echo "Preview uploaded and checked (unrelated files preserved)."
