@@ -60,7 +60,7 @@ def main(argv=None):
         app_source, inline_service = split_app_service(source) if not source.lstrip().startswith("service ") else (source, None)
         if args.command == "check":
             if source.lstrip().startswith("service "):
-                from sedrava_http_parser import parse_service
+                from sedrava_http_display import parse_display_service as parse_service
                 parse_service(source)
             else:
                 parse(app_source)
@@ -94,7 +94,7 @@ def main(argv=None):
         elif args.command == "build" and args.target == "api-web":
             from sedrava_http_parser import parse_service
             from sedrava_http_codegen import generate_fetch_module
-            service, schema = parse_service(source)
+            service, schema, _ = parse_service(source)
             output = args.output or Path("build/api-web/service.mjs")
             if output.resolve() == args.source.resolve():
                 raise ValueError("API output must differ from the source file")
@@ -133,7 +133,7 @@ def main(argv=None):
                     service_source = args.service.read_text(encoding="utf-8")
                 else:
                     service_source = inline_service
-                service, schema = parse_service(service_source)
+                service, schema, selected = parse_service(service_source)
                 if output.suffix.lower() != ".html":
                     raise ValueError("Web output with --service must be an HTML file")
                 module_path = output.parent / "service.mjs"
@@ -141,7 +141,7 @@ def main(argv=None):
                     raise ValueError("Generated API module must differ from source files")
                 if args.service is not None and output.resolve() == args.service.resolve():
                     raise ValueError("Web output must differ from service declaration")
-                result = embed_api_panel(result, service.name, [field.name for field in schema.fields])
+                result = embed_api_panel(result, service.name, selected)
                 module = generate_fetch_module(service, schema)
             if output.resolve() == args.source.resolve():
                 raise ValueError("Web output must differ from the source file")
