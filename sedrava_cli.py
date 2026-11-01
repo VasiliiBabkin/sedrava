@@ -56,15 +56,17 @@ def main(argv=None):
             raise ValueError("Source exceeds size limit")
         with args.source.open(encoding="utf-8") as handle:
             source = handle.read(MAX_SOURCE_CHARS + 1)
+        from sedrava_http_inline import split_app_service
+        app_source, inline_service = split_app_service(source) if not source.lstrip().startswith("service ") else (source, None)
         if args.command == "check":
             if source.lstrip().startswith("service "):
                 from sedrava_http_parser import parse_service
                 parse_service(source)
             else:
-                parse(source)
+                parse(app_source)
             print(f"OK: {args.source}")
         elif args.command == "run":
-            program = parse(source)
+            program = parse(app_source)
             state = program.states.copy()
             if args.state_file and args.state_file.exists():
                 if args.state_file.stat().st_size > 800000: raise ValueError('Snapshot too large')
@@ -87,7 +89,7 @@ def main(argv=None):
             if program.has_navigation: result={"state":result,"stack":list(session.stack)}
             print(json.dumps(result,ensure_ascii=False,sort_keys=True))
         elif args.command == "test":
-            count = run(parse(source))
+            count = run(parse(app_source))
             print(f"PASS: {count} Sedrava tests")
         elif args.command == "build" and args.target == "api-web":
             from sedrava_http_parser import parse_service
@@ -118,27 +120,32 @@ def main(argv=None):
         elif args.target == "web":
             from web_codegen import generate
             output = args.output or Path("build/web/index.html")
-            result = generate(source)
-            if args.service is not None:
+            if inline_service is not None and args.service is not None:
+                raise ValueError("Use either an inline service or --service, not both")
+            result = generate(app_source)
+            if args.service is not None or inline_service is not None:
                 from sedrava_http_parser import parse_service
                 from sedrava_http_codegen import generate_fetch_module
                 from sedrava_http_embed import embed_api_panel
-                if args.service.stat().st_size > 32768:
-                    raise ValueError("API declaration exceeds source limit")
-                service_source = args.service.read_text(encoding="utf-8")
+                if args.service is not None:
+                    if args.service.stat().st_size > 32768:
+                        raise ValueError("API declaration exceeds source limit")
+                    service_source = args.service.read_text(encoding="utf-8")
+                else:
+                    service_source = inline_service
                 service, schema = parse_service(service_source)
                 if output.suffix.lower() != ".html":
                     raise ValueError("Web output with --service must be an HTML file")
                 module_path = output.parent / "service.mjs"
-                if module_path.resolve() in (args.source.resolve(), args.service.resolve()):
+                if module_path.resolve() in ({args.source.resolve()} | ({args.service.resolve()} if args.service is not None else set())):
                     raise ValueError("Generated API module must differ from source files")
-                if output.resolve() == args.service.resolve():
+                if args.service is not None and output.resolve() == args.service.resolve():
                     raise ValueError("Web output must differ from service declaration")
                 result = embed_api_panel(result, service.name)
                 module = generate_fetch_module(service, schema)
             if output.resolve() == args.source.resolve():
                 raise ValueError("Web output must differ from the source file")
-            if args.service is not None:
+            if args.service is not None or inline_service is not None:
                 atomic_write_text(module_path, module)
             atomic_write_text(output, result)
             print(output)
