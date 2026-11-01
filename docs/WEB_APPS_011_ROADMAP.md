@@ -37,6 +37,23 @@ A language that cannot integrate with other code and services is constrained to 
 
 **Dependency:** ship the B1 state/event adapter before HTTP effects; specify module grammar alongside B0 so app structure is not locked to a single source file. Do not make arbitrary JavaScript injection the default escape hatch.
 
+## API-first implementation priority (decision 2026-11-01)
+
+The first interoperability need is **external services and HTTP APIs**, not arbitrary third-party JavaScript execution. Prioritize a minimal typed HTTP client immediately after the B1 state/event foundation, before expanding the decorative component catalog.
+
+**API0 contract (specification and tests):**
+- Explicit `service` declaration with HTTPS origin allowlist and fixed request paths.
+- Start with GET + JSON, named response record schema, bounded depth/body/collection size, strict validation, typed failures.
+- Asynchronous request state: idle/loading/success/error, cancellation, timeout, retry; network results are only committed via validated existing actions.
+- Browser fetch follows CORS; never claim the compiler can bypass a third-party service's CORS policy.
+- No API keys or tokens embedded in generated public JavaScript; private credentials require a server-side proxy/adapter in a later milestone.
+- Mocked local endpoint in Chromium tests, plus negative tests for invalid JSON, bad status, oversized body, timeouts, rejected origin and offline mode.
+- Clear diagnostic for unsupported endpoints or server-only capabilities. Keep existing 0.10 programs unchanged.
+
+**API1 acceptance:** one Sedrava task-manager view loads public example records from a test API, renders a loading indicator, success and recoverable error, and preserves local tasks across a failed request. No dependency on third-party availability in CI.
+
+**Non-goals for the first HTTP slice:** arbitrary JavaScript, OAuth, database credentials, unrestricted URLs, WebSockets, server-rendered secrets or production authentication.
+
 ## Delivery slices and gates
 
 ### B0 — contract and executable task-manager fixture
@@ -52,13 +69,13 @@ A language that cannot integrate with other code and services is constrained to 
 - Generate local JS adapter, event delegation, safe DOM updates and persistent state.
 - Acceptance: create/edit/complete/delete tasks, invalid input rollback, reload persistence, keyboard-only flows, XSS regression tests, 360/768/1440 viewport checks.
 
-### B2 — app navigation and composition
+### B2 — minimal typed HTTP API integration (API0/API1)\n\n- Implement the API-first contract above after B1, with deterministic mocked network tests.\n- Acceptance: public JSON endpoint, loading/success/error/retry, CORS-aware diagnostics, and preservation of committed local state.\n\n### B2b — app navigation and composition
 
 - Reuse guarded multi-screen navigation with browser history/back.
 - Reusable UI components, layout templates, empty/loading/error states, accessible dialog and responsive navbar.
 - Acceptance: refresh/deep-link/back/forward and state restoration, no stale selected item.
 
-### B3 — client data, modules and network
+### B3 — richer client data, modules and network
 
 - Explicit `storage` selection, versioned data migrations, safe import/export and quota/error behavior.
 - Explicit HTTP client with origin allowlist, typed response parsing, timeouts, cancellation, loading/error/retry.
