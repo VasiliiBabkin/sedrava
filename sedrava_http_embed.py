@@ -3,13 +3,19 @@
 The panel remains isolated from local persistent state and actions.
 """
 import html
+import json
+import re
 
 
 def embed_api_panel(document: str, name: str, fields=None) -> str:
     if type(document) is not str or "</body>" not in document:
         raise ValueError("Generated Web document must contain a closing body tag")
     heading = html.escape(name)
-    import json
+    if fields is not None:
+        if (type(fields) is not list or not fields or len(fields) > 64
+                or any(type(field) is not str or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,63}", field) for field in fields)
+                or len(fields) != len(set(fields))):
+            raise ValueError("Invalid HTTP display field selection")
     visible = json.dumps(fields, ensure_ascii=True) if fields is not None else "null"
     panel = """
 <section id="sedrava-api-panel" aria-label="External data">
@@ -20,7 +26,6 @@ def embed_api_panel(document: str, name: str, fields=None) -> str:
 </section>
 <script type="module">
 import {load} from './service.mjs';
-const panel = document.getElementById('sedrava-api-panel');
 const visibleFields = """ + visible + """;
 const status = document.getElementById('sedrava-api-status');
 const results = document.getElementById('sedrava-api-results');
