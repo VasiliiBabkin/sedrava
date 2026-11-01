@@ -9,14 +9,14 @@ The workflow `.github/workflows/sedrava-site-vds.yml` compiles `examples/sedrava
 
 Add these **repository secrets** (Settings → Secrets and variables → Actions):
 
-- `SEDRAVA_DEPLOY_HOST`: SSH server hostname or IP (not the web URL unless it resolves to the SSH server).
-- `SEDRAVA_DEPLOY_USER`: SSH account with write access to the target directory.
-- `SEDRAVA_DEPLOY_SSH_KEY`: private Ed25519 key dedicated to this deployment. Never commit it.
-- `SEDRAVA_DEPLOY_KNOWN_HOSTS`: independently verified SSH host-key line (e.g. obtained from the VDS control panel or checked against a trusted server-side fingerprint).
+- `SSH_HOST`: SSH server hostname or IP (not the web URL unless it resolves to the SSH server).
+- `SSH_USER`: SSH account with write access to the target directory.
+- `SSH_PRIVATE_KEY`: private Ed25519 key dedicated to this deployment. Never commit it.
+- `SSH_KNOWN_HOSTS`: independently verified SSH host-key line (e.g. obtained from the VDS control panel or checked against a trusted server-side fingerprint).
 
-Optional **repository variable**: `SEDRAVA_DEPLOY_SSH_PORT` (default 22).
+Optional **repository variable**: `SSH_PORT` (default 22).
 
-On the VDS, configure the website root to the exact directory above. The SSH user must be able to write there. The workflow intentionally omits `rsync --delete`, so unrelated files are not deleted; however, files with matching names may still be overwritten. Use a dedicated preview directory and check it before first deployment.
+On the VDS, configure the website root to the exact directory above. The SSH user must be able to write there. The existing sedrava-site repository uses the same secret names, but GitHub repository secrets are scoped to their repository: configure them separately in sedrava or use authorized organization secrets. Do not copy private key material into commits or chat. The workflow uses the same tar-over-SSH transfer as sedrava-site and does not delete unrelated files; files with matching names may still be overwritten. Use a dedicated preview directory and check it before first deployment.
 
 ## First run
 
