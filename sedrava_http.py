@@ -104,7 +104,7 @@ class JsonResponse:
             for field in self.fields:
                 value = item[field.name]
                 if field.kind == "text":
-                    if type(value) is not str or len(value) > 1024 or any(ord(c) < 32 and c not in "\n\t" for c in value):
+                    if type(value) is not str or len(value) > 1024 or any(ord(c) < 32 and ord(c) not in (9, 10) for c in value):
                         raise ValueError("Invalid JSON text field: " + field.name)
                 elif field.kind == "int32":
                     if type(value) is not int or not -(2**31) <= value < 2**31:
