@@ -53,3 +53,64 @@ class ApiService:
     @property
     def url(self):
         return self.origin.rstrip("/") + self.path
+
+# A bounded, explicit JSON response schema for the first read-only connector.
+# Fields are declared rather than inferred from untrusted response values.
+@dataclass(frozen=True)
+class JsonField:
+    name: str
+    kind: str
+
+    def __post_init__(self):
+        if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,63}", self.name):
+            raise ValueError("Invalid JSON field name")
+        if self.kind not in ("text", "int32", "bool"):
+            raise ValueError("Unsupported JSON field type")
+
+
+@dataclass(frozen=True)
+class JsonResponse:
+    fields: tuple
+    many: bool = False
+    max_items: int = 100
+
+    def __post_init__(self):
+        if type(self.fields) is not tuple or not self.fields or len(self.fields) > 32:
+            raise ValueError("JSON schema requires 1..32 fields")
+        if any(type(f) is not JsonField for f in self.fields):
+            raise ValueError("Expected JsonField declarations")
+        if len({f.name for f in self.fields}) != len(self.fields):
+            raise ValueError("Duplicate JSON field")
+        if type(self.many) is not bool or type(self.max_items) is not int or not 1 <= self.max_items <= 1000:
+            raise ValueError("Invalid JSON collection limits")
+
+    def validate(self, data):
+        import json
+        # Reject unbounded nesting and payloads before accepting any state.
+        try:
+            raw = json.dumps(data, ensure_ascii=False, allow_nan=False)
+        except (TypeError, ValueError, OverflowError, RecursionError) as exc:
+            raise ValueError("Invalid JSON response") from exc
+        if len(raw.encode("utf-8")) > 1048576:
+            raise ValueError("JSON response exceeds size limit")
+        items = data if self.many else [data]
+        if type(items) is not list or len(items) > self.max_items:
+            raise ValueError("JSON response has unexpected collection shape or size")
+        output = []
+        for item in items:
+            if type(item) is not dict or set(item) != {f.name for f in self.fields}:
+                raise ValueError("JSON record fields do not match schema")
+            checked = {}
+            for field in self.fields:
+                value = item[field.name]
+                if field.kind == "text":
+                    if type(value) is not str or len(value) > 1024 or any(ord(c) < 32 and c not in "\\n\\t" for c in value):
+                        raise ValueError("Invalid JSON text field: " + field.name)
+                elif field.kind == "int32":
+                    if type(value) is not int or not -(2**31) <= value < 2**31:
+                        raise ValueError("Invalid JSON int32 field: " + field.name)
+                elif type(value) is not bool:
+                    raise ValueError("Invalid JSON bool field: " + field.name)
+                checked[field.name] = value
+            output.append(checked)
+        return output if self.many else output[0]
