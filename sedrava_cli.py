@@ -92,7 +92,7 @@ def main(argv=None):
             count = run(parse(app_source))
             print(f"PASS: {count} Sedrava tests")
         elif args.command == "build" and args.target == "api-web":
-            from sedrava_http_parser import parse_service
+            from sedrava_http_display import parse_display_service as parse_service
             from sedrava_http_codegen import generate_fetch_module
             service, schema, _ = parse_service(source)
             output = args.output or Path("build/api-web/service.mjs")
@@ -101,10 +101,10 @@ def main(argv=None):
             atomic_write_text(output, generate_fetch_module(service, schema))
             print(output)
         elif args.command == "build" and args.target == "api-page":
-            from sedrava_http_parser import parse_service
+            from sedrava_http_display import parse_display_service as parse_service
             from sedrava_http_codegen import generate_fetch_module
             from sedrava_http_page import generate_api_page
-            service, schema = parse_service(source)
+            service, schema, _ = parse_service(source)
             output = args.output or Path("build/api-page")
             html_path = output / "index.html"
             module_path = output / "service.mjs"
@@ -124,7 +124,7 @@ def main(argv=None):
                 raise ValueError("Use either an inline service or --service, not both")
             result = generate(app_source)
             if args.service is not None or inline_service is not None:
-                from sedrava_http_parser import parse_service
+                from sedrava_http_display import parse_display_service as parse_service
                 from sedrava_http_codegen import generate_fetch_module
                 from sedrava_http_embed import embed_api_panel
                 if args.service is not None:
