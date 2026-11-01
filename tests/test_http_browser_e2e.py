@@ -62,22 +62,22 @@ class HttpBrowserE2E(unittest.TestCase):
                                       body=__import__("json").dumps(state["payload"]))
                     page.route("https://api.example.com/posts", route_api)
                     page.goto(url, wait_until="load")
-                    page.get_by_role("status").get_by_text("Loaded 1 record(s)").wait_for()
+                    page.wait_for_function("document.querySelector('#status').textContent === 'Loaded 1 record(s)'")
                     self.assertEqual(page.locator("article").count(), 1)
                     self.assertIn("<img src=x", page.locator("article").inner_text())
                     self.assertEqual(page.locator("article img").count(), 0)
                     state["code"] = 500
                     page.get_by_role("button", name="Reload data").click()
-                    page.get_by_role("status").get_by_text("Unable to load data", exact=False).wait_for()
+                    page.wait_for_function("document.querySelector('#status').textContent.startsWith('Unable to load data')")
                     self.assertEqual(page.locator("article").count(), 0)
                     state["code"] = 200
                     state["payload"] = [{"id": 2, "title": "Recovered"}]
                     page.get_by_role("button", name="Reload data").click()
-                    page.get_by_role("status").get_by_text("Loaded 1 record(s)").wait_for()
+                    page.wait_for_function("document.querySelector('#status').textContent === 'Loaded 1 record(s)'")
                     self.assertIn("Recovered", page.locator("article").inner_text())
                     state["payload"] = [{"id": True, "title": "Invalid"}]
                     page.get_by_role("button", name="Reload data").click()
-                    page.get_by_role("status").get_by_text("Unable to load data", exact=False).wait_for()
+                    page.wait_for_function("document.querySelector('#status').textContent.startsWith('Unable to load data')")
                     self.assertEqual(page.locator("article").count(), 0)
                 finally:
                     browser.close()
