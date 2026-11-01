@@ -1,6 +1,6 @@
 """Initial contract tests for external HTTP API declarations."""
 import unittest
-from sedrava_http import ApiService
+from sedrava_http import ApiService, JsonField, JsonResponse
 
 
 class ApiContractTests(unittest.TestCase):
@@ -8,6 +8,29 @@ class ApiContractTests(unittest.TestCase):
         service = ApiService("articles", "https://api.example.com", "/v1/articles")
         self.assertEqual(service.url, "https://api.example.com/v1/articles")
         self.assertEqual(service.timeout_ms, 10000)
+
+    def test_typed_json_response(self):
+        schema = JsonResponse((JsonField("title", "text"), JsonField("count", "int32"), JsonField("done", "bool")), many=True)
+        expected = [{"title": "Example", "count": 3, "done": False}]
+        self.assertEqual(schema.validate(expected), expected)
+        for invalid in (
+            [{"title": "x", "count": True, "done": False}],
+            [{"title": "x", "count": 2**31, "done": False}],
+            [{"title": "x", "count": 1, "done": 0}],
+            [{"title": "x", "count": 1, "done": False, "extra": 1}],
+            [{"title": "x" * 1025, "count": 1, "done": False}],
+            {"title": "x", "count": 1, "done": False},
+        ):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                schema.validate(invalid)
+
+    def test_duplicate_and_unsupported_schema(self):
+        with self.assertRaises(ValueError):
+            JsonResponse((JsonField("x", "text"), JsonField("x", "bool")))
+        with self.assertRaises(ValueError):
+            JsonField("x", "float")
+        with self.assertRaises(ValueError):
+            JsonResponse((JsonField("x", "text"),), many=True, max_items=0)
 
     def test_reject_unsafe_origins(self):
         for origin in (
