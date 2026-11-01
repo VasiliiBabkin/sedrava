@@ -5,10 +5,12 @@ The panel remains isolated from local persistent state and actions.
 import html
 
 
-def embed_api_panel(document: str, name: str) -> str:
+def embed_api_panel(document: str, name: str, fields=None) -> str:
     if type(document) is not str or "</body>" not in document:
         raise ValueError("Generated Web document must contain a closing body tag")
     heading = html.escape(name)
+    import json
+    visible = json.dumps(fields, ensure_ascii=True) if fields is not None else "null"
     panel = """
 <section id="sedrava-api-panel" aria-label="External data">
   <h2>""" + heading + """</h2>
@@ -19,6 +21,7 @@ def embed_api_panel(document: str, name: str) -> str:
 <script type="module">
 import {load} from './service.mjs';
 const panel = document.getElementById('sedrava-api-panel');
+const visibleFields = """ + visible + """;
 const status = document.getElementById('sedrava-api-status');
 const results = document.getElementById('sedrava-api-results');
 const button = document.getElementById('sedrava-api-reload');
@@ -40,6 +43,7 @@ async function refresh() {
       const article = document.createElement('article');
       const description = document.createElement('dl');
       for (const [key, value] of Object.entries(row)) {
+        if (visibleFields !== null && !visibleFields.includes(key)) continue;
         const term = document.createElement('dt');
         const detail = document.createElement('dd');
         term.textContent = key;
