@@ -1,5 +1,6 @@
 """Regression tests for schema-driven HTTP panel rendering."""
 import unittest
+import json
 
 from sedrava_http_embed import embed_api_panel
 
@@ -23,8 +24,8 @@ class HttpEmbedTests(unittest.TestCase):
                                title="Новости", loading="Загрузка",
                                empty="Нет данных", error="</script><script>alert(1)</script>")
         self.assertIn("<h2>Новости</h2>", page)
-        self.assertIn("Загрузка", page)
-        self.assertIn("Нет данных", page)
+        self.assertIn(json.dumps("Загрузка", ensure_ascii=True), page)
+        self.assertIn(json.dumps("Нет данных", ensure_ascii=True), page)
         self.assertNotIn("</script><script>alert(1)</script>", page)
         self.assertIn("messages.error", page)
 
