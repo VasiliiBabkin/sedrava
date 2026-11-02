@@ -58,7 +58,7 @@ async function refresh() {
       const article = document.createElement('article');
       const description = document.createElement('dl');
       for (const key of visibleFields ?? Object.keys(row)) {\n        const value = row[key];
-        if (visibleFields !== null && !visibleFields.includes(key)) continue;
+        if (!Object.prototype.hasOwnProperty.call(row, key)) continue;
         const term = document.createElement('dt');
         const detail = document.createElement('dd');
         term.textContent = key;
