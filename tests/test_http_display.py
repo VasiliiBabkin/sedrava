@@ -66,7 +66,7 @@ class DisplayTests(unittest.TestCase):
     def test_invalid_text_rejected(self):
         for option in ('heading ""', 'heading "bad\\\\x"', 'loading "x" extra'):
             with self.subTest(option=option):
-                source = BASE + '    display cards:\\n        title\\n        ' + option + '\\n'
+                source = BASE + '    display cards:\n        title\n        ' + option + '\n'
                 with self.assertRaises(ValueError):
                     parse_display_service(source)
 
