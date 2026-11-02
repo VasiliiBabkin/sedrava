@@ -51,6 +51,28 @@ class InlineApiTests(unittest.TestCase):
             html = output.read_text(encoding="utf-8")
             self.assertIn('const visibleFields = ["title"];', html)
 
+    def test_one_file_custom_display_messages(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            original = Path("examples/task_manager_navigation.sdr").read_text(encoding="utf-8")
+            source = folder / "localized.sdr"
+            service = SERVICE + '''    display cards:
+        heading "Новости"
+        loading "Загрузка"
+        empty "Нет данных"
+        error "Ошибка"
+        title
+'''
+            source.write_text(original.rstrip() + "\n\n" + service, encoding="utf-8")
+            output = folder / "site" / "index.html"
+            self.assertEqual(main(["check", str(source)]), 0)
+            self.assertEqual(main(["build", "web", str(source), "--output", str(output)]), 0)
+            page = output.read_text(encoding="utf-8")
+            self.assertIn("<h2>Новости</h2>", page)
+            self.assertIn("const messages =", page)
+            self.assertIn("messages.loading", page)
+            self.assertIn('const visibleFields = ["title"];', page)
+
     def test_conflicting_inline_and_external_service_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             folder = Path(tmp)
