@@ -81,3 +81,51 @@ class HttpBrowserE2E(unittest.TestCase):
                     self.assertEqual(page.locator("article").count(), 0)
                 finally:
                     browser.close()
+
+    def test_embedded_localized_cards_empty_error_and_retry(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            app = Path("examples/task_manager_navigation.sdr").read_text(encoding="utf-8")
+            display = '''    display cards:
+        heading "Новости"
+        loading "Загрузка"
+        empty "Нет записей"
+        error "Ошибка сети"
+        title
+'''
+            source = folder / "app.sdr"
+            source.write_text(app.rstrip() + "\n\n" + SOURCE + display, encoding="utf-8")
+            output = folder / "public" / "index.html"
+            self.assertEqual(main(["check", str(source)]), 0)
+            self.assertEqual(main(["build", "web", str(source), "--output", str(output)]), 0)
+            with serve(output.parent) as url, sync_playwright() as playwright:
+                browser = playwright.chromium.launch(headless=True)
+                try:
+                    page = browser.new_page()
+                    state = {"code": 200, "payload": [{"id": 1, "title": "<script>alert(1)</script>"}]}
+                    def route_api(route):
+                        route.fulfill(status=state["code"], content_type="application/json",
+                                      body=__import__("json").dumps(state["payload"]))
+                    page.route("https://api.example.com/posts", route_api)
+                    page.goto(url, wait_until="load")
+                    panel = page.locator("#sedrava-api-panel")
+                    self.assertEqual(panel.locator("h2").inner_text(), "Новости")
+                    panel.locator("#sedrava-api-status").get_by_text("Loaded 1 record(s)").wait_for()
+                    self.assertEqual(panel.locator("article").count(), 1)
+                    self.assertEqual(panel.locator("article dt").all_inner_texts(), ["title"])
+                    self.assertIn("<script>alert(1)</script>", panel.locator("article").inner_text())
+                    self.assertEqual(panel.locator("article script").count(), 0)
+                    state["payload"] = []
+                    panel.get_by_role("button", name="Reload external data").click()
+                    panel.get_by_text("Нет записей").wait_for()
+                    self.assertEqual(panel.locator("article").count(), 0)
+                    state["code"] = 500
+                    panel.get_by_role("button", name="Reload external data").click()
+                    panel.get_by_text("Ошибка сети").wait_for()
+                    state["code"] = 200
+                    state["payload"] = [{"id": 2, "title": "Recovered"}]
+                    panel.get_by_role("button", name="Reload external data").click()
+                    panel.locator("#sedrava-api-status").get_by_text("Loaded 1 record(s)").wait_for()
+                    self.assertIn("Recovered", panel.locator("article").inner_text())
+                finally:
+                    browser.close()
