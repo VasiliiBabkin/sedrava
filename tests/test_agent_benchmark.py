@@ -73,7 +73,7 @@ class BenchmarkReportingTests(unittest.TestCase):
                     "--output", str(output),
                 ]
                 result = subprocess.run(command, capture_output=True, text=True)
-                self.assertEqual(result.returncode == 0, expected, result.stderr)
+                self.assertEqual(result.returncode == 0, expected, result.stdout + result.stderr + (output.with_suffix(".build.log").read_text() if output.with_suffix(".build.log").exists() else ""))
                 trial = module.validate(json.loads(output.read_text()))
                 self.assertEqual(trial["outcome"] == "passed", expected)
                 self.assertTrue(output.with_suffix(".build.log").exists())
