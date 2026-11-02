@@ -1,6 +1,6 @@
 """Declarative HTTP display contract tests."""
 import unittest
-from sedrava_http_display import parse_display_service
+from sedrava_http_display import parse_display_service, parse_display_options
 
 BASE = '''service articles:
     origin "https://api.example.com"
@@ -23,6 +23,32 @@ class DisplayTests(unittest.TestCase):
     def test_implicit_schema_order(self):
         _, _, fields = parse_display_service(BASE)
         self.assertEqual(fields, ["id", "title"])
+
+    def test_custom_heading_and_messages(self):
+        extra = '''    display cards:
+        title
+        heading "Latest articles"
+        loading "Fetching articles"
+        empty "Nothing published"
+        error "Could not retrieve articles"
+'''
+        _, _, fields = parse_display_service(BASE + extra)
+        self.assertEqual(fields, ["title"])
+        self.assertEqual(parse_display_options(BASE + extra), {
+            "title": "Latest articles",
+            "loading": "Fetching articles",
+            "empty": "Nothing published",
+            "error": "Could not retrieve articles",
+        })
+
+    def test_duplicate_option_rejected(self):
+        extra = '''    display cards:
+        title
+        heading "One"
+        heading "Two"
+'''
+        with self.assertRaises(ValueError):
+            parse_display_options(BASE + extra)
 
     def test_unknown_and_duplicate_rejected(self):
         for extra in ('''    display cards:
