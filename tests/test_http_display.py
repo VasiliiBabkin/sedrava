@@ -1,6 +1,6 @@
 """Declarative HTTP display contract tests."""
 import unittest
-from sedrava_http_display import parse_display_service, parse_display_options
+from sedrava_http_display import parse_display_service, parse_display_options, parse_display_options
 
 BASE = '''service articles:
     origin "https://api.example.com"
@@ -49,6 +49,26 @@ class DisplayTests(unittest.TestCase):
 '''
         with self.assertRaises(ValueError):
             parse_display_options(BASE + extra)
+
+    def test_custom_text_and_unicode(self):
+        source = BASE + '''    display cards:
+        heading "Новости"
+        loading "Загрузка…"
+        empty "Нет записей"
+        error "Ошибка загрузки"
+        title
+'''
+        self.assertEqual(parse_display_service(source)[2], ["title"])
+        self.assertEqual(parse_display_options(source), {
+            "title": "Новости", "loading": "Загрузка…",
+            "empty": "Нет записей", "error": "Ошибка загрузки"})
+
+    def test_invalid_text_rejected(self):
+        for declaration in ('heading ""', 'heading "one"\\n        heading "two"',
+                            'heading "bad\\\\x"', 'loading "x"\\n    path "/oops"'):
+            with self.subTest(declaration=declaration):
+                with self.assertRaises(ValueError):
+                    parse_display_service(BASE + "    display cards:\\n        title\\n        " + declaration + "\\n")
 
     def test_unknown_and_duplicate_rejected(self):
         for extra in ('''    display cards:
