@@ -7,10 +7,18 @@ import json
 import re
 
 
-def embed_api_panel(document: str, name: str, fields=None) -> str:
+def embed_api_panel(document: str, name: str, fields=None, *, title=None, loading=None, empty=None, error=None) -> str:
     if type(document) is not str or "</body>" not in document:
         raise ValueError("Generated Web document must contain a closing body tag")
-    heading = html.escape(name)
+    for label, value in (("title", title), ("loading", loading), ("empty", empty), ("error", error)):
+        if value is not None and (type(value) is not str or not value or len(value) > 160):
+            raise ValueError("Invalid HTTP display " + label)
+    heading = html.escape(title if title is not None else name)
+    messages = json.dumps({
+        "loading": loading if loading is not None else "Loading…",
+        "empty": empty if empty is not None else "No records",
+        "error": error if error is not None else "Unable to load external data. Check network access and API CORS policy.",
+    }, ensure_ascii=True)
     if fields is not None:
         if (type(fields) is not list or not fields or len(fields) > 64
                 or any(type(field) is not str or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,63}", field) for field in fields)
@@ -36,7 +44,7 @@ def embed_api_panel(document: str, name: str, fields=None) -> str:
 </section>
 <script type="module">
 import {load} from './service.mjs';
-const visibleFields = """ + visible + """;
+const visibleFields = """ + visible + """;\nconst messages = """ + messages + """;
 const status = document.getElementById('sedrava-api-status');
 const results = document.getElementById('sedrava-api-results');
 const button = document.getElementById('sedrava-api-reload');
@@ -47,7 +55,7 @@ async function refresh() {
   controller?.abort();
   controller = new AbortController();
   button.disabled = true;
-  status.textContent = 'Loading…';
+  status.textContent = messages.loading;
   results.replaceChildren();
   try {
     const data = await load({signal: controller.signal});
@@ -70,11 +78,11 @@ async function refresh() {
       fragment.append(article);
     }
     results.replaceChildren(fragment);
-    status.textContent = rows.length ? 'Loaded ' + rows.length + ' record(s)' : 'No records';
+    status.textContent = rows.length ? 'Loaded ' + rows.length + ' record(s)' : messages.empty;
   } catch (error) {
     if (current !== sequence) return;
     status.textContent = error?.name === 'AbortError' ? 'Request cancelled' :
-      'Unable to load external data. Check network access and API CORS policy.';
+      messages.error;
   } finally {
     if (current === sequence) button.disabled = false;
   }
