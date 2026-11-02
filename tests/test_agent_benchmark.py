@@ -59,13 +59,17 @@ class BenchmarkReportingTests(unittest.TestCase):
             for expected, test_code in ((True, "0"), (False, "1")):
                 output = folder / ("pass.json" if expected else "fail.json")
                 import subprocess
+                build_script = folder / "build.py"
+                test_script = folder / "behavior.py"
+                build_script.write_text("raise SystemExit(0)\\n")
+                test_script.write_text("raise SystemExit(" + test_code + ")\\n")
                 command = [
                     sys.executable, str(runner),
                     "--task", "counter-v0", "--language", "sedrava",
                     "--target", "web", "--model", "manual-baseline",
                     "--commit", "a" * 40, "--cwd", str(folder),
-                    "--build", sys.executable, "-c", "raise SystemExit(0)",
-                    "--test", sys.executable, "-c", "raise SystemExit(" + test_code + ")",
+                    "--build", sys.executable, str(build_script),
+                    "--test", sys.executable, str(test_script),
                     "--output", str(output),
                 ]
                 result = subprocess.run(command, capture_output=True, text=True)
