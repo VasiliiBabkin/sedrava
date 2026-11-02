@@ -18,6 +18,16 @@ class HttpEmbedTests(unittest.TestCase):
         self.assertIn("&lt;script&gt;", page)
         self.assertNotIn("<h2><script>", page)
 
+    def test_custom_messages_and_script_safety(self):
+        page = embed_api_panel("<body></body>", "Articles", ["title"],
+                               title="Новости", loading="Загрузка",
+                               empty="Нет данных", error="</script><script>alert(1)</script>")
+        self.assertIn("<h2>Новости</h2>", page)
+        self.assertIn("Загрузка", page)
+        self.assertIn("Нет данных", page)
+        self.assertNotIn("</script><script>alert(1)</script>", page)
+        self.assertIn("messages.error", page)
+
     def test_invalid_display_fields_rejected(self):
         for fields in ([], ["title", "title"], ["<script>"], ["a"] * 65, "title"):
             with self.subTest(fields=fields):
