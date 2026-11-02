@@ -12,7 +12,7 @@ import json
 
 _HEADER = re.compile(r"    display cards:")
 _FIELD = re.compile(r"        ([A-Za-z][A-Za-z0-9_]{0,63})")
-_OPTION = re.compile(r'        (heading|loading|empty|error) ("(?:[^"\\\\]|\\\\.)*")
+_OPTION = re.compile(r'        (heading|loading|empty|error) (".*")$')
 
 
 def split_display(source: str):
