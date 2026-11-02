@@ -141,7 +141,8 @@ def main(argv=None):
                     raise ValueError("Generated API module must differ from source files")
                 if args.service is not None and output.resolve() == args.service.resolve():
                     raise ValueError("Web output must differ from service declaration")
-                result = embed_api_panel(result, service.name, selected)
+                from sedrava_http_display import parse_display_options
+                result = embed_api_panel(result, service.name, selected, **parse_display_options(service_source))
                 module = generate_fetch_module(service, schema)
             if output.resolve() == args.source.resolve():
                 raise ValueError("Web output must differ from the source file")
