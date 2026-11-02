@@ -64,7 +64,7 @@ class DisplayTests(unittest.TestCase):
             "empty": "Нет записей", "error": "Ошибка загрузки"})
 
     def test_invalid_text_rejected(self):
-        for option in ('heading ""', 'heading "bad\\\\x"', 'loading "x" extra'):
+        for option in ('heading ""', 'heading "bad" extra', 'loading "x" extra'):
             with self.subTest(option=option):
                 source = BASE + '    display cards:\n        title\n        ' + option + '\n'
                 with self.assertRaises(ValueError):
