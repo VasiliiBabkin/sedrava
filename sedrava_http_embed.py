@@ -18,6 +18,16 @@ def embed_api_panel(document: str, name: str, fields=None) -> str:
             raise ValueError("Invalid HTTP display field selection")
     visible = json.dumps(fields, ensure_ascii=True) if fields is not None else "null"
     panel = """
+<style>
+#sedrava-api-panel { margin-block: 1.5rem; }
+#sedrava-api-panel #sedrava-api-status { min-height: 1.5em; }
+#sedrava-api-panel #sedrava-api-results { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr)); gap: 1rem; margin-top: 1rem; }
+#sedrava-api-panel #sedrava-api-results article { border: 1px solid currentColor; border-radius: .75rem; padding: 1rem; min-width: 0; overflow-wrap: anywhere; }
+#sedrava-api-panel #sedrava-api-results dl { margin: 0; }
+#sedrava-api-panel #sedrava-api-results dt { font-size: .85em; opacity: .75; margin-top: .75rem; }
+#sedrava-api-panel #sedrava-api-results dt:first-child { margin-top: 0; }
+#sedrava-api-panel #sedrava-api-results dd { margin: .2rem 0 0; }
+</style>
 <section id="sedrava-api-panel" aria-label="External data">
   <h2>""" + heading + """</h2>
   <p id="sedrava-api-status" role="status" aria-live="polite">Waiting to load</p>
@@ -47,7 +57,7 @@ async function refresh() {
     for (const row of rows) {
       const article = document.createElement('article');
       const description = document.createElement('dl');
-      for (const [key, value] of Object.entries(row)) {
+      for (const key of visibleFields ?? Object.keys(row)) {\n        const value = row[key];
         if (visibleFields !== null && !visibleFields.includes(key)) continue;
         const term = document.createElement('dt');
         const detail = document.createElement('dd');
