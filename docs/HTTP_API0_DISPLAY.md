@@ -14,6 +14,10 @@ service articles:
         id int32
         title text
     display cards:
+        heading "Latest articles"
+        loading "Loading articles…"
+        empty "No articles yet"
+        error "Could not load articles"
         title
         id
 ```
@@ -32,3 +36,10 @@ authentication, POST, or Android networking in API0.
 
 Security: JSON remains strictly validated against the complete response schema;
 values are rendered using `textContent`, not interpreted as HTML.
+
+The optional `heading`, `loading`, `empty`, and `error` directives accept
+JSON-quoted text (1–160 characters each). Each directive can occur only once.
+The heading labels the whole external-data panel, not an individual record.
+Strings are HTML-escaped or encoded as script-safe JSON literals, and record
+values continue to render via `textContent`. The default English messages
+remain in effect when directives are omitted.
