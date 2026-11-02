@@ -4,6 +4,7 @@ import importlib.util
 import json
 import pathlib
 import tempfile
+import sys
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -50,6 +51,29 @@ class BenchmarkReportingTests(unittest.TestCase):
         self.assertEqual(group["evaluated"], 2)
         self.assertEqual(group["passed"], 1)
         self.assertEqual(group["pass_rate"], 0.5)
+
+    def test_candidate_runner_records_real_success_and_failure(self):
+        runner = ROOT / "benchmarks/agent/run_candidate.py"
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = pathlib.Path(tmp)
+            for expected, test_code in ((True, "0"), (False, "1")):
+                output = folder / ("pass.json" if expected else "fail.json")
+                import subprocess
+                command = [
+                    sys.executable, str(runner),
+                    "--task", "counter-v0", "--language", "sedrava",
+                    "--target", "web", "--model", "manual-baseline",
+                    "--commit", "a" * 40, "--cwd", str(folder),
+                    "--build", sys.executable, "-c", "raise SystemExit(0)",
+                    "--test", sys.executable, "-c", "raise SystemExit(" + test_code + ")",
+                    "--output", str(output),
+                ]
+                result = subprocess.run(command, capture_output=True, text=True)
+                self.assertEqual(result.returncode == 0, expected, result.stderr)
+                trial = module.validate(json.loads(output.read_text()))
+                self.assertEqual(trial["outcome"] == "passed", expected)
+                self.assertTrue(output.with_suffix(".build.log").exists())
+                self.assertTrue(output.with_suffix(".test.log").exists())
 
     def test_cli_writes_summary(self):
         with tempfile.TemporaryDirectory() as tmp:
