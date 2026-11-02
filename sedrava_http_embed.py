@@ -19,6 +19,8 @@ def embed_api_panel(document: str, name: str, fields=None, *, title=None, loadin
         "empty": empty if empty is not None else "No records",
         "error": error if error is not None else "Unable to load external data. Check network access and API CORS policy.",
     }, ensure_ascii=True)
+    # JSON literals embedded in a script must not terminate the script element.
+    messages = messages.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
     if fields is not None:
         if (type(fields) is not list or not fields or len(fields) > 64
                 or any(type(field) is not str or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,63}", field) for field in fields)
