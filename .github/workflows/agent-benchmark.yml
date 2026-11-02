@@ -13,6 +13,9 @@ on:
       - ".github/workflows/agent-benchmark.yml"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   validate-reporting:
     runs-on: ubuntu-latest
