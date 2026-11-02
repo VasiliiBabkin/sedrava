@@ -28,3 +28,29 @@ See `result.schema.json` and `sample-result.json`. A trial is one model/task/lan
 ## Interpretation
 
 Report pass rate with numerator and denominator, median attempts/time/tokens where measured, and confidence intervals when sample size permits. Disclose agent access to examples and any prior knowledge of the language. A language-specific reference supplied to an agent is a treatment condition, not a neutral constant.
+
+## Candidate runner (no model invocation)
+
+`run_candidate.py` executes a pre-existing candidate's build command and, only
+if that succeeds, its behavioral test command. It records exit status, elapsed
+time, and separate build/test logs. Commands are argv vectors executed **without
+a shell**. Run only trusted build/test commands in an isolated environment.
+
+Example (replace the scripts with real commands and the SHA with the tested
+commit):
+
+```bash
+python benchmarks/agent/run_candidate.py \
+  --task counter-v0 --language sedrava --target web \
+  --model manual-baseline --commit "$(git rev-parse HEAD)" \
+  --cwd . --build python -m compileall -q sedrava.py \
+  --test python -m unittest tests.test_core -v \
+  --output /tmp/sedrava-trial.json
+python benchmarks/agent/analyze.py /tmp/sedrava-trial.json
+```
+
+The example above is **only a runner demonstration**: it is not a valid
+cross-language behavioral comparison. A real benchmark must use task-specific
+acceptance tests and agent-produced candidate source. Token usage and cost
+remain `null` until independently recorded. A run marked `manual-baseline`
+must never be presented as an autonomous agent trial.
