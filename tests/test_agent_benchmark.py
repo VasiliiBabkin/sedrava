@@ -61,8 +61,8 @@ class BenchmarkReportingTests(unittest.TestCase):
                 import subprocess
                 build_script = folder / "build.py"
                 test_script = folder / "behavior.py"
-                build_script.write_text("raise SystemExit(0)\\n")
-                test_script.write_text("raise SystemExit(" + test_code + ")\\n")
+                build_script.write_text("raise SystemExit(0)\n")
+                test_script.write_text("raise SystemExit(" + test_code + ")\n")
                 command = [
                     sys.executable, str(runner),
                     "--task", "counter-v0", "--language", "sedrava",
