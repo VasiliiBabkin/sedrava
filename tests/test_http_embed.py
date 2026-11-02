@@ -8,7 +8,8 @@ class HttpEmbedTests(unittest.TestCase):
     def test_explicit_schema_fields_are_embedded(self):
         page = embed_api_panel("<html><body></body></html>", "Articles", ["id", "title"])
         self.assertIn('const visibleFields = ["id", "title"];', page)
-        self.assertIn("for (const key of visibleFields ?? Object.keys(row))", page)\n        self.assertIn("grid-template-columns", page)
+        self.assertIn("for (const key of visibleFields ?? Object.keys(row))", page)
+        self.assertIn("grid-template-columns", page)
         self.assertIn("textContent = String(value)", page)
         self.assertNotIn("innerHTML", page)
 
