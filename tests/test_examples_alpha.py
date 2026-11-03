@@ -5,6 +5,7 @@ import unittest
 from sedrava_core import parse, run
 from sedrava_frontend import parse_document
 from sedrava_site import Site
+from sedrava_webapp import WebApp, generate_webapp
 from site_codegen import generate_site
 from web_codegen import generate
 from android_codegen_v03 import generate as android
@@ -17,6 +18,13 @@ class ExamplesAlpha(unittest.TestCase):
             with self.subTest(example=path.name):
                 source = path.read_text(encoding='utf-8')
                 program = parse_document(source)
+                if isinstance(program,WebApp):
+                    first=generate_webapp(program)
+                    second=generate_webapp(parse_document(source))
+                    self.assertEqual(first,second)
+                    self.assertIn("index.html",first)
+                    self.assertIn("app.js",first)
+                    continue
                 if isinstance(program,Site):
                     first,_=generate_site(program,path.parent)
                     second,_=generate_site(parse_document(source),path.parent)
