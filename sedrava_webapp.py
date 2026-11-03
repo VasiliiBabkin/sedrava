@@ -5,7 +5,7 @@ module does not interpret Sedrava actions. Supports bounded collection
 rendering and selection alongside scalar/derived values. No HTTP, multi-view
 navigation, or inline arbitrary code.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import html
 import json
 import os
@@ -30,12 +30,22 @@ class WebApp:
     program: object
     widgets: tuple
     mode: str = "webapp"
+    views: dict = field(default_factory=dict)
 
 
 UI_LAYOUT = frozenset(("container", "row", "column", "grid", "card",
                        "callout", "heading", "paragraph", "code",
                        "spacer", "divider"))
 UI_DYNAMIC = {
+    "form": Definition("form", children=True, required=("action",), parameters={"action": Parameter(identifier)}),
+    "submit": Definition("button", positional="text", required=("text",), parameters={"text": Parameter(text)}, defaults={"variant":"primary"}, variants=("primary","secondary","ghost")),
+    "dialog": Definition("dialog", children=True, required=("id","label")),
+    "open": Definition("button", positional="text", required=("text","to"), parameters={"text":Parameter(text),"to":Parameter(identifier)}),
+    "close": Definition("button", positional="text", required=("text","to"), parameters={"text":Parameter(text),"to":Parameter(identifier)}),
+    "select": Definition("select", children=True, required=("state","label"), parameters={"state":Parameter(identifier)}),
+    "option": Definition("option", positional="text", required=("text","value"), parameters={"text":Parameter(text),"value":Parameter(lambda v:v)}),
+    "navigate": Definition("button", positional="text", required=("text", "to"), parameters={"text": Parameter(text), "to": Parameter(identifier), "action": Parameter(identifier)}),
+    "back": Definition("button", positional="text", required=("text",), parameters={"text": Parameter(text)}),
     "value": Definition("output", required=("state",),
                         parameters={"state": Parameter(identifier)}),
     "input": Definition("input", required=("state", "label"),
@@ -48,7 +58,7 @@ UI_DYNAMIC = {
                        parameters={"collection": Parameter(identifier),
                                    "select": Parameter(identifier),
                                    "title": Parameter(identifier),
-                                   "status": Parameter(identifier)}),
+                                   "status": Parameter(identifier), "search": Parameter(identifier), "sort": Parameter(identifier), "where": Parameter(identifier), "equals": Parameter(identifier), "active": Parameter(identifier), "empty": Parameter(text)}),
     "button": Definition("button", positional="text",
                          required=("text", "action"),
                          parameters={"text": Parameter(text),
@@ -66,8 +76,18 @@ def parse_webapp(source):
         raise ValueError("Line 1: column 1: Expected webapp \"Title\"")
     view_lines = [(i, item) for i, item in enumerate(lines)
                   if item[0] == 0 and item[1].startswith("view ")]
-    if len(view_lines) != 1 or view_lines[0][1][1] != "view main:":
-        fail(Span(lines[0][2], 1), "Exactly one 'view main:' is required")
+    if not view_lines or not any(re.fullmatch(r'view main(?: at "/")?:', item[1]) for _,item in view_lines):
+        fail(Span(lines[0][2], 1), "Exactly one initial view main is required")
+    views={}
+    for _,(_,header,n) in view_lines:
+        match=re.fullmatch(r'view ([A-Za-z][A-Za-z0-9_]*)(?: at "([^"]+)")?(?: when ([A-Za-z][A-Za-z0-9_]*))?:',header)
+        if not match or match[1] in views:fail(Span(n,1),"Exactly one declaration per view; invalid or duplicate view")
+        name,path,guard=match.groups();path=path or ('/' if name=='main' else '/'+name)
+        from sedrava_web_routes import route_parameters
+        route_parameters(path)
+        if path in [v['path'] for v in views.values()]:fail(Span(n,1),"Duplicate route")
+        views[name]={'path':path,'guard':guard}
+    if views['main']['path']!='/' or views['main']['guard']:fail(Span(1,1),"Initial main route must be unguarded /")
     ix, (_, _, view_lineno) = view_lines[0]
     if ix == len(lines) - 1:
         fail(Span(view_lineno, 1), "Empty view main")
@@ -84,7 +104,20 @@ def parse_webapp(source):
     declared = {key: value_type(value) for key, value in program.states.items()}
     for key, expr in program.derived.items():
         declared[key] = type_of(expr, declared)
-    body_lines = lines[ix + 1:]
+    from sedrava_web_routes import route_parameters
+    for name,spec in views.items():
+        for key in route_parameters(spec['path']):
+            if key not in program.states or declared[key] is not int:fail(Span(view_lineno,1),"Route parameters require mutable integer state")
+        if spec['guard'] and declared.get(spec['guard']) is not bool:fail(Span(view_lineno,1),"View guard requires boolean state")
+    body_lines=[]
+    for position,(start,(_,header,number)) in enumerate(view_lines):
+        end=view_lines[position+1][0] if position+1<len(view_lines) else len(lines)
+        name=re.match(r'view (\w+)',header)[1]
+        content=lines[start+1:end]
+        if not content:fail(Span(number,1),"Empty view")
+        body_lines.extend(content)
+    # Parse each view's tree separately through the same typed widget parser.
+    body_lines=lines[ix+1:(view_lines[1][0] if len(view_lines)>1 else len(lines))]
     if not body_lines or body_lines[0][0] != 4:
         fail(Span(view_lineno, 1), "View content requires four-space indentation")
     lex = [(depth, tokens(line, number, depth), number)
@@ -112,7 +145,7 @@ def parse_webapp(source):
                 fail(items[0].span, "Invalid component block structure")
             args = items[1:-1] if is_block else items[1:]
             given = {}
-            if kind in ("value", "input", "checkbox", "when", "list"):
+            if kind in ("value", "input", "checkbox", "when", "list", "select"):
                 if not args or args[0].quoted or type(args[0].value) is not str:
                     fail(items[0].span, "State identifier required")
                 name = args[0].value
@@ -141,12 +174,12 @@ def parse_webapp(source):
                     fail(given[field].span, str(exc))
             if kind in ("heading", "button", "code") and not given["text"].value.strip():
                 fail(items[0].span, "Accessible text must not be empty")
-            if kind in ("value", "input", "checkbox", "when"):
+            if kind in ("value", "input", "checkbox", "when", "select"):
                 key = given["state"].value
                 if key not in declared:
                     fail(given["state"].span, "Unknown state " + key)
                 actual = declared[key]
-                if kind in ("input", "checkbox") and key not in program.states:
+                if kind in ("input", "checkbox", "select") and key not in program.states:
                     fail(given["state"].span, "Input cannot edit derived state")
                 if kind == "input" and actual not in (int, str):
                     fail(given["state"].span, "Input requires integer or text state")
@@ -154,7 +187,7 @@ def parse_webapp(source):
                     fail(given["state"].span, kind + " requires boolean state")
                 if kind == "value" and actual not in (int, bool, str):
                     fail(given["state"].span, "Value requires scalar or derived scalar state")
-                if kind in ("input", "checkbox") and not given["label"].value.strip():
+                if kind in ("input", "checkbox", "select") and not given["label"].value.strip():
                     fail(given["label"].span, "Accessible label must not be empty")
             if kind == "list":
                 key = given["collection"].value
@@ -169,7 +202,17 @@ def parse_webapp(source):
                     fail(given["title"].span, "List title requires a text record field")
                 if "status" in given and fields.get(given["status"].value) is not bool:
                     fail(given["status"].span, "List status requires a boolean record field")
-            if kind == "button" and given["action"].value not in program.actions:
+                if 'search' in given and declared.get(given['search'].value) is not str:fail(items[0].span,'List search requires text state')
+                if 'sort' in given and given['sort'].value not in fields:fail(items[0].span,'Unknown sort field')
+                if 'where' in given:
+                    if fields.get(given['where'].value) is not bool or 'equals' not in given or declared.get(given['equals'].value) is not bool:fail(items[0].span,'Filter requires bool field and equals bool state')
+                elif 'equals' in given or 'active' in given:fail(items[0].span,'Filter options require where')
+                if 'active' in given and declared.get(given['active'].value) is not bool:fail(items[0].span,'Filter active requires bool state')
+            if kind == "navigate" and given["to"].value not in views:
+                fail(items[0].span,"Unknown target view")
+            if kind == "navigate" and "action" in given and given["action"].value not in program.actions:
+                fail(items[0].span,"Unknown navigation action")
+            if kind in ("button", "form") and given["action"].value not in program.actions:
                 fail(given["action"].span, "Unknown action " + given["action"].value)
             pos += 1
             nested = ()
@@ -179,29 +222,47 @@ def parse_webapp(source):
                 nested, pos = body(pos, indent + 4, nesting + 1)
                 if not nested:
                     fail(items[0].span, "Empty component block")
+            if kind=='select':
+                options=[n for n in nested if n.kind=='option']
+                if len(options)!=len(nested) or not options:fail(items[0].span,"Select requires option children")
+                if any(type(n.properties['value'].value) is not declared[given['state'].value] for n in options):fail(items[0].span,"Option type must match select state")
+                values=[n.properties['value'].value for n in options]
+                if len(values)!=len(set(values)):fail(items[0].span,"Duplicate option")
+            if kind=='form' and any(n.kind=='form' for n in walk(nested)):fail(items[0].span,"Forms cannot nest")
             widget_count += 1
             if widget_count > 512:
                 fail(items[0].span, "WebApp UI component limit (512) exceeded")
             children.append(Component(kind, given, tuple(nested), items[0].span))
         return tuple(children), pos
 
-    widgets, end = body(0, 4)
-    if end != len(lex):
-        fail(Span(view_lineno, 1), "Unexpected text after view")
-    previous_level = 0
-    h1 = 0
-    for node in walk(widgets):
-        if node.kind == "heading":
-            level = node.properties["level"].value if "level" in node.properties else (
-                1 if previous_level == 0 else 2)
-            if level > previous_level + 1:
-                fail(node.span, "Heading levels must not skip a level")
-            node.properties.setdefault("level", Property(level, node.span))
-            previous_level = level
-            h1 += level == 1
-    if h1 != 1:
-        fail(Span(view_lineno, 1), "WebApp requires exactly one h1")
-    return WebApp(program.name, program, widgets)
+    all_widgets=[]
+    for position,(start,(_,header,number)) in enumerate(view_lines):
+        end=view_lines[position+1][0] if position+1<len(view_lines) else len(lines)
+        content=lines[start+1:end]
+        lex=[(depth,tokens(line,n,depth),n) for depth,line,n in content]
+        if not lex or lex[0][0]!=4:fail(Span(number,1),"View content requires four-space indentation")
+        nodes, consumed=body(0,4)
+        if consumed!=len(lex):fail(Span(number,1),"Unexpected text after view")
+        previous_level=0;h1=0
+        for node in walk(nodes):
+            if node.kind=='heading':
+                level=node.properties['level'].value if 'level' in node.properties else (1 if previous_level==0 else 2)
+                if level>previous_level+1:fail(node.span,"Heading levels must not skip a level")
+                node.properties.setdefault('level',Property(level,node.span));previous_level=level;h1+=level==1
+        if h1!=1:fail(Span(number,1),"WebApp requires exactly one h1 per view")
+        name=re.match(r'view (\w+)',header)[1]
+        views[name]['widgets']=nodes
+        all_widgets.extend(nodes)
+    ids={};dialog_ids=set()
+    for node in walk(all_widgets):
+        if 'id' in node.properties:
+            key=node.properties['id'].value
+            if key in ids or key in ('content','sedrava-error'):fail(node.span,'Duplicate or reserved UI id')
+            ids[key]=node
+            if node.kind=='dialog':dialog_ids.add(key)
+    for node in walk(all_widgets):
+        if node.kind in ('open','close') and node.properties['to'].value not in dialog_ids:fail(node.span,'Unknown dialog')
+    return WebApp(program.name, program, tuple(all_widgets), views=views)
 
 
 APP_CSS = r"""
@@ -271,7 +332,7 @@ def generate_webapp(document):
         elif kind in ("input", "checkbox"):
             tag = "div"
         attrs = {"class": "s-node s-" + kind + " " + ident +
-                 " v-" + props.get("variant", "default")}
+                 " v-" + props.get("variant", "default") + (" s-button" if kind in ("navigate","back","open","close","submit") else "")}
         if "id" in props:
             attrs["id"] = props["id"]
         if "label" in props and kind not in ("input", "checkbox", "value"):
@@ -281,10 +342,26 @@ def generate_webapp(document):
         common = "<" + tag + "".join(attr(k, v) for k, v in attrs.items()) + ">"
         if definition.void:
             return common
+        if kind=='select':
+            field_id='choice-'+ident
+            choices=''.join('<option'+attr('value',json.dumps(n.properties['value'].value,ensure_ascii=False))+'>'+html.escape(n.properties['text'].value)+'</option>' for n in node.children)
+            return '<div class="s-field"><label'+attr('for',field_id)+'>'+html.escape(props['label'])+'</label><select'+attr('id',field_id)+attr('data-choice',props['state'])+attr('class',attrs['class'])+'>'+choices+'</select></div>'
+        if kind=='dialog':
+            return common[:-1]+attr('data-dialog',props['id'])+'>'+''.join(render(child) for child in node.children)+'</dialog>'
+        if kind=='form':
+            return common[:-1]+attr('data-submit',props['action'])+'>'+''.join(render(child) for child in node.children)+'</form>'
+        if kind in ('open','close'):
+            return common[:-1]+attr('type','button')+attr('data-'+kind+'-dialog',props['to'])+'>'+html.escape(props['text'])+'</button>'
+        if kind=='submit':
+            return common[:-1]+attr('type','submit')+'>'+html.escape(props['text'])+'</button>'
         if kind == "value":
             key = html.escape(props["state"], quote=True)
             label = html.escape(props.get("label", props["state"]))
             return common + "<span>" + label + ': </span><output data-state="' + key + '" aria-live="polite"></output></div>'
+        if kind in ("navigate", "back"):
+            attrs=attr('type','button')+(' data-back="true"' if kind=='back' else attr('data-navigate',props['to']))
+            if 'action' in props:attrs+=attr('data-route-action',props['action'])
+            return common[:-1]+attrs+'>'+html.escape(props['text'])+'</button>'
         if kind == "button":
             key = html.escape(props["action"], quote=True)
             return common[:-1] + attr("type", "button") + attr("data-action", key) + ">" + html.escape(props["text"]) + "</button>"
@@ -315,7 +392,8 @@ def generate_webapp(document):
                 attr("data-select", props["select"]) +
                 (attr("data-title-field", props["title"]) if "title" in props else "") +
                 (attr("data-status-field", props["status"]) if "status" in props else "") +
-                attr("aria-label", props.get("label", props["collection"]))
+                attr("aria-label", props.get("label", props["collection"])) +
+                ''.join(attr('data-query-'+key,props[key]) for key in ('search','sort','where','equals','active','empty') if key in props)
             )
             return common[:-1] + field_attrs + "></ul>"
         if kind == "code":
@@ -323,7 +401,7 @@ def generate_webapp(document):
         return common + html.escape(props.get("text", "")) + (
             "".join(render(child) for child in node.children)) + "</" + tag + ">"
 
-    markup = "".join(render(n) for n in document.widgets)
+    markup = ''.join('<section data-view="'+name+'"'+(' hidden' if name!='main' else '')+'>'+''.join(render(n) for n in spec['widgets'])+'</section>' for name,spec in document.views.items()) if len(document.views)>1 else ''.join(render(n) for n in document.widgets)
     theme_css = ":root{" + "".join("--" + k + ":" + v + ";" for k, v in THEME.items()) + "}\n"
     css = theme_css + CSS + "\n" + APP_CSS + "\n" + "\n".join(selectors) + "\n"
     names = {key: "values[" + json_script(key) + "]" for key in program.states}
@@ -343,7 +421,9 @@ def generate_webapp(document):
         '  document.querySelectorAll("[data-when]").forEach(el=>{el.hidden=!values[el.dataset.when];});',
         '  document.querySelectorAll("[data-input]").forEach(el=>{if(document.activeElement!==el)el.value=String(state[el.dataset.input]);});',
         '  document.querySelectorAll("[data-check]").forEach(el=>{el.checked=state[el.dataset.check];});',
+        '  document.querySelectorAll("[data-choice]").forEach(el=>el.value=JSON.stringify(state[el.dataset.choice]));',
         '  renderLists();',
+        '  if(typeof activeView!=="undefined"){if(!canView(activeView))goView("main",true);showView();}',
         '  syncButtons();',
         '}',
         'function syncButtons(){',
@@ -391,7 +471,10 @@ def generate_webapp(document):
         '    const selected=state[el.dataset.select];',
         '    const titleField=el.dataset.titleField, statusField=el.dataset.statusField;',
         '    const fragment=document.createDocumentFragment();',
-        '    for(const row of collection.items){',
+        '    const values=valuesOfState();',
+        '    const rows=queryRows(collection.items,{title:titleField,search:el.dataset.querySearch?values[el.dataset.querySearch]:"",sort:el.dataset.querySort,where:el.dataset.queryWhere,equals:el.dataset.queryEquals?values[el.dataset.queryEquals]:false,active:el.dataset.queryActive?values[el.dataset.queryActive]:true});',
+        '    if(!rows.length && el.dataset.queryEmpty){const empty=document.createElement("li");empty.setAttribute("role","status");empty.textContent=el.dataset.queryEmpty||"No matching records";fragment.append(empty);}',
+        '    for(const row of rows){',
         '      const item=document.createElement("li");item.dataset.id=String(row.id);',
         '      const button=document.createElement("button");button.type="button";',
         '      button.className="s-list-choice";button.dataset.itemId=String(row.id);',
@@ -421,6 +504,16 @@ def generate_webapp(document):
         "if(restoreError)showError('Saved data rejected; original retained');",
         '',
     ])
+    if len(document.views)>1:
+        from sedrava_web_routes import ROUTER_JS
+        config={name:{k:v for k,v in spec.items() if k!='widgets'} for name,spec in document.views.items()}
+        # activeView must exist before render() initial invocation (no TDZ).
+        ui_js='let activeView="main";let routeReady=false;\nconst viewConfig='+json_script(config)+';\n'+ui_js+ROUTER_JS.replace("let activeView='main';",'')
+    from sedrava_web_queries import QUERY_JS
+    ui_js=QUERY_JS+ui_js
+    from sedrava_web_ui import EXTRA_JS, EXTRA_CSS
+    ui_js+=EXTRA_JS
+    css+=EXTRA_CSS
     title = html.escape(document.name)
     index = ('<!doctype html>\n<html lang="en"><head><meta charset="utf-8">'
              '<meta name="viewport" content="width=device-width,initial-scale=1">'

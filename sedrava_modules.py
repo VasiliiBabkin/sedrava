@@ -50,6 +50,7 @@ def expand(source, source_path=None, _stack=(), _root=None, _files=None):
 
 
 def components(source):
+    source_lines(source)
     # Resolve definitions after imports. They are templates, never executable source.
     definitions = {}
     lines = source.splitlines()

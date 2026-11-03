@@ -34,3 +34,9 @@ Use this integration branch. Inspect `sedrava_webapp.py`, `sedrava_http*.py`, `s
 Added `sedrava_modules.py`: typed text/int/bool component parameters, one explicit slot, recursive expansion bounds, deterministic relative `.sdr` imports restricted to components/styles, cycle/traversal/symlink checks. Both presentation modes lower into the existing typed component AST. Imported state/actions are intentionally not supported yet. Diagnostics for expanded templates use expanded line positions (full cross-file source maps remain a release gap).
 
 Added three unit tests for actual composition in both modes and negative import/recursion/type cases. API0 browser tests can select a real installed Chromium in container environments; no test is skipped or weakened by this change.
+
+## Routing/forms/query checkpoint
+
+Implemented typed multi-view hash routes (`:int_state`), guarded deep-link resolution, Back/Forward, reload restore, bounded navigation and focus changes using a tested Python route model. Domain actions still come from the existing core generator. Added native dialog/open/close, forms/submit and typed select/option. Added list search, bool filtering and stable Unicode-codepoint sorting, compared Python/JavaScript with complete row identity/order.
+
+`examples/platform_tasks.sdr` now performs offline create/select/rename/complete/delete with search/filter, guarded detail route and confirmation dialog. Real Chromium: 2 integration scenarios pass, screenshots at 320/360/390/768/1024/1440; prior scalar 5/5 and collection 5/5 scenarios pass. Full Python at this checkpoint: 245 tests, no failures. Reload initially reset the deep route before restoration; this was found by E2E and corrected. Empty list status appears only when explicitly requested, preserving prior list behavior.
