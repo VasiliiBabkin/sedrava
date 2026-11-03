@@ -39,8 +39,8 @@ def expand(source, source_path=None, _stack=(), _root=None, _files=None):
         files.add(path)
         text = path.read_text(encoding='utf-8')
         for depth, declaration, n in source_lines(text):
-            if depth == 0 and not declaration.startswith(('component ', 'style ', 'import ', 'fn ')):
-                raise ValueError(f'Line {number}: column 1: module {value}:{n} may only export components/styles/imports')
+            if depth == 0 and not declaration.startswith(('component ', 'style ', 'import ', 'fn ', 'record ')):
+                raise ValueError(f'Line {number}: column 1: module {value}:{n} may only export components/styles/records/functions/imports')
         expanded, _ = expand(text, path, (*_stack, path), root, files)
         output.extend(expanded.splitlines())
     joined = '\n'.join(output)

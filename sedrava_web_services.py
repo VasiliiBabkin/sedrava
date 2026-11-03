@@ -63,7 +63,10 @@ def validate_services(blocks, program, types):
         elif method in ('POST','PUT','PATCH'):raise ValueError('Mutation requires a typed body')
         for key in re.findall(r':([A-Za-z][A-Za-z0-9_]*)',capability.path):
             if types.get(key) is not int:raise ValueError('HTTP path parameters require integer state')
-        services[name]=WebService(capability,schema,'' if own else capability.origin.rstrip('/'),method,body,props.get('auto')=='true',props.get('cache')=='true')
+        from urllib.parse import urlsplit
+        host=urlsplit(capability.origin).hostname.lower()
+        canonical='https://'+('['+host+']' if ':' in host else host)
+        services[name]=WebService(capability,schema,'' if own else canonical,method,body,props.get('auto')=='true',props.get('cache')=='true')
     return services
 
 

@@ -6,6 +6,7 @@ from sedrava_records import RecordType, ListType, RecordValue, ListValue, value_
 from dataclasses import dataclass
 from sedrava_functions import FunctionType, expression_cost
 from sedrava_stdlib import SIGNATURES
+from sedrava_queries import NAMES as QUERY_NAMES, type_query
 from sedrava_navigation import Span, Widget, Screen, Navigation, MAX_SCREENS, MAX_NAV_COMMANDS
 
 from sedrava_syntax import MAX_SOURCE_CHARS, source_lines
@@ -163,10 +164,10 @@ def parse_expr(source, types):
             checked_value(item.value)
     try:
         type_of(node, types)
-        if expression_cost(node)>MAX_AST_NODES:raise ValueError("Expression/function exceeds complexity limit")
+        if expression_cost(node)>MAX_DERIVED_NODES:raise ValueError("Expression/function exceeds complexity limit")
     except ValueError as exc:
         unknown = next((item.id for item in ast.walk(node)
-                        if isinstance(item, ast.Name) and item.id not in types and item.id not in SIGNATURES and item.id not in ('append','update','remove','get','has','count','next_id')), None)
+                        if isinstance(item, ast.Name) and item.id not in types and item.id not in SIGNATURES and item.id not in QUERY_NAMES and item.id not in ('append','update','remove','get','has','count','next_id')), None)
         if unknown is not None:
             raise ValueError(f"Unknown identifier: {unknown}") from exc
         raise
@@ -192,6 +193,7 @@ def type_of(node, types):
             if any(type_of(k.value, types) != dict(kind.fields)[k.arg] for k in node.keywords): raise ValueError("Record field type mismatch")
             node.record_type = kind
             return kind
+        if name in QUERY_NAMES:return type_query(node,types,type_of)
         if name in SIGNATURES:
             parameters,result=SIGNATURES[name]
             if node.keywords or len(node.args)!=len(parameters) or any(type_of(arg,types) is not kind for arg,kind in zip(node.args,parameters)):raise ValueError('Standard operation argument type/count mismatch')
@@ -245,6 +247,9 @@ def _evaluate(node, state):
         record = evaluate(node.value, state)
         return record.values[[k for k, _ in record.kind.fields].index(node.attr)]
     if isinstance(node, ast.Call):
+        if hasattr(node,"collection_query"):
+            from sedrava_queries import evaluate_query
+            return evaluate_query(node,state,evaluate,checked_int)
         if hasattr(node,"pure_builtin"):
             from sedrava_stdlib import apply
             return checked_value(apply(node.pure_builtin,[evaluate(arg,state) for arg in node.args]))
@@ -366,7 +371,7 @@ def parse(source):
             if name is not None: raise ValueError(f"Line {number}: duplicate app")
             name = label(m[1], number, 5)
         elif m := re.fullmatch(r"fn ([A-Za-z][A-Za-z0-9_]*)\((.*?)\) -> ([A-Za-z][A-Za-z0-9_]*) = (.+)",line):
-            if states or actions or m[1] in types or keyword.iskeyword(m[1]) or len(functions)>=32 or m[1] in SIGNATURES or m[1] in ('true','false','append','update','remove','get','has','count','next_id'):raise ValueError(f'Line {number}: invalid pure function declaration')
+            if states or actions or m[1] in types or keyword.iskeyword(m[1]) or len(functions)>=32 or m[1] in SIGNATURES or m[1] in QUERY_NAMES or m[1] in ('true','false','append','update','remove','get','has','count','next_id'):raise ValueError(f'Line {number}: invalid pure function declaration')
             kinds={'int':int,'text':str,'bool':bool,**records}
             params=[]
             for param in m[2].split(',') if m[2].strip() else ():
@@ -543,7 +548,7 @@ def parse(source):
     # Bound expanded derived expressions: generators inline them in actions/rules.
     sizes = {key: 1 for key in states}
     for key, expr in derived.items():
-        sizes[key] = sum(sizes.get(item.id, 1) if isinstance(item, ast.Name) else 1+(item.pure_function.cost if isinstance(item,ast.Call) and hasattr(item,"pure_function") else 0) for item in ast.walk(expr))
+        sizes[key] = sum(sizes.get(item.id, 1) if isinstance(item, ast.Name) else 1+(item.pure_function.cost if isinstance(item,ast.Call) and hasattr(item,"pure_function") else 0)+getattr(item,"query_cost",0) for item in ast.walk(expr))
         if sizes[key] > MAX_DERIVED_NODES:
             raise ValueError("Derived expression exceeds expansion limit")
     values = resolve(states, derived)

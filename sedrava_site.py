@@ -287,6 +287,8 @@ def parse_site(source):
     source = components(source)
     from sedrava_web_assets import read_directives
     source, settings = read_directives(source)
+    if "theme-state" in settings:raise ValueError("Site mode has no mutable theme-state")
+    if "robots" in settings and "origin" not in settings:raise ValueError("robots requires an explicit publishing origin")
     lines=source_lines(source)
     if not lines:raise ValueError('Line 1: column 1: Missing site')
     lex=[(depth,tokens(line,n,depth),n) for depth,line,n in lines]

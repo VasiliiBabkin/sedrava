@@ -12,4 +12,4 @@ class FunctionType:
 
 
 def expression_cost(node):
-    return sum(1+(item.pure_function.cost if isinstance(item,ast.Call) and hasattr(item,'pure_function') else 0) for item in ast.walk(node))
+    return sum(1+(item.pure_function.cost if isinstance(item,ast.Call) and hasattr(item,'pure_function') else 0)+getattr(item,'query_cost',0) for item in ast.walk(node))

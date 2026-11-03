@@ -11,6 +11,9 @@ from android_codegen import generate as scaffold
 def kt(node, names):
     if isinstance(node, ast.Attribute): return '(' + kt(node.value, names) + ').sdr_' + node.attr
     if isinstance(node, ast.Call):
+        if hasattr(node,"collection_query"):
+            from sedrava_queries import kt_query
+            return kt_query(node,kt,names)
         if hasattr(node,"pure_builtin"):
             from sedrava_stdlib import kt_call
             return kt_call(node.pure_builtin,[kt(arg,names) for arg in node.args])

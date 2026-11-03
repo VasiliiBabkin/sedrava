@@ -2,8 +2,8 @@
 
 The core's parser, action compiler and persistence semantics are reused; this
 module does not interpret Sedrava actions. Supports bounded collection
-rendering and selection alongside scalar/derived values. No HTTP, multi-view
-navigation, or inline arbitrary code.
+rendering and selection alongside scalar/derived values. Typed capability-bounded HTTP and multi-view
+navigation share the core state model. No inline arbitrary code.
 """
 from dataclasses import dataclass, field
 import html
@@ -36,6 +36,7 @@ class WebApp:
     styles: dict = field(default_factory=dict)
     settings: dict = field(default_factory=dict)
     themes: dict = field(default_factory=dict)
+    types: dict = field(default_factory=dict)
 
 
 UI_LAYOUT = frozenset(("container", "row", "column", "grid", "card",
@@ -88,6 +89,7 @@ def parse_webapp(source):
     source = components(source)
     from sedrava_web_assets import read_directives
     source, settings = read_directives(source)
+    if any(key in settings for key in ("origin","robots","social-image")):raise ValueError("Static publishing metadata requires site mode")
     raw=source.splitlines();kept=[];presentation=[];named_themes={};pos=0
     while pos<len(raw):
         named=re.fullmatch(r'theme ([A-Za-z][A-Za-z0-9_-]*):',raw[pos])
@@ -105,7 +107,7 @@ def parse_webapp(source):
     from sedrava_site import parse_site
     style_doc=parse_site('site "settings"\n'+'\n'.join(presentation)+'\npage home at "/":\n    title "settings"\n    heading "settings"\n')
     theme_palettes={name:parse_site('site "theme"\n'+text+'\npage home at "/":\n    title "theme"\n    heading "theme"\n').theme for name,text in named_themes.items()}
-    source='\n'.join(kept)+'\n' 
+    source='\n'.join(kept)+'\n'
     from sedrava_web_services import extract_services, validate_services
     source, service_blocks = extract_services(source)
     lines = source_lines(source)
@@ -140,7 +142,7 @@ def parse_webapp(source):
         fail(Span(view_lineno, 1), "WebApp B1 does not support multi-view navigation")
     declared = {key: value_type(value) for key, value in program.states.items()}
     for key, expr in program.derived.items():
-        declared[key] = type_of(expr, {**(program.functions or {}),**declared})
+        declared[key] = type_of(expr, {**(program.records or {}),**(program.functions or {}),**declared})
     from sedrava_web_routes import route_parameters
     for name,spec in views.items():
         for key in route_parameters(spec['path']):
@@ -331,7 +333,7 @@ def parse_webapp(source):
             if node.kind=='dialog':dialog_ids.add(key)
     for node in walk(all_widgets):
         if node.kind in ('open','close') and node.properties['to'].value not in dialog_ids:fail(node.span,'Unknown dialog')
-    return WebApp(program.name, program, tuple(all_widgets), views=views, services=services, theme=style_doc.theme, styles=style_doc.styles, settings=settings, themes=theme_palettes)
+    return WebApp(program.name, program, tuple(all_widgets), views=views, services=services, theme=style_doc.theme, styles=style_doc.styles, settings=settings, themes=theme_palettes, types=declared)
 
 
 APP_CSS = r"""
@@ -490,7 +492,7 @@ def generate_webapp(document, source_dir=".", _inputs=None):
             if kind=='each':
                 field_attrs=field_attrs.replace('data-list=', 'data-each=')
                 return common[:-1]+field_attrs+'><template>'+''.join(render(c) for c in node.children)+'</template><div data-each-items role="list"></div></section>'
-            if kind=='table':field_attrs+=attr('data-table',props.get('fields',' '.join(k for k,_ in document.program.states[props['collection']].kind.record.fields)))
+            if kind=='table':field_attrs+=attr('data-table',props.get('fields',' '.join(k for k,_ in document.types[props['collection']].record.fields)))
             return common[:-1] + field_attrs + ('></div>' if kind=='table' else '></ul>')
         if kind == "code":
             return common + "<code>" + html.escape(props["text"]) + "</code></pre>"
@@ -681,6 +683,7 @@ def build_webapp(source, output, source_path):
         "schema": 1, "mode": "webapp", "compiler_version": VERSION,
         "source_sha256": digest(source.encode("utf-8") if isinstance(source, str)
                                 else source_path.read_bytes()),
+        "inputs": {path.relative_to(source_path.parent).as_posix(): digest(path.read_bytes()) for path in sorted(modules)},
         "files": {name: digest(data) for name, data in sorted(files.items())},
     }, sort_keys=True, indent=2) + "\n").encode("utf-8")
     output.parent.mkdir(parents=True, exist_ok=True)

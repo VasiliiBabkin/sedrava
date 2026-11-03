@@ -1,8 +1,9 @@
-# Sedrava 0.11 experimental B1 collections: task CRUD.
+# Sedrava 0.11 integration: offline tasks with typed domain queries.
 webapp "Sedrava · Workspace"
 record Task:
     title: text
     done: bool
+fn matches(task: Task, query: text) -> bool = contains(lower_ascii(task.title), lower_ascii(query))
 state tasks: list<Task>(max=100) = []
 state selected = 0
 state new_title = ""
@@ -11,6 +12,7 @@ state search_text = ""
 state filter_enabled = false
 state filter_done = false
 persist tasks
+derive visible_tasks = filter(tasks, matches, search_text)
 derive empty = count(tasks) == 0
 derive task_count = count(tasks)
 derive chosen = has(tasks, selected)
@@ -50,7 +52,7 @@ view main:
             select filter_done label "Completion status":
                 option "In progress" value false
                 option "Completed" value true
-            each tasks select selected title title status done search search_text sort title where done equals filter_done active filter_enabled empty "No matching tasks" label "Task list":
+            each visible_tasks select selected title title status done sort title where done equals filter_done active filter_enabled empty "No matching tasks" label "Task list":
                 card:
                     column gap 12:
                         field title label "Task" weight bold size 20

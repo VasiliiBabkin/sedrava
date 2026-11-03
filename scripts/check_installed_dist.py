@@ -41,10 +41,20 @@ def check(archive, folder):
     run(cli,'build','site',site_source,'--output',site_output)
     assert first=={p.relative_to(site_output):p.read_bytes() for p in site_output.rglob('*') if p.is_file()}
     assert (site_output/'site.css').is_file() and list((site_output/'assets').glob('*.svg'))
+    for name in ('site','tasks','catalog','crm'):
+        source=folder/'share/sedrava/examples'/f'platform_{name}.sdr'
+        output=folder/'platform output'/name
+        run(cli,'check',source)
+        mode='site' if name=='site' else 'webapp'
+        run(cli,'build',mode,source,'--output',output)
+        first={p.relative_to(output):p.read_bytes() for p in output.rglob('*') if p.is_file()}
+        run(cli,'build',mode,source,'--output',output)
+        assert first=={p.relative_to(output):p.read_bytes() for p in output.rglob('*') if p.is_file()}
     print(f'PASS: clean {archive.name}, bundled docs/examples/license, check/test/run/Web/Android and deterministic Web',flush=True)
 
 if __name__=='__main__':
-    archives=[*sorted((ROOT/'dist').glob('*.whl')),*sorted((ROOT/'dist').glob('*.tar.gz'))]
+    dist=Path(sys.argv[1]).resolve() if len(sys.argv)>1 else ROOT/'dist'
+    archives=[*sorted(dist.glob('*.whl')),*sorted(dist.glob('*.tar.gz'))]
     assert len(archives)==2,'Build exactly one wheel and sdist first'
     with tempfile.TemporaryDirectory(prefix='sedrava installed ') as tmp:
         for index,archive in enumerate(archives):check(archive,Path(tmp)/str(index))

@@ -15,6 +15,9 @@ def json_script(value, **kwargs):
 def js_expr(node, names):
     if isinstance(node, ast.Attribute): return '(' + js_expr(node.value, names) + ')[' + json_script(node.attr) + ']'
     if isinstance(node, ast.Call):
+        if hasattr(node,"collection_query"):
+            from sedrava_queries import js_query
+            return js_query(node,js_expr,names)
         if hasattr(node,"pure_builtin"):
             from sedrava_stdlib import js_call
             return js_call(node.pure_builtin,[js_expr(arg,names) for arg in node.args])
@@ -81,6 +84,7 @@ def generate(source, _program=None, _domain_only=False):
     if not program.widgets:
         raise ValueError("Missing screen main")
     from sedrava_stdlib import JS_RUNTIME
+    from sedrava_queries import JS_RUNTIME as QUERY_RUNTIME
     initial = json_script({k: plain(v) for k, v in program.states.items()}, ensure_ascii=False)
     names = {key: "nextState[" + json_script(key) + "]" for key in program.states}
     for key, expr in (program.derived or {}).items():
@@ -143,7 +147,7 @@ def generate(source, _program=None, _domain_only=False):
         f"const initialState = JSON.parse({json_script(initial)});",
         "const storageKey = 'sedrava:' + (typeof location !== 'undefined' ? location.pathname : '/') + ':' + " + json_script(program.name) + ";",
         "const persistentKeys = " + json_script(list(program.persistent)) + ";",
-        JS_RUNTIME,
+        JS_RUNTIME, QUERY_RUNTIME,
         js_runtime(program, json_script) if (program.records or program.has_navigation) else "const collectionTypes = {}; function legacySnapshotValid(saved) { return saved !== null && typeof saved === 'object' && !Array.isArray(saved) && Object.keys(saved).every(k => persistentKeys.includes(k) && validValue(saved[k],initialState[k])) && validateState({...initialState,...saved}); } function saveSnapshot() { if(restoreError) throw Error('Rejected saved data retained'); const previous=localStorage.getItem(storageKey); if(previous!==null && !legacySnapshotValid(JSON.parse(previous))) throw Error('Rejected saved data retained'); localStorage.setItem(storageKey,JSON.stringify(Object.fromEntries(persistentKeys.map(k=>[k,state[k]])))); }",
         "let restoreError = false;",
         "let state = { ...initialState };",

@@ -1,0 +1,37 @@
+app "Collection algebra"
+record Item:
+    title: text
+    score: int
+    done: bool
+fn matches(row: Item, query: text) -> bool = contains(row.title, query)
+fn raised(row: Item, extra: int) -> Item = Item(title=row.title, score=row.score+extra, done=row.done)
+state rows: list<Item>(max=8) = []
+state projected: list<Item>(max=8) = []
+state total=0
+state found=0
+state yes=false
+state every=false
+action seed:
+    rows=append(rows,Item(title="😀",score=3,done=false))
+    rows=append(rows,Item(title="",score=2,done=true))
+    rows=append(rows,Item(title="a",score=1,done=true))
+action query:
+    projected=sort(filter(rows,"done",true),"title")
+    total=sum(rows,"score")
+    found=find(rows,matches,"a")
+    yes=any(rows,"done",false)
+    every=all(rows,"done",true)
+action transform:
+    rows=map(rows,raised,1)
+action remove_first:
+    rows=remove(rows,1)
+action unicode_sort:
+    projected=sort(rows,"title")
+action overflow:
+    found=99
+    rows=map(rows,raised,2147483647)
+action sum_overflow:
+    rows=append(rows,Item(title="limit",score=2147483647,done=true))
+    total=sum(rows,"score")
+screen main:
+    value total

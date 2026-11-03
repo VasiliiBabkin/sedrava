@@ -86,6 +86,7 @@ function renderCollections() {
 
 
 def kt_support(program, quoted):
+    from sedrava_queries import KT_RUNTIME
     kinds = {int:'Int', bool:'Boolean', str:'String'}
     lines = [
         'internal interface SdrRecord { fun check(); fun fields(): Map<String, Any?> }',
@@ -101,6 +102,7 @@ def kt_support(program, quoted):
         'internal fun <T: SdrRecord> sdr_update(list: SdrList<T>, id: Int, record: T): SdrList<T> { sdr_get(list,id); record.check(); return list.copy(items=list.items.map { if(it.id==id) SdrItem(id,record) else it }) }',
         'internal fun <T: SdrRecord> sdr_remove(list: SdrList<T>, id: Int): SdrList<T> { sdr_get(list,id); return list.copy(items=list.items.filter { it.id!=id }) }',
     ]
+    lines.append(KT_RUNTIME)
     for name, record in program.records.items():
         lines += ['internal data class SdrRecord_' + name + '(' + ', '.join('val sdr_'+k+': '+kinds[t] for k,t in record.fields) + '): SdrRecord {', '  override fun check() {']
         lines += ['    checkedText(sdr_'+k+')' for k,t in record.fields if t is str]

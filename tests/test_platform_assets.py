@@ -32,3 +32,9 @@ class Assets(unittest.TestCase):
         self.assertFalse(ok);self.assertEqual(state,rejected)
         accepted,ok=edit_state(doc.program,state,'theme_mode','dark')
         self.assertTrue(ok);self.assertEqual(accepted['theme_mode'],'dark')
+
+    def test_wrong_mode_metadata_is_not_silently_ignored(self):
+        from sedrava_site import parse_site
+        with self.assertRaisesRegex(ValueError,'theme-state'):parse_site('site "x"\ntheme-state mode\n')
+        with self.assertRaisesRegex(ValueError,'robots'):parse_site('site "x"\nrobots false\n')
+        with self.assertRaisesRegex(ValueError,'site mode'):parse_webapp('webapp "x"\norigin "https://example.com"\n')

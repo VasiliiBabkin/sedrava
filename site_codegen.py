@@ -219,7 +219,7 @@ def build_site(source,output,source_path):
     if source_path.is_relative_to(output.resolve()) or any(p.is_relative_to(output.resolve()) for p in inputs):
         raise ValueError('Site output must not contain the source or source assets')
     validate_existing(output)
-    files[MARKER]=(json.dumps({'schema':1,'mode':'site','compiler_version':VERSION,'source_sha256':digest(source.encode('utf-8')),'files':{k:digest(v) for k,v in sorted(files.items())}},sort_keys=True,indent=2)+'\n').encode('utf-8')
+    files[MARKER]=(json.dumps({'schema':1,'mode':'site','compiler_version':VERSION,'source_sha256':digest(source.encode('utf-8')),'inputs':{p.relative_to(source_path.parent).as_posix():digest(p.read_bytes()) for p in sorted(inputs)},'files':{k:digest(v) for k,v in sorted(files.items())}},sort_keys=True,indent=2)+'\n').encode('utf-8')
     output.parent.mkdir(parents=True,exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='.sedrava-site-',dir=output.parent,ignore_cleanup_errors=True) as temporary:
         stage=Path(temporary)/'next';stage.mkdir();backup=Path(temporary)/'previous'

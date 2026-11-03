@@ -46,6 +46,7 @@ persist companies
 persist contacts
 persist show_help
 persist theme_mode
+derive active_count = count(filter(contacts, "active", true))
 derive company_count = count(companies)
 derive contact_count = count(contacts)
 derive company_selected = has(companies, company_id)
@@ -92,6 +93,7 @@ view main:
                     column:
                         heading "Contacts" level 2
                         value contact_count label "Contacts"
+                        value active_count label "Active contacts"
             when show_help:
                 callout:
                     paragraph "Start by adding a company, select it, then open its contacts. This client stores data locally; it is not a multi-user backend."

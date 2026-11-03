@@ -6,6 +6,7 @@ EXTRA_CSS = r'''
 .s-webapp select{font:inherit;padding:12px;color:var(--foreground);background:var(--surface);border:1px solid var(--border);border-radius:10px;width:100%;max-width:100%}
 .s-webapp form{display:grid;gap:16px}.s-webapp dialog{color:var(--foreground);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:24px;width:min(34rem,calc(100% - 32px));max-height:85vh;overflow:auto}
 .s-webapp dialog::backdrop{background:#0009}.s-webapp button{overflow-wrap:anywhere;min-height:44px;max-width:100%}
+.s-webapp h1[tabindex="-1"]:focus{outline:none}
 .s-webapp [data-view][hidden]{display:none!important}.s-webapp [data-view]{min-width:0}
 '''
 EXTRA_JS = r'''
@@ -45,7 +46,7 @@ function renderEach(){
 document.addEventListener('click',event=>{
  const button=event.target.closest('button[data-pick],button[data-action]');if(!button)return;
  const row=button.closest('[data-row-id]');if(!row||button.disabled)return;
- const identity=Number(row.dataset.rowId),collection=state[row.dataset.rowCollection];
+ const identity=Number(row.dataset.rowId),collection=valuesOfState()[row.dataset.rowCollection];
  if(!collection.items.some(r=>r.id===identity)){showError('Record no longer exists');return;}
  try{
   const candidate=editState(state,row.dataset.rowSelect,identity);if(candidate===state){showError('Selection rejected');return;}
