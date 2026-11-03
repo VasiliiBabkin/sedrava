@@ -5,7 +5,7 @@ sys.path[:0]=[str(Path(__file__).resolve().parents[1]),str(Path(__file__).resolv
 import functools
 from http.server import SimpleHTTPRequestHandler,ThreadingHTTPServer
 import os,shutil,tempfile,threading,unittest
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright,expect
 from test_native_docs import NativeDocs,SOURCE,COUNTER
 from site_codegen import build_site
 class Browser(unittest.TestCase):
@@ -19,11 +19,14 @@ class Browser(unittest.TestCase):
                     engine=os.environ.get('SEDRAVA_BROWSER','chromium');options={'executable_path':shutil.which('chromium'),'args':['--no-sandbox']} if engine=='chromium' else {}
                     browser=getattr(p,engine).launch(**options);page=browser.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
                     page.goto('http://127.0.0.1:'+str(server.server_port)+'/');page.locator('iframe').scroll_into_view_if_needed();frame=page.frame_locator('iframe')
-                    frame.get_by_role('button',name='Add',exact=True).click();self.assertEqual(frame.locator('output').inner_text(),'1')
-                    page.get_by_role('button',name='Reload / Перезагрузить').click();self.assertEqual(frame.locator('output').inner_text(),'1')
+                    frame.get_by_role('button',name='Add',exact=True).click();self.assertEqual(frame.locator('output:visible').inner_text(),'1')
+                    frame.get_by_role('button',name='Details',exact=True).click()
+                    with page.expect_event('framenavigated',predicate=lambda f:f.parent_frame is not None):page.get_by_role('button',name='Reload / Перезагрузить').click()
+                    self.assertTrue(frame.get_by_role('heading',name='Details',exact=True).is_visible());self.assertEqual(frame.locator('output:visible').inner_text(),'1')
+                    frame.get_by_role('button',name='Home',exact=True).click()
                     self.assertEqual(page.locator('.doc-demo code').text_content(),COUNTER)
                     page.evaluate('localStorage.setItem("unrelated","keep")');page.get_by_role('button',name='Reset this demo / Сбросить пример').click()
-                    frame.get_by_role('button',name='Add',exact=True).wait_for();page.wait_for_function('document.querySelector("iframe").contentDocument.querySelector("output").textContent==="0"')
+                    frame.get_by_role('button',name='Add',exact=True).wait_for();expect(frame.locator('output:visible')).to_have_text('0')
                     self.assertEqual(page.evaluate('localStorage.getItem("unrelated")'),'keep')
                     page.get_by_label('Search',exact=True).fill('ПРИВЕТ');self.assertEqual(page.locator('[data-search-results] a').count(),2)
                     page.get_by_label('Search',exact=True).press('ArrowDown');self.assertEqual(page.evaluate('document.activeElement.tagName'),'A')

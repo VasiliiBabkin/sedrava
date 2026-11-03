@@ -12,3 +12,6 @@ Demo iframes are **trusted author code on the same origin**, not a security sand
 Local sources, modules, resources and output routes are bounded and hashed. Failed validation occurs before replacing managed output. No build-time network access or publication. Generated docs are static files suitable for Nginx, including the optional fixed client search/copy/reset adapter.
 
 Русский: Markdown, поиск, боковая навигация и встроенное WebApp — проверяемые компоненты site. Установка extras `[docs]` обязательна для них. HTML отклоняется; текст и код экранируются; URL проверяются; зависимости ограничены корнем и хешируются. Пример собирается из того же файла, который показан рядом, без ручных изменений генерации. Общий origin означает доверие к автору примера, а не изоляцию. Произвольный редактор/недоверенный код не поддерживается. Reset удаляет только состояние конкретного примера. Статический сайт не имитирует сервер API. Выпуск/развёртывание эта возможность не выполняет.
+
+
+`clean-urls true` opts a static site into relative directory links instead of explicit index.html links, preserving existing defaults. Demo reload preserves its accepted route/hash; reset returns to the declared demo entry after scoped storage deletion. Нативная перезагрузка сохраняет hash-маршрут, reset удаляет только данные выбранного примера.

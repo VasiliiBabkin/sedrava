@@ -167,7 +167,7 @@ for(const panel of document.querySelectorAll('.doc-code')){
 for(const demo of document.querySelectorAll('[data-demo]')){
  const frame=demo.querySelector('iframe'),status=demo.querySelector('[data-demo-status]');
  frame.addEventListener('load',()=>{status.textContent='Loaded / Загружено';});
- demo.querySelector('[data-demo-reload]').addEventListener('click',()=>{frame.src=new URL(frame.src).href;});
+ demo.querySelector('[data-demo-reload]').addEventListener('click',()=>{try{const current=new URL(frame.contentWindow.location.href),expected=new URL(frame.src);if(current.origin!==location.origin||current.pathname!==expected.pathname)throw Error('unexpected demo location');frame.contentWindow.location.reload();}catch(_){status.textContent='Reload refused: unexpected demo origin/path';}});
  demo.querySelector('[data-demo-reset]').addEventListener('click',()=>{
   const url=new URL(frame.src);if(url.origin!==location.origin){status.textContent='Reset refused: wrong origin';return;}
   try{localStorage.removeItem('sedrava:'+url.pathname+':'+demo.dataset.app);

@@ -89,7 +89,7 @@ def parse_webapp(source):
     source = components(source)
     from sedrava_web_assets import read_directives
     source, settings = read_directives(source)
-    if any(key in settings for key in ("origin","robots","social-image")):raise ValueError("Static publishing metadata requires site mode")
+    if any(key in settings for key in ("origin","robots","social-image","clean-urls")):raise ValueError("Static publishing metadata requires site mode")
     raw=source.splitlines();kept=[];presentation=[];named_themes={};pos=0
     while pos<len(raw):
         named=re.fullmatch(r'theme ([A-Za-z][A-Za-z0-9_-]*):',raw[pos])

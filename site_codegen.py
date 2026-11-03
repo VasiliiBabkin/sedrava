@@ -124,6 +124,7 @@ def generate_site(source,source_dir='.'):
             url=urlsplit(value)
             if url.scheme:return value
             path=relative(page_file(routes[url.path]),page) if url.path else ''
+            if site.settings.get('clean-urls') and path.endswith('index.html'):path=path[:-len('index.html')] or './'
             return urlunsplit(('', '',path,url.query,url.fragment))
         def render(node):
             nonlocal counter

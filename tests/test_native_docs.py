@@ -7,6 +7,7 @@ from site_codegen import build_site
 from sedrava_site import parse_site
 
 SOURCE='''site "Native docs"
+clean-urls true
 page home at "/":
     title "Native docs"
     heading "Native docs"
@@ -20,7 +21,7 @@ page ru at "/ru/":
     markdown "guide.md"
     demo "counter.sdr" at "/live/counter/" label "Счётчик"
 '''
-COUNTER='webapp "Counter"\nstate n=0\npersist n\naction add: n=n+1\nview main:\n    heading "Counter"\n    value n label "Count"\n    button "Add" action add\n'
+COUNTER='webapp "Counter"\nstate n=0\npersist n\naction add: n=n+1\nview main:\n    heading "Counter"\n    value n label "Count"\n    button "Add" action add\n    navigate "Details" to details\nview details at "/details":\n    heading "Details"\n    value n label "Count"\n    back "Home"\n'
 import importlib.util
 @unittest.skipUnless(importlib.util.find_spec('markdown_it') and importlib.util.find_spec('pygments'),'Optional docs extra unavailable; native-docs CI installs and tests it explicitly')
 class NativeDocs(unittest.TestCase):
@@ -30,6 +31,7 @@ class NativeDocs(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);self.fixture(root);out=root/'out';build_site(SOURCE,out,root/'site.sdr')
             index=(out/'index.html').read_text();self.assertIn('<iframe',index);self.assertIn("frame-src 'self'",index);self.assertIn('docs.js',index);self.assertNotIn('sandbox=',index)
+            self.assertIn('href="ru/"',index)
             self.assertIn('id="привет-world"',index);self.assertIn('<table>',index)
             digest=hashlib.sha256(COUNTER.encode()).hexdigest();self.assertEqual((out/'sources'/f'{digest}.sdr').read_text(),COUNTER)
             demos=json.loads((out/'docs-demos.json').read_text());self.assertEqual(len(demos),1);self.assertEqual(demos['/live/counter/']['source_sha256'],digest)
