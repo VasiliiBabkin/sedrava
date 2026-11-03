@@ -207,8 +207,6 @@ def generate_webapp(document):
     program = document.program
     # Extract the exact validated 0.10 core runtime. No new action interpreter.
     domain_js = generate_legacy_web("", _program=program, _domain_only=True)
-    from sedrava_site import Site
-    site = Site(document.name, dict(THEME), {}, ())
     selectors = []
     counter = 0
 
@@ -280,7 +278,7 @@ def generate_webapp(document):
                     control + '<small id="' + error_id +
                     '" role="alert" hidden>Value rejected by declared type or rules</small></div>')
         if kind == "when":
-            return common[:-1] + attr("data-when", props["state"]) + ">" + (
+            return common[:-1] + attr("data-when", props["state"]) + " hidden>" + (
                 "".join(render(child) for child in node.children)) + "</section>"
         if kind == "code":
             return common + "<code>" + html.escape(props["text"]) + "</code></pre>"

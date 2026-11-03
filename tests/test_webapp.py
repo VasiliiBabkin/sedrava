@@ -54,7 +54,7 @@ class WebAppTests(unittest.TestCase):
         self.assertIn('data-state="double_count"', markup)
         self.assertIn('data-input="note"', markup)
         self.assertIn('data-check="show_note"', markup)
-        self.assertIn('data-when="show_note"', markup)
+        self.assertIn('data-when="show_note" hidden>', markup)
         self.assertIn('data-action="increment"', markup)
         self.assertIn('const actions = {', script)
         self.assertIn('nextState["count"] = checkedInt(', script)
@@ -86,8 +86,6 @@ class WebAppTests(unittest.TestCase):
         self.bad(MINIMAL.replace('view main:', 'view main:\n    heading "X"\nview main:'), "Exactly one")
         self.bad(MINIMAL.replace('    heading "Hello"\n', ''), "exactly one h1")
         self.bad(MINIMAL.replace('    value count\n', '    heading "Other" level 1\n'), "exactly one h1")
-        self.bad(MINIMAL.replace('    value count\n', '    column:\n        value count\n').replace(
-            '    button "Add" action add\n',''), "column|Unsupported") if False else None
         self.bad(MINIMAL.replace('    value count', '      value count'), "Expected four-space")
         self.bad(MINIMAL.replace('    value count', '    script "evil"'), "Unsupported WebApp")
         self.bad(MINIMAL.replace('    value count', '    row:'), "Empty component block")
@@ -129,12 +127,12 @@ class WebAppTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "modified"):
                 build_webapp(EXAMPLE, paths[0], source)
             self.assertEqual((paths[0] / "app.js").read_text(), "user edited")
+            unmanaged = root / "unmanaged"
+            unmanaged.mkdir()
+            (unmanaged / "mine.txt").write_text("mine")
             with self.assertRaisesRegex(ValueError, "unmanaged"):
-                build_webapp(EXAMPLE, root / "unmanaged", source) if False else (
-                    (root / "unmanaged").mkdir(),
-                    (root / "unmanaged" / "mine.txt").write_text("mine"),
-                    build_webapp(EXAMPLE, root / "unmanaged", source)
-                )
+                build_webapp(EXAMPLE, unmanaged, source)
+            self.assertEqual((unmanaged / "mine.txt").read_text(), "mine")
             with self.assertRaisesRegex(ValueError, "contain its source"):
                 build_webapp(EXAMPLE, root, source)
 
