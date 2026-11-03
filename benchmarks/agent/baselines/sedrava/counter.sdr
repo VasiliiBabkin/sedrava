@@ -1,5 +1,6 @@
 app "Counter baseline"
 state count = 0
+persist count
 action increment: count = count + 1
 action decrement: count = count - 1
 action reset: count = 0
