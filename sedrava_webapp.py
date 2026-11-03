@@ -1,8 +1,9 @@
 """Experimental Sedrava webapp v0.11: typed app state and responsive Web UI.
 
 The core's parser, action compiler and persistence semantics are reused; this
-module does not interpret Sedrava actions. Only scalar/derived values are
-currently supported. No network, lists, navigation, or inline arbitrary code.
+module does not interpret Sedrava actions. Supports bounded collection
+rendering and selection alongside scalar/derived values. No HTTP, multi-view
+navigation, or inline arbitrary code.
 """
 from dataclasses import dataclass
 import html
@@ -13,6 +14,7 @@ import re
 import tempfile
 
 from sedrava_core import parse as parse_app, run, type_of
+from sedrava_records import ListType, value_type
 from sedrava_syntax import source_lines, MAX_BLOCK_DEPTH
 from sedrava_site import (BREAKPOINTS, COMMON, COMPONENTS, THEME, Component,
                           Definition, Parameter, Property, Span, choice, fail,
@@ -42,6 +44,11 @@ UI_DYNAMIC = {
                            parameters={"state": Parameter(identifier)}),
     "when": Definition("section", children=True, required=("state",),
                        parameters={"state": Parameter(identifier)}),
+    "list": Definition("ul", required=("collection", "select"),
+                       parameters={"collection": Parameter(identifier),
+                                   "select": Parameter(identifier),
+                                   "title": Parameter(identifier),
+                                   "status": Parameter(identifier)}),
     "button": Definition("button", positional="text",
                          required=("text", "action"),
                          parameters={"text": Parameter(text),
@@ -70,10 +77,9 @@ def parse_webapp(source):
     domain = "\n".join(raw[:view_lineno - 1]) + '\nscreen main:\n    text "WebApp placeholder"\n'
     program = parse_app(domain)
     run(program)
-    if program.has_navigation or program.records or any(type(v) not in (int, bool, str)
-                                                        for v in program.states.values()):
-        fail(Span(view_lineno, 1), "WebApp B1 supports scalar state only; collections/navigation are not yet supported")
-    declared = {key: type(value) for key, value in program.states.items()}
+    if program.has_navigation:
+        fail(Span(view_lineno, 1), "WebApp B1 does not support multi-view navigation")
+    declared = {key: value_type(value) for key, value in program.states.items()}
     for key, expr in program.derived.items():
         declared[key] = type_of(expr, declared)
     body_lines = lines[ix + 1:]
@@ -104,7 +110,7 @@ def parse_webapp(source):
                 fail(items[0].span, "Invalid component block structure")
             args = items[1:-1] if is_block else items[1:]
             given = {}
-            if kind in ("value", "input", "checkbox", "when"):
+            if kind in ("value", "input", "checkbox", "when", "list"):
                 if not args or args[0].quoted or type(args[0].value) is not str:
                     fail(items[0].span, "State identifier required")
                 name = args[0].value
@@ -112,7 +118,7 @@ def parse_webapp(source):
                     identifier(name)
                 except ValueError as exc:
                     fail(args[0].span, str(exc))
-                given["state"] = Property(name, args[0].span)
+                given["collection" if kind == "list" else "state"] = Property(name, args[0].span)
                 args = args[1:]
             elif args and args[0].quoted and definition.positional:
                 given[definition.positional] = Property(args[0].value, args[0].span)
@@ -144,8 +150,23 @@ def parse_webapp(source):
                     fail(given["state"].span, "Input requires integer or text state")
                 if kind in ("checkbox", "when") and actual is not bool:
                     fail(given["state"].span, kind + " requires boolean state")
+                if kind == "value" and actual not in (int, bool, str):
+                    fail(given["state"].span, "Value requires scalar or derived scalar state")
                 if kind in ("input", "checkbox") and not given["label"].value.strip():
                     fail(given["label"].span, "Accessible label must not be empty")
+            if kind == "list":
+                key = given["collection"].value
+                collection_type = declared.get(key)
+                if not isinstance(collection_type, ListType):
+                    fail(given["collection"].span, "List requires a declared collection")
+                selected = given["select"].value
+                if selected not in program.states or type(program.states[selected]) is not int:
+                    fail(given["select"].span, "List select requires a mutable integer state")
+                fields = dict(collection_type.record.fields)
+                if "title" in given and fields.get(given["title"].value) is not str:
+                    fail(given["title"].span, "List title requires a text record field")
+                if "status" in given and fields.get(given["status"].value) is not bool:
+                    fail(given["status"].span, "List status requires a boolean record field")
             if kind == "button" and given["action"].value not in program.actions:
                 fail(given["action"].span, "Unknown action " + given["action"].value)
             pos += 1
@@ -197,6 +218,12 @@ APP_CSS = r"""
 .s-webapp [aria-invalid=true]{border-color:var(--gold)!important}
 .s-webapp [role=alert]{color:var(--gold);font-size:.9rem}
 .s-webapp [hidden]{display:none!important}
+.s-webapp .s-list{list-style:none;display:grid;gap:12px;padding:0;margin:0;min-width:0}
+.s-webapp .s-list li{min-width:0}
+.s-webapp .s-list-choice{font:inherit;text-align:left;color:var(--foreground);background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px 16px;min-height:48px;width:100%;display:grid;gap:4px;cursor:pointer}
+.s-webapp .s-list-choice[aria-pressed=true]{outline:2px solid var(--accent);outline-offset:1px}
+.s-webapp .s-list-title{font-weight:650;overflow-wrap:anywhere;white-space:pre-wrap}
+.s-webapp .s-list-status{color:var(--muted);font-size:.85rem}
 #sedrava-error{margin:16px auto;max-width:80rem;padding:12px}
 """
 
@@ -280,6 +307,15 @@ def generate_webapp(document):
         if kind == "when":
             return common[:-1] + attr("data-when", props["state"]) + " hidden>" + (
                 "".join(render(child) for child in node.children)) + "</section>"
+        if kind == "list":
+            field_attrs = (
+                attr("data-list", props["collection"]) +
+                attr("data-select", props["select"]) +
+                (attr("data-title-field", props["title"]) if "title" in props else "") +
+                (attr("data-status-field", props["status"]) if "status" in props else "") +
+                attr("aria-label", props.get("label", props["collection"]))
+            )
+            return common[:-1] + field_attrs + "></ul>"
         if kind == "code":
             return common + "<code>" + html.escape(props["text"]) + "</code></pre>"
         return common + html.escape(props.get("text", "")) + (
@@ -305,11 +341,12 @@ def generate_webapp(document):
         '  document.querySelectorAll("[data-when]").forEach(el=>{el.hidden=!values[el.dataset.when];});',
         '  document.querySelectorAll("[data-input]").forEach(el=>{if(document.activeElement!==el)el.value=String(state[el.dataset.input]);});',
         '  document.querySelectorAll("[data-check]").forEach(el=>{el.checked=state[el.dataset.check];});',
+        '  renderLists();',
         '  syncButtons();',
         '}',
         'function syncButtons(){',
         '  const invalid=!!document.querySelector("[data-input][aria-invalid=true]");',
-        '  document.querySelectorAll("button[data-action]").forEach(el=>{el.disabled=invalid;});',
+        '  document.querySelectorAll("button[data-action], [data-list] button").forEach(el=>{el.disabled=invalid;});',
         '}',
         'function persistAccepted(){',
         "  try{saveSnapshot();return true;}catch(_){showError('Could not save state; existing stored data retained');return false;}",
@@ -346,6 +383,35 @@ def generate_webapp(document):
         '      const error=document.getElementById(el.getAttribute("aria-describedby"));if(error)error.hidden=true;syncButtons();}',
         '  });',
         '});',
+        'function renderLists() {',
+        '  document.querySelectorAll("[data-list]").forEach(el => {',
+        '    const collection=state[el.dataset.list];',
+        '    const selected=state[el.dataset.select];',
+        '    const titleField=el.dataset.titleField, statusField=el.dataset.statusField;',
+        '    const fragment=document.createDocumentFragment();',
+        '    for(const row of collection.items){',
+        '      const item=document.createElement("li");item.dataset.id=String(row.id);',
+        '      const button=document.createElement("button");button.type="button";',
+        '      button.className="s-list-choice";button.dataset.itemId=String(row.id);',
+        '      button.setAttribute("aria-pressed", String(selected===row.id));',
+        '      const label=titleField?String(row[titleField]):Object.entries(row).filter(([key])=>key!=="id").map(([key,val])=>key+": "+String(val)).join(" · ");',
+        '      const title=document.createElement("span");title.className="s-list-title";title.textContent=label;button.append(title);',
+        '      button.setAttribute("aria-label", "Select "+label);',
+        '      if(statusField){const note=document.createElement("span");note.className="s-list-status";note.textContent=row[statusField]?"Completed":"In progress";button.setAttribute("aria-describedby", "list-status-"+el.dataset.list+"-"+row.id);note.id="list-status-"+el.dataset.list+"-"+row.id;button.append(note);}',
+        '      button.addEventListener("click",()=>{',
+        '        if(button.disabled)return;',
+        '        const next=editState(state,el.dataset.select,row.id);',
+        '        if(commit(next)){',
+        '          const updated=[...document.querySelectorAll("[data-list]")].find(list=>list.dataset.list===el.dataset.list && list.dataset.select===el.dataset.select);',
+        '          const focus=updated&&[...updated.querySelectorAll("button[data-item-id]")].find(b=>b.dataset.itemId===String(row.id));',
+        '          if(focus)focus.focus({preventScroll:true});',
+        '        }',
+        '      });',
+        '      item.append(button);fragment.append(item);',
+        '    }',
+        '    el.replaceChildren(fragment);',
+        '  });',
+        '}',
         'document.querySelectorAll("[data-check]").forEach(el=>{',
         '  el.addEventListener("change",()=>{const next=editState(state,el.dataset.check,el.checked);commit(next);render();});',
         '});',

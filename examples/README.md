@@ -1,6 +1,6 @@
 # Executable examples / Эталонные программы
 
-Every `.sdr` file has embedded tests. From a source checkout, substitute the file below:
+Legacy `app` examples include executable tests; experimental `site` and `webapp` examples have dedicated Python/Chromium checks. From a source checkout, substitute the file below:
 
 ```sh
 sedrava check examples/countdown.sdr
@@ -58,3 +58,16 @@ Wheel/sdist include examples, documentation and license under `sys.prefix/share/
 ## Static site / Статический сайт (experimental 0.11)
 
 `web_ui_011_landing.sdr` is a site document, not an action application. Это сайт, не приложение с действиями. Use `sedrava check examples/web_ui_011_landing.sdr` and `sedrava build site examples/web_ui_011_landing.sdr --output build/site`; keep `assets/sedrava-blueprint.svg` beside the source. `build web/android`, `run`, `test` target applications and reject this document. [English](../docs/WEB_UI_011.en.md) · [Русский](../docs/WEB_UI_011.ru.md).
+
+## Stateful WebApp 0.11 — интерактивные веб-приложения (experimental)
+
+`webapp_011_counter.sdr` covers scalar state, buttons and form inputs.
+`webapp_011_tasks.sdr` demonstrates records, bounded lists, selection,
+create/rename/complete/delete actions and offline persistence.
+
+    python -m sedrava_cli build webapp examples/webapp_011_tasks.sdr --output build/tasks
+    python -m http.server 8000 --directory build/tasks
+
+Dedicated guides: [scalar WebApp](../docs/WEBAPP_011_B1.md) and
+[record/list CRUD WebApp](../docs/WEBAPP_011_COLLECTIONS.md).
+These are branch-only experiments, not part of the released language.

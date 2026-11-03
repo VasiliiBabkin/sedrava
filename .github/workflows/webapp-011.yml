@@ -8,8 +8,11 @@ on:
       - "sedrava_core.py"
       - "sedrava_syntax.py"
       - "examples/webapp_011_counter.sdr"
+      - "examples/webapp_011_tasks.sdr"
       - "tests/test_webapp.py"
+      - "tests/test_webapp_collections.py"
       - "scripts/test_webapp_browser.py"
+      - "scripts/test_webapp_collections_browser.py"
       - ".github/workflows/webapp-011.yml"
   pull_request:
     paths:
@@ -19,8 +22,11 @@ on:
       - "sedrava_core.py"
       - "sedrava_syntax.py"
       - "examples/webapp_011_counter.sdr"
+      - "examples/webapp_011_tasks.sdr"
       - "tests/test_webapp.py"
+      - "tests/test_webapp_collections.py"
       - "scripts/test_webapp_browser.py"
+      - "scripts/test_webapp_collections_browser.py"
       - ".github/workflows/webapp-011.yml"
   workflow_dispatch:
 permissions:
@@ -38,8 +44,8 @@ jobs:
           python-version: "3.12"
       - name: Compile checker and run unit regressions
         run: |
-          python -m compileall -q sedrava_webapp.py sedrava_cli.py tests/test_webapp.py scripts/test_webapp_browser.py
-          python -m unittest discover -s tests -p test_webapp.py -v
+          python -m compileall -q sedrava_webapp.py sedrava_cli.py tests/test_webapp.py tests/test_webapp_collections.py scripts/test_webapp_browser.py scripts/test_webapp_collections_browser.py
+          python -m unittest discover -s tests -p "test_webapp*.py" -v
       - name: Build real standalone WebApp
         run: |
           python -m sedrava_cli check examples/webapp_011_counter.sdr
@@ -47,6 +53,9 @@ jobs:
           test -s build/webapp-011/index.html
           test -s build/webapp-011/app.js
           test -s build/webapp-011/app.css
+          python -m sedrava_cli check examples/webapp_011_tasks.sdr
+          python -m sedrava_cli build webapp examples/webapp_011_tasks.sdr --output build/webapp-011-tasks
+          test -s build/webapp-011-tasks/app.js
       - name: Install browser
         run: |
           python -m pip install playwright==1.62.0
@@ -57,6 +66,7 @@ jobs:
           mkdir -p build/webapp-evidence
           set -o pipefail
           python scripts/test_webapp_browser.py 2>&1 | tee build/webapp-evidence/chromium.log
+          python scripts/test_webapp_collections_browser.py 2>&1 | tee build/webapp-evidence/chromium-collections.log
       - name: Upload generated app and evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -65,4 +75,5 @@ jobs:
           if-no-files-found: warn
           path: |
             build/webapp-011/
+            build/webapp-011-tasks/
             build/webapp-evidence/
