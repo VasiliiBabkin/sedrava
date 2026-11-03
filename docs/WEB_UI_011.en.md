@@ -89,3 +89,22 @@ The natural syntax from PR #21 is retained. The contract now explicitly defines 
 Run `python -m unittest discover -s tests -v` and `python scripts/test_site_browser.py` (requires Playwright 1.62.0 and Chromium). The latter records full-page screenshots at 360/768/1440, traces, focus, semantics and computed default text contrast under `build/site-evidence`. It tests actual navigation, Back/Forward, keyboard, reduced motion, layout overrides, Unicode and escaped markup, with no page errors or failed HTTP responses. These checks are not a full WCAG certification or screen-reader/device audit. The dedicated read-only GitHub workflow uploads `sedrava-web-ui-011` with the site and actual SHA/hash receipt; it never deploys.
 
 Next components are **planned**, not implemented: semantic navbar/footer, badge/callout, code block, documentation navigation; later accessible forms, accordion, tabs and dialog. State bindings, reusable author components, arbitrary JS/CSS, site-to-Android and production-site replacement are outside Slice A.
+
+## Slice B additions (development branch only)
+
+The additive Slice B branch provides `navbar`, `footer`, `callout`, and
+`code` components. This is **not** a published language release.
+
+| Component | Authoring syntax | Semantics |
+| --- | --- | --- |
+| `navbar` | `navbar label "Primary navigation":` with child links/rows | One top-level `<nav>`, before the main landmark |
+| `footer` | `footer:` with children | One top-level `<footer>`, after the main landmark |
+| `callout` | `callout variant warning:` with children | `<aside>` notice, variants default/info/warning |
+| `code` | `code "state x = 0\npersist x"` | Escaped `<pre><code>` with local horizontal scrolling |
+
+`navbar` and `footer` are optional. When used, the navbar must be the first
+top-level element and footer the last. Neither is allowed inside a nested
+container. This keeps navigation and footer landmarks outside the generated
+`<main>`. All other nested content remains in `<main>`. Code is static text
+without evaluation or HTML injection. The existing site-mode text-literal
+length limit applies. The original Web/Android application modes are unchanged.

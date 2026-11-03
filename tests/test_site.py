@@ -40,6 +40,42 @@ class SiteTests(unittest.TestCase):
         self.assertIn('href="../index.html"',gallery)
         self.assertNotIn('<script',home)
 
+    def test_slice_b_landmarks_code_and_escaping(self):
+        source=('site "Sample"\npage home at "/":\n    title "Sample"\n'
+                '    navbar label "Main & links":\n'
+                '        link "Home" to "/"\n'
+                '    heading "Welcome"\n'
+                '    callout variant warning:\n'
+                '        paragraph "Be careful"\n'
+                '    code "<script>alert(1)</script>\\nstate x = 0"\n'
+                '    footer:\n'
+                '        paragraph "End"\n')
+        data,_=generate_site(source)
+        html=data['index.html'].decode('utf-8')
+        self.assertIn('<nav ',html)
+        self.assertIn('aria-label="Main &amp; links"',html)
+        self.assertIn('<aside ',html)
+        self.assertIn('v-warning',html)
+        self.assertIn('<pre ',html)
+        self.assertIn('<code>&lt;script&gt;alert(1)&lt;/script&gt;',html)
+        self.assertNotIn('<script>alert(1)',html)
+        self.assertLess(html.index('</nav>'),html.index('<main '))
+        self.assertLess(html.index('</main>'),html.index('<footer '))
+        self.assertIn('.s-code code{font:inherit',data['site.css'].decode())
+        self.assertNotIn('alert(1)',data['site.css'].decode())
+
+    def test_slice_b_landmark_order_and_required_code(self):
+        self.bad(TINY+'    navbar:\n        link "x" to "/"\n', 'first top-level')
+        self.bad(TINY+'    footer:\n        paragraph "end"\n    paragraph "late"\n', 'last top-level')
+        self.bad('site "x"\npage home at "/":\n    title "x"\n'
+                 '    navbar:\n        link "x" to "/"\n'
+                 '    navbar:\n        link "x" to "/"\n'
+                 '    heading "Hello"\n', 'first top-level|Only one')
+        self.bad(TINY+'    column:\n        navbar:\n            link "x" to "/"\n', 'top-level')
+        self.bad(TINY+'    code ""\n', 'Accessible text')
+        self.bad(TINY+'    code "state" onclick "evil"\n', 'Unknown parameter')
+        self.bad(TINY+'    callout variant danger:\n        paragraph "x"\n', 'Expected one of')
+
     def test_unknown_component_property_duplicate_and_indentation(self):
         for line in ('    html "bad"','    paragraph "x" onclick "evil"','    paragraph "x" gap 1 gap 2','    heading "x":','      paragraph "x"','\tparagraph "x"','    column:'):
             self.bad(TINY+line+'\n',r'Line \d+:')

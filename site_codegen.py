@@ -15,7 +15,14 @@ from sedrava_version import VERSION
 CSS = r'''
 *,:before,:after{box-sizing:border-box}html{color-scheme:dark;scroll-behavior:smooth;scroll-padding-top:2rem}body{margin:0;background:radial-gradient(ellipse at 12% 0%,#292039 0%,transparent 48rem),var(--background);color:var(--foreground);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:1rem;line-height:1.65;-webkit-font-smoothing:antialiased}::selection{background:var(--accent);color:var(--background)}.s-page{min-height:100vh}.s-node{--s-margin:0px;--s-max:100%;min-inline-size:0;max-inline-size:min(var(--s-max),calc(100% - 2 * var(--s-margin)));overflow-wrap:anywhere}.s-container{width:100%;margin-inline:auto}.s-row{display:flex;flex-wrap:wrap;align-items:center}.s-column{display:flex;flex-direction:column}.s-grid{display:grid;grid-template-columns:minmax(0,1fr)}.s-card{border:1px solid var(--border);background:var(--surface);transition:transform .18s ease,border-color .18s ease;position:relative}.s-card:hover{border-color:var(--accent);transform:translateY(-3px)}.s-card.v-highlight{background:linear-gradient(125deg,#302541,var(--surface));border-color:var(--accent)}.s-card.v-muted{background:transparent}.s-heading{font-family:Georgia,"Times New Roman",serif;line-height:1.13;letter-spacing:-.035em;font-weight:500;margin:0;text-wrap:balance;white-space:pre-wrap}.s-heading:is(h1){font-size:clamp(2.6rem,6.5vw,6.3rem);letter-spacing:-.055em;line-height:1.03}.s-heading:is(h2){font-size:clamp(1.7rem,3.5vw,2.75rem)}.s-heading:is(h3,h4,h5,h6){font-size:1.45rem}.s-heading.v-display{font-size:clamp(2.6rem,6.5vw,6.3rem);letter-spacing:-.055em;line-height:1.03}.s-paragraph{margin:0;white-space:pre-wrap}.s-paragraph.v-lead{font-size:clamp(1.08rem,2vw,1.3rem);line-height:1.75;color:var(--muted);max-width:42rem}.s-paragraph.v-muted{color:var(--muted)}.s-paragraph.v-eyebrow{font-size:.75rem;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--gold)}.s-paragraph.v-brand{font-size:1.3rem;font-weight:750;letter-spacing:-.045em}.s-link{color:var(--accent);text-underline-offset:.28em;text-decoration-thickness:1px;transition:color .16s ease;white-space:normal}.s-link:hover{color:var(--gold)}.s-link.v-quiet{color:var(--muted);text-decoration:none}.s-link.v-quiet:hover{color:var(--foreground)}.s-button{display:inline-flex;align-items:center;justify-content:center;gap:.6rem;min-height:48px;padding:.75rem 1.4rem;border:1px solid transparent;border-radius:12px;background:var(--accent);color:var(--background);font-weight:650;font-size:.95rem;line-height:1.4;text-decoration:none;text-align:center;transition:background .16s ease,transform .16s ease,border-color .16s ease}.s-button:hover{background:var(--gold);transform:translateY(-2px)}.s-button.v-secondary{background:transparent;border-color:var(--border);color:var(--foreground)}.s-button.v-secondary:hover{border-color:var(--accent);background:var(--surface)}.s-button.v-ghost{background:transparent;color:var(--accent)}.s-button.v-ghost:hover{background:var(--surface)}a:focus-visible{outline:3px solid var(--gold);outline-offset:4px;border-radius:6px}.s-image{display:block;width:100%;height:auto;object-fit:contain}.s-spacer{flex-shrink:0}.s-divider{border:0;border-block-start:1px solid var(--border);margin:0;width:100%}.s-skip{position:fixed;inset-block-start:1rem;inset-inline-start:1rem;z-index:20;transform:translateY(-200%);background:var(--gold);color:var(--background);padding:.75rem 1rem;border-radius:10px;font-weight:700}.s-skip:focus{transform:none}main:focus{outline:none}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,:before,:after{animation:none!important;transition:none!important}.s-card:hover,.s-button:hover{transform:none}}
 '''
-
+CSS += r'''
+.s-navbar{border-block-end:1px solid var(--border);background:var(--surface)}
+.s-footer{border-block-start:1px solid var(--border);background:var(--surface)}
+.s-callout{border:1px solid var(--border);border-inline-start:4px solid var(--accent);background:var(--surface)}
+.s-callout.v-warning{border-inline-start-color:var(--gold)}
+.s-code{display:block;max-inline-size:100%;overflow-x:auto;overflow-y:hidden;white-space:pre;word-break:normal;overflow-wrap:normal;background:var(--surface);border:1px solid var(--border);color:var(--foreground);font-family:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;font-size:.9rem;line-height:1.6}
+.s-code code{font:inherit;white-space:inherit}
+'''
 
 def digest(data):return hashlib.sha256(data).hexdigest()
 
@@ -142,8 +149,12 @@ def generate_site(source,source_dir='.'):
             if props.get('target')=='blank':attrs.update(target='_blank',rel='noopener noreferrer')
             opening='<'+tag+''.join(' '+key+'="'+html.escape(str(value),quote=True)+'"' for key,value in attrs.items())+'>'
             if definition.void:return opening
+            if node.kind=='code':
+                return opening+'<code>'+html.escape(props['text'])+'</code></pre>'
             return opening+html.escape(props.get('text',''))+''.join(render(c) for c in node.children)+'</'+tag+'>'
-        body=''.join(render(n) for n in page.children)
+        navbar_html=''.join(render(n) for n in page.children if n.kind=='navbar')
+        main_body=''.join(render(n) for n in page.children if n.kind not in ('navbar','footer'))
+        footer_html=''.join(render(n) for n in page.children if n.kind=='footer')
         content='''<!doctype html>
 <html lang="'''+html.escape(page.lang,quote=True)+'''">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -151,7 +162,7 @@ def generate_site(source,source_dir='.'):
 <title>'''+html.escape(page.title)+'''</title><meta name="description" content="'''+html.escape(page.description,quote=True)+'''">
 <link rel="icon" href="'''+relative('favicon.svg',page)+'''">
 <link rel="stylesheet" href="'''+relative('site.css',page)+'''">
-</head><body><a class="s-skip" href="#content">'''+('К содержимому' if page.lang.startswith('ru') else 'Skip to content')+'''</a><main id="content" class="s-page" tabindex="-1">'''+body+'''</main></body></html>
+</head><body><a class="s-skip" href="#content">'''+('К содержимому' if page.lang.startswith('ru') else 'Skip to content')+'''</a>'''+navbar_html+'''<main id="content" class="s-page" tabindex="-1">'''+main_body+'''</main>'''+footer_html+'''</body></html>
 '''
         files[page_file(page)]=content.encode('utf-8')
     theme=':root{'+''.join('--'+key+':'+value+';' for key,value in site.theme.items())+'}\n'
