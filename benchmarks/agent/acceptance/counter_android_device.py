@@ -106,6 +106,9 @@ def exercise(package, activity, observations):
     launch(package, activity)
     wait_for_count(2, "A07", observations)
     press("Reset")
+    # ADB input may return before the application's click handler commits
+    # state. Confirm visible zero before intentionally killing the process.
+    wait_for_count(0, "A08-before-restart", [])
     adb("shell", "am", "force-stop", package)
     launch(package, activity)
     wait_for_count(0, "A08", observations)
