@@ -382,11 +382,12 @@ screen main:
     def test_all_ui_examples_launch_without_errors(self):
         from sedrava_frontend import parse_document
         from sedrava_site import Site
+        from sedrava_webapp import WebApp
         for path in sorted((ROOT / 'examples').glob('*.sdr')):
             source = path.read_text()
             document=parse_document(source)
-            if isinstance(document,Site):
-                continue # Dedicated site Chromium suite exercises this explicit mode.
+            if isinstance(document,(Site,WebApp)):
+                continue # Dedicated site/WebApp Chromium suites exercise these modes.
             if document.widgets:
                 self.open(source)
                 self.assertTrue(self.page.locator('body').is_visible())
