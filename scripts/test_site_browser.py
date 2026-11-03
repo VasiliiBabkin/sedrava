@@ -70,6 +70,23 @@ class SiteBrowser(unittest.TestCase):
                 self.assertEqual(self.page.locator('main').count(),1)
                 self.assertEqual(self.page.locator('script').count(),0)
 
+    def test_slice_b_landmarks_and_code_no_overflow(self):
+        for width in (360,768,1440):
+            self.open(width=width)
+            self.no_overflow()
+            self.assertEqual(self.page.locator('nav[aria-label="Primary navigation"]').count(),1)
+            self.assertEqual(self.page.locator('footer[aria-label="Site footer"]').count(),1)
+            self.assertTrue(self.page.evaluate(
+                'document.querySelector("nav").compareDocumentPosition(document.querySelector("main")) & Node.DOCUMENT_POSITION_FOLLOWING'))
+            self.open('/site/components/index.html',width=width)
+            self.no_overflow()
+            self.assertEqual(self.page.locator('aside.s-callout').count(),1)
+            self.assertEqual(self.page.locator('pre.s-code code').count(),1)
+            code=self.page.locator('pre.s-code code')
+            self.assertIn('persist value',code.inner_text())
+            self.assertEqual(self.page.locator('script').count(),0)
+            self.assertEqual(self.page.locator('pre.s-code script').count(),0)
+
     def test_grid_breakpoints_and_property_override(self):
         for width,expected in ((360,(1,1)),(768,(1,2)),(1440,(2,3))):
             self.open(width=width)

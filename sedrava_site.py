@@ -187,6 +187,15 @@ COMPONENTS = {
     'image':Definition('img',positional='src',required=('src','alt'),parameters={'src':Parameter(lambda v:safe_url(v,image=True)),'alt':Parameter(text)},attributes={'src':'src','alt':'alt'},fixed_attributes={'loading':'lazy','decoding':'async','referrerpolicy':'no-referrer'},void=True),
     'spacer':Definition('div',parameters={'size':Parameter(integer(0,4096))},defaults={'size':24},fixed_attributes={'aria-hidden':'true'}),
     'divider':Definition('hr',void=True),
+    'navbar':Definition('nav',children=True,defaults={'gap':16,'padding':20},
+                        fixed_attributes={'aria-label':'Primary navigation'}),
+    'footer':Definition('footer',children=True,defaults={'padding':24}),
+    'callout':Definition('aside',children=True,defaults={'padding':24,'radius':16},
+                         variants=('default','info','warning')),
+    'code':Definition('pre',positional='text',required=('text',),
+                      parameters={'text':Parameter(text)},
+                      defaults={'padding':20,'radius':12}),
+
 }
 STYLE_PARAMETERS = {**COMMON,'columns':Parameter(integer(1,12)),'wrap':Parameter(boolean,True),'variant':Parameter(text)}
 STYLE_PARAMETERS = {k:v for k,v in STYLE_PARAMETERS.items() if k not in ('id','style','label')}
@@ -299,7 +308,7 @@ def parse_site(source):
                 if key not in props:fail(t[0].span,'Missing required parameter '+key)
                 try:params[key].validate(props[key].value)
                 except ValueError as exc:fail(props[key].span,str(exc))
-            if kind in ('heading','link','button') and not props['text'].value.strip():fail(t[0].span,'Accessible text must not be empty')
+            if kind in ('heading','link','button','code') and not props['text'].value.strip():fail(t[0].span,'Accessible text must not be empty')
             pos+=1;desc=()
             if block:
                 desc,pos=body(pos,indent+4)
@@ -366,6 +375,18 @@ def parse_site(source):
         else:fail(t[0].span,'Expected theme, style or page in site mode')
     if not pages or not any(p.path=='/' for p in pages):fail(first[0].span,'Site requires a page at /')
     site=Site(first[1].value,theme,styles,tuple(pages));ids={}
+    for page in pages:
+        root=page.children
+        for index,node in enumerate(root):
+            if node.kind=='navbar' and index!=0:
+                fail(node.span,'Navbar must be the first top-level component')
+            if node.kind=='footer' and index!=len(root)-1:
+                fail(node.span,'Footer must be the last top-level component')
+            if node.kind in ('navbar','footer') and sum(n.kind==node.kind for n in root)>1:
+                fail(node.span,'Only one '+node.kind+' is allowed per page')
+            for nested in walk(node.children):
+                if nested.kind in ('navbar','footer'):
+                    fail(nested.span,'Navbar and footer must be top-level components')
     for page in pages:
         ids[page.path]={'content'};h1=0;previous=0
         for node in walk(page.children):
