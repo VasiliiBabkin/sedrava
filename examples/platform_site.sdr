@@ -2,6 +2,7 @@ site "Sedrava · Studio"
 origin "https://preview.example.com"
 robots false
 stylesheet "assets/platform-brand.css"
+license "assets/INTER_LICENSE.txt"
 social-image "assets/sedrava-blueprint.svg"
 import "assets/platform-components.sdr"
 theme:
