@@ -11,7 +11,7 @@ from android_codegen_v03 import kt
 CASES=[
  'text_length("a😀é")','trim("  x\\t\\n")','lower_ascii("İABCΣ😀")',
  'contains("é😀", "😀")','concat("Hello ", "😀")','is_date("2024-02-29")',
- 'is_date("2023-02-29")','date_days("1970-01-01")','date_days("0001-01-01")',
+ 'is_date("2023-02-29")','is_date("2024-01-01\\n")','date_days("2024-01-01\\n")','date_days("1970-01-01")','date_days("0001-01-01")',
  'date_add("2024-02-28", 2)','date_add("0099-12-31", 1)','date_add("9999-12-31", 1)',
  'date_days("2026-13-01")','1 if true else 2147483647 + 1',
  'concat("'+'x'*1024+'", "y")',

@@ -42,12 +42,12 @@ view main:
             value task_count label "Tasks"
             card:
                 column gap 16:
-                    input new_title label "New task"
+                    input new_title label "New task" kind text
                     button "Add task" action add
             when empty:
                 callout:
                     paragraph "No tasks yet. Create your first task."
-            input search_text label "Search tasks"
+            input search_text label "Search tasks" kind text
             checkbox filter_enabled label "Filter by completion"
             select filter_done label "Completion status":
                 option "In progress" value false

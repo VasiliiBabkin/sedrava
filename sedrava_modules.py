@@ -66,10 +66,10 @@ def components(source):
             raise ValueError(f'Line {pos+1}: column 1: duplicate component {name}')
         params = {}
         for declaration in parameters.split(',') if parameters else ():
-            spec = re.fullmatch(r'\s*([A-Za-z][A-Za-z0-9_]*)\s*:\s*(text|int|bool)\s*', declaration)
+            spec = re.fullmatch(r'\s*([A-Za-z][A-Za-z0-9_]*)\s*:\s*(text|int|bool|ref)\s*', declaration)
             if not spec or spec[1] in params:
                 raise ValueError(f'Line {pos+1}: column 1: invalid component parameter')
-            params[spec[1]] = {'text': str, 'int': int, 'bool': bool}[spec[2]]
+            params[spec[1]] = {'text': str, 'int': int, 'bool': bool, 'ref':'reference'}[spec[2]]
         pos += 1; body = []
         while pos < len(lines) and (not lines[pos].strip() or lines[pos].startswith(' ')):
             body.append(lines[pos]); pos += 1
@@ -95,9 +95,13 @@ def components(source):
                 raise ValueError(f'Line {i}: column 1: component parameters require name/value pairs')
             values = {}
             for key, value in zip(args[::2], args[1::2]):
-                if key.value in values or key.value not in params or type(value.value) is not params[key.value]:
+                if key.value in values or key.value not in params:
                     raise ValueError(f'Line {i}: column 1: invalid typed component parameter {key.value}')
-                values[key.value] = json.dumps(value.value, ensure_ascii=False)
+                expected=params[key.value]
+                reference=expected=='reference'
+                if (reference and (value.quoted or type(value.value) is not str or not re.fullmatch('[A-Za-z][A-Za-z0-9_]*',value.value))) or (not reference and type(value.value) is not expected):
+                    raise ValueError(f'Line {i}: column 1: invalid typed component parameter {key.value}')
+                values[key.value] = value.value if reference else json.dumps(value.value, ensure_ascii=False)
             if set(values) != set(params):
                 raise ValueError(f'Line {i}: column 1: component requires exact parameters')
             children = []

@@ -27,15 +27,18 @@ function renderTable(rows,el,selected,fragment){
  table.append(body);fragment.append(table);
 }
 
+function fillRow(item,row,values){
+   item.querySelectorAll('[data-row-field]').forEach(node=>node.textContent=String(row[node.dataset.rowField]));
+   item.querySelectorAll('[data-row-when]').forEach(node=>node.hidden=!row[node.dataset.rowWhen]);
+   item.querySelectorAll('[data-state]').forEach(node=>node.textContent=String(values[node.dataset.state]));
+   item.querySelectorAll('[data-when]').forEach(node=>node.hidden=!values[node.dataset.when]);
+}
 function renderEach(){
  document.querySelectorAll('[data-each]').forEach(el=>{
   const values=valuesOfState(),rows=queryRows(values[el.dataset.each].items,{title:el.dataset.titleField,search:el.dataset.querySearch?values[el.dataset.querySearch]:'',sort:el.dataset.querySort,where:el.dataset.queryWhere,equals:el.dataset.queryEquals?values[el.dataset.queryEquals]:false,active:el.dataset.queryActive?values[el.dataset.queryActive]:true});
   const list=el.querySelector('[data-each-items]'),template=el.querySelector('template'),fragment=document.createDocumentFragment();
   for(const row of rows){const item=document.createElement('div');item.setAttribute('role','listitem');item.dataset.rowId=String(row.id);item.dataset.rowSelect=el.dataset.select;item.dataset.rowCollection=el.dataset.each;item.append(template.content.cloneNode(true));
-   item.querySelectorAll('[data-row-field]').forEach(node=>node.textContent=String(row[node.dataset.rowField]));
-   item.querySelectorAll('[data-row-when]').forEach(node=>node.hidden=!row[node.dataset.rowWhen]);
-   item.querySelectorAll('[data-state]').forEach(node=>node.textContent=String(values[node.dataset.state]));
-   item.querySelectorAll('[data-when]').forEach(node=>node.hidden=!values[node.dataset.when]);
+   fillRow(item,row,values);
    item.querySelectorAll('button[data-action],button[data-pick]').forEach(button=>button.setAttribute('aria-label',button.textContent+' '+String(el.dataset.titleField?row[el.dataset.titleField]:row.id)));
    fragment.append(item);
   }

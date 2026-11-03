@@ -8,3 +8,9 @@ component AppHeader(title: text):
         paragraph "SEDRAVA / WORKSPACE" variant eyebrow
         heading $title
         slot
+
+component Metric(label: text, data: ref):
+    card style panel:
+        column:
+            heading $label level 2
+            value $data label $label

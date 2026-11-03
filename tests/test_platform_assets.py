@@ -12,6 +12,8 @@ class Assets(unittest.TestCase):
             output=Path(tmp)/'site';build_site(source.read_text(),output,source)
             self.assertTrue((output/'sitemap.xml').is_file())
             self.assertEqual(len(list((output/'assets').glob('*.woff2'))),1)
+            self.assertIn('SIL OPEN FONT LICENSE',next((output/'assets').glob('license-*.txt')).read_text())
+            self.assertIn('rel="license"',(output/'index.html').read_text())
             self.assertIn('canonical',(output/'guide/index.html').read_text())
             css=next((output/'assets').glob('*.css')).read_text()
             self.assertNotIn('url("platform-inter.woff2")',css)

@@ -1,5 +1,6 @@
 webapp "Sedrava · Client desk"
 stylesheet "assets/platform-brand.css"
+license "assets/INTER_LICENSE.txt"
 import "assets/platform-components.sdr"
 theme light:
     background "#f5f3fa"
@@ -97,15 +98,9 @@ view main:
                 navigate "Companies" to companies
                 navigate "Settings" to settings
             grid columns 2:
-                card style panel:
-                    column:
-                        heading "Companies" level 2
-                        value company_count label "Companies"
-                card style panel:
-                    column:
-                        heading "Contacts" level 2
-                        value contact_count label "Contacts"
-                        value active_count label "Active contacts"
+                use Metric label "Companies" data company_count
+                use Metric label "Contacts" data contact_count
+                use Metric label "Active contacts" data active_count
             when show_help:
                 callout:
                     paragraph "Start by adding a company, select it, then open its contacts. This client stores data locally; it is not a multi-user backend."

@@ -1,6 +1,6 @@
 """Validated WebApp route model shared by interpreter tests and browser generation."""
 import re
-from sedrava_core import edit_state, resolve
+from sedrava_core import valid_state, resolve
 
 
 def route_parameters(path):
@@ -12,17 +12,23 @@ def route_parameters(path):
     return names
 
 
+def routes_overlap(left,right):
+    a,b=left.split('/'),right.split('/')
+    if len(a)!=len(b):return False
+    return all(x==y or (x.startswith(':') and (y.startswith(':') or re.fullmatch('-?[0-9]+',y))) or (y.startswith(':') and re.fullmatch('-?[0-9]+',x)) for x,y in zip(a,b))
+
+
 def resolve_route(document, path, state):
     for name, spec in document.views.items():
         pattern = '^'+re.sub(r':[A-Za-z][A-Za-z0-9_]*', r'(-?[0-9]+)', spec['path'])+'$'
         match = re.fullmatch(pattern, path)
         if not match:
             continue
-        candidate = state
+        candidate = state.copy()
         for key, raw in zip(route_parameters(spec['path']), match.groups()):
             if len(raw) > 11: return None
-            candidate, accepted = edit_state(document.program, candidate, key, int(raw))
-            if not accepted: return None
+            candidate[key]=int(raw)
+        if not valid_state(document.program,candidate):return None
         if spec['guard'] and not resolve(candidate, document.program.derived)[spec['guard']]:
             return None
         return name, candidate
@@ -50,8 +56,9 @@ function restoreRoute(){
     const pattern='^'+spec.path.replace(/:[A-Za-z][A-Za-z0-9_]*/g,'(-?[0-9]+)')+'$';
     const match=path.match(new RegExp(pattern));if(!match)continue;
     let candidate=state;let valid=true;
-    keys.forEach((key,i)=>{const raw=match[i+1];const next=raw.length<=11?editState(candidate,key,Number(raw)):candidate;if(next===candidate)valid=false;candidate=next;});
-    if(!valid||!canView(name,candidate))break;
+    candidate={...state};
+    keys.forEach((key,i)=>{const raw=match[i+1];if(raw.length>11)valid=false;else candidate[key]=Number(raw);});
+    if(!valid||!validateState(candidate)||!canView(name,candidate))break;
     state=candidate;activeView=name;found=true;break;
   }
   if(!found){activeView='main';history.replaceState({sedravaDepth:0},'','#/');showError('Page not found or selected record no longer exists');}

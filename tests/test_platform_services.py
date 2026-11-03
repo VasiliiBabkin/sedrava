@@ -25,3 +25,9 @@ class Services(unittest.TestCase):
     def test_origin_is_normalized_for_browser_capability_comparison(self):
         doc=parse_webapp(SOURCE.replace('origin self','origin "https://API.EXAMPLE.COM:443/"'))
         self.assertEqual(doc.services['catalog'].origin,'https://api.example.com')
+
+    def test_remote_templates_typecheck_untrusted_fields_and_capabilities(self):
+        doc=parse_webapp(SOURCE)
+        self.assertIn(b'<template>',generate_webapp(doc)['index.html'])
+        for old,new in [('field title label','field unknown label'),('row-when available','row-when title'),('field id label "Product ID"','pick "Select remote"'),('field id label "Product ID"','input product_title label "Nested"')]:
+            with self.subTest(new=new),self.assertRaises(ValueError):parse_webapp(SOURCE.replace(old,new))

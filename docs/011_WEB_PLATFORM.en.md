@@ -75,7 +75,7 @@ component Panel(title: text):
             slot
 ```
 
-Instantiate inside a page/view with `use Panel title "Overview":` and indented children. Parameters are exact compile-time text/int/bool literals, substituted outside string literals. One explicit slot; recursive templates reject. Component instances lower into the same registry-driven checked UI AST. State bindings inside templates refer to the application's declared state. Runtime component props, named/multiple slots and instance-local state are not implemented.
+Instantiate inside a page/view with `use Panel title "Overview":` and indented children. Parameters are exact compile-time text/int/bool literals, substituted outside string literals. A `ref` parameter passes a bare checked identifier into a typed state/action/row-field position: for example, `Metric(label: text, data: ref)` can contain `value $data label $label`, instantiated with `use Metric label "Companies" data company_count`. Values then update through the ordinary reactive binding; action references are checked by the normal UI action validator. References are not arbitrary expressions or executable source. One explicit slot; recursive templates reject. Component instances lower into the same registry-driven checked UI AST. State bindings inside templates refer to the application's declared state. Arbitrary runtime value props, named/multiple slots and instance-local state are not implemented.
 
 ## UI reference
 
@@ -106,7 +106,7 @@ Invalid draft editors block action/form/navigation/request submission until corr
 
 `view main:` is the unguarded initial `/` route. Additional declarations can use `view details at "/tasks/:selected" when chosen:` with an existing mutable int parameter and bool guard. Targets and duplicate route/view names are checked. URLs use hashes (`#/tasks/1`) so direct links and reload work on an ordinary static host. Back/Forward are browser history, not a second invented router stack. Navigation depth is bounded to 32. Transition focuses the new h1; ordinary keyboard controls retain visible focus.
 
-Route parameters are edited on a private typed candidate before evaluating the guard. Unknown/missing/deleted records display an error or return to main without corrupting state. Deleting the selected record closes the now-inactive view/dialog. Service requests are aborted when their view is left and on pagehide; sequence tokens suppress stale completion. No promise of arbitrary route string parameters or path-rewrite SPA routing is made.
+All route parameters are edited together on one private typed candidate, then invariants and the guard are evaluated. Overlapping literal/integer route patterns are rejected. Unknown/missing/deleted records display an error or return to main without corrupting state. Deleting the selected record closes the now-inactive view/dialog. Service requests are aborted when their view is left and on pagehide; sequence tokens suppress stale completion. No promise of arbitrary route string parameters or path-rewrite SPA routing is made.
 
 `persist name` uses the existing exact schema fingerprint and atomic restore validation. Corrupt/incompatible originals are retained and subsequent saves blocked, rather than replacing them with defaults. No automatic migration. A schema/application-title/served-path change can affect compatibility or storage identity; preserve projects and export storage independently before changes. Browser storage is local per origin and path, is not encrypted, and may be removed by the user/browser. Offline means accepted local state and optional public GET cache; there is no service worker ensuring a cold offline page download.
 
@@ -130,9 +130,11 @@ service catalog:
         available bool
 ```
 
-`origin self` is an explicit same-origin capability; otherwise use a bare public HTTPS origin. Integer `:state` path parameters are checked. GET auto-load/cache are optional. POST/PUT/PATCH require a `body DeclaredRecord(field=state, ...)` matching scalar field types. DELETE has no body. `response one/many` is an exact record schema with int32/text/bool fields. `request "Refresh" service catalog`, `cancel "Cancel" service catalog`, `remote catalog title title search search_text label "Catalog"` connect UI. Remote states are explicit idle/loading/success/error with last accepted data retained; they are not unchecked writes into domain state. Empty 204 is accepted for a many response only.
+`origin self` is an explicit same-origin capability; otherwise use a bare public HTTPS origin. Integer `:state` path parameters are checked. GET auto-load/cache are optional. POST/PUT/PATCH require a `body DeclaredRecord(field=state, ...)` matching scalar field types. DELETE has no body. `response one/many` is an exact record schema with int32/text/bool fields. `request "Refresh" service catalog`, `cancel "Cancel" service catalog`, `remote catalog title title search search_text label "Catalog"` connect UI. A `remote ...:` block may provide a custom schema-checked card/layout/field/row-when template, reusing the local row renderer. Untrusted values become text nodes. Remote templates cannot pick local IDs, edit state or authorize record actions.
 
-The connector checks HTTP status, JSON shape, duplicate keys, nesting, UTF-8, text/int32/item/byte bounds. Timeout 100–30000ms; WebApp response max 200000 bytes, default 65536. Requests use `credentials: omit`, reject redirects and respect CORS/CSP. No API-key/custom-secret-header mechanism, CORS bypass, authentication or arbitrary JS source. Optional GET cache is public data only; an accepted cache hit is shown until explicit refresh. Bad cached data is retained and not overwritten. Cancellation/retry are explicit; a timed-out mutation may already have happened at the server, so there is no distributed rollback guarantee.
+Remote states are explicit idle/loading/success/error with last accepted data retained; they are not unchecked writes into domain state. Empty 204 is accepted for a many response only.
+
+The connector checks HTTP status, JSON shape, duplicate keys, nesting, UTF-8, text/int32/item/byte bounds. Timeout 100–30000ms; WebApp response max 200000 bytes, default 65536. Requests use `credentials: omit`, reject redirects and respect CORS/CSP. No API-key/custom-secret-header mechanism, CORS bypass, authentication or arbitrary JS source. Optional GET cache is public data only; an accepted cache hit is shown until explicit refresh. Bad cached data is retained and not overwritten. Caches are isolated by served application path, schema/config and resolved endpoint path; changing an integer parameter cancels the prior request and cannot accept its stale completion. Cancellation/retry are explicit; a timed-out mutation may already have happened at the server, so there is no distributed rollback guarantee.
 
 ## Styling, resources and static SEO
 
@@ -162,3 +164,9 @@ Upgrading existing 0.9/0.10 programs does not require syntax changes: use their 
 | Backend/auth/database/native executable plugins | Unsupported | Unsupported |
 
 The four sources are acceptance clients, not evidence of every requested future platform scenario. Tests compare complete Python/JS/Kotlin states, run real Chromium with real loopback HTTP, six widths 320/360/390/768/1024/1440 and axe-core. See status/CI for exact counts at each SHA. Passing four initial-screen axe checks is not accessibility certification. Cross-file source maps, namespaced modules, richer runtime component props, timezone/clock/format libraries, server adapters, service workers and broader browser proof remain release work. **NO-GO for a 0.11.0 release until the documented gates are met.**
+
+
+[Implemented extension interfaces and server-adapter gates / Границы расширений](011_EXTENSION_BOUNDARIES.md).
+
+
+Local resource notices: `license "assets/INTER_LICENSE.txt"` copies a UTF-8 text license (up to 64KiB, eight files, root-confined) into generated assets and links it with `rel=license`. Include applicable third-party notices with generated font distributions. Локальная директива license сохраняет лицензию ресурса в генерируемой сборке; примеры с Inter включают OFL.

@@ -35,3 +35,11 @@ class Modules(unittest.TestCase):
     def test_recursive_component_is_rejected(self):
         with self.assertRaisesRegex(ValueError,'recursive'):
             expand('component Loop:\n    use Loop\nsite "x"\npage home at "/":\n    use Loop\n')
+
+    def test_reference_parameters_bind_through_the_existing_typed_ui(self):
+        source='webapp "Bindings"\ncomponent Metric(label: text, data: ref):\n    column:\n        value $data label $label\nstate count=0\naction add: count=count+1\nview main:\n    heading "Bindings"\n    use Metric label "First" data count\n    use Metric label "Second" data count\n    button "Add" action add\n'
+        doc=parse_webapp(source)
+        from sedrava_webapp import generate_webapp
+        self.assertEqual(generate_webapp(doc)['index.html'].count(b'data-state="count"'),2)
+        for old,new in [('data count','data unknown'),('data count','data "count"'),('data count','data count.value')]:
+            with self.subTest(new=new),self.assertRaises(ValueError):parse_webapp(source.replace(old,new))

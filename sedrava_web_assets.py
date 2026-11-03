@@ -11,16 +11,17 @@ from sedrava_core import read_literal
 
 
 def read_directives(source):
-    settings={'stylesheets':[]};lines=[]
+    settings={'stylesheets':[],'licenses':[]};lines=[]
     for number,line in enumerate(source.splitlines(),1):
-        match=re.fullmatch(r'(stylesheet|origin|social-image|favicon) (".*")',line)
+        match=re.fullmatch(r'(stylesheet|license|origin|social-image|favicon) (".*")',line)
         if match:
             value,end=read_literal(match[2])
             if end!=len(match[2]):raise ValueError(f'Line {number}: column 1: invalid presentation directive')
             key=match[1]
-            if key=='stylesheet':
-                if len(settings['stylesheets'])>=8:raise ValueError('At most eight local stylesheets')
-                settings['stylesheets'].append(value)
+            if key in ('stylesheet','license'):
+                group='stylesheets' if key=='stylesheet' else 'licenses'
+                if len(settings[group])>=8:raise ValueError('At most eight local '+group)
+                settings[group].append(value)
             else:
                 if key in settings:raise ValueError(f'Line {number}: column 1: duplicate {key}')
                 settings[key]=value
@@ -91,6 +92,11 @@ def collect(settings, source_dir):
             return 'url("'+name.split('/')[-1]+'")'
         css=re.sub(pattern,replace,css,flags=re.I)
         name='assets/'+digest(css.encode())+'.css';files[name]=css.encode();sheets.append(name)
+    for value in settings.get('licenses',[]):
+        path,data=local(value,root,{'.txt'})
+        if len(data)>65536:raise ValueError('License exceeds 64 KiB')
+        data.decode('utf-8')
+        files['assets/license-'+digest(data)+'.txt']=data
     images={key:resource(settings[key],root) for key in ('favicon','social-image') if key in settings}
     if sum(len(v) for v in files.values())>16*1024*1024:raise ValueError('Presentation assets exceed 16 MiB')
     return files,inputs,sheets,images
@@ -107,6 +113,7 @@ def attach(files, settings, source_dir, pages=None):
             import posixpath
             return posixpath.relpath(target,posixpath.dirname(path) or '.')
         head=''.join('<link rel="stylesheet" href="'+link(name)+'">' for name in sheets)
+        head+=''.join('<link rel="license" href="'+link(name)+'">' for name in sorted(extras) if name.startswith('assets/license-'))
         if 'favicon' in images:
             head+='<link rel="icon" href="'+link(images['favicon'])+'">'
         if origin and page:

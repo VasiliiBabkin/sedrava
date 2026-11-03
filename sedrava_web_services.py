@@ -105,7 +105,8 @@ function renderRemote(){
     const list=el.querySelector('[data-remote-results]');const fragment=document.createDocumentFragment();
     const config=serviceConfigs[el.dataset.remote];let rows=service.data===null?[]:(config.many?service.data:[service.data]);
     if(el.dataset.remoteSearch){const query=valuesOfState()[el.dataset.remoteSearch].toLowerCase();rows=rows.filter(row=>Object.values(row).some(v=>String(v).toLowerCase().includes(query)));}
-    for(const row of rows){const card=document.createElement('article');card.className='s-card';
+    const template=el.querySelector('template');
+    for(const row of rows){if(template){const item=document.createElement('article');item.append(template.content.cloneNode(true));fillRow(item,row,valuesOfState());fragment.append(item);continue;}const card=document.createElement('article');card.className='s-card';
       for(const [key,value] of Object.entries(row)){const node=document.createElement(key===el.dataset.remoteTitle?'h2':'p');node.textContent=String(value);card.append(node);}fragment.append(card);}
     if(service.status==='success'&&!rows.length){const empty=document.createElement('p');empty.textContent='No matching data';fragment.append(empty);}
     list.replaceChildren(fragment);
@@ -149,7 +150,7 @@ for(const [name,config] of Object.entries(serviceConfigs)){
       if(controller.signal.aborted)throw Error('Request aborted');
       if(sequence!==current.sequence)return;
       if(response.status===204&&!config.many)throw Error('Empty response requires a many schema');
-      current.data=data;current.status='success';current.error='';
+      current.data=data;current.status='success';current.error=cacheRejected?'Saved API data rejected; original retained':'';
       if(config.cache&&!cacheRejected){try{const previous=localStorage.getItem(cacheKey);if(previous!==null)checkRemote(strictJSON(previous),config);localStorage.setItem(cacheKey,JSON.stringify(data));}catch(_){cacheRejected=true;current.error='Could not save API cache; original retained';}}
     }catch(error){if(sequence!==current.sequence)return;current.status='error';current.error=expired?'Request timed out':controller.signal.aborted?'Request cancelled':String(error.message||'Network error');}
     finally{clearTimeout(timer);if(sequence===current.sequence){current.controller=null;renderRemote();}}

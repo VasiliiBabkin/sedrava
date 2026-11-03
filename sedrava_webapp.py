@@ -122,9 +122,10 @@ def parse_webapp(source):
         match=re.fullmatch(r'view ([A-Za-z][A-Za-z0-9_]*)(?: at "([^"]+)")?(?: when ([A-Za-z][A-Za-z0-9_]*))?:',header)
         if not match or match[1] in views:fail(Span(n,1),"Exactly one declaration per view; invalid or duplicate view")
         name,path,guard=match.groups();path=path or ('/' if name=='main' else '/'+name)
-        from sedrava_web_routes import route_parameters
-        route_parameters(path)
-        if path in [v['path'] for v in views.values()]:fail(Span(n,1),"Duplicate route")
+        from sedrava_web_routes import route_parameters,routes_overlap
+        try:route_parameters(path)
+        except ValueError as exc:fail(Span(n,1),str(exc))
+        if any(routes_overlap(path,v['path']) for v in views.values()):fail(Span(n,1),"Duplicate or overlapping route")
         views[name]={'path':path,'guard':guard}
     if views['main']['path']!='/' or views['main']['guard']:fail(Span(1,1),"Initial main route must be unguarded /")
     ix, (_, _, view_lineno) = view_lines[0]
@@ -173,7 +174,7 @@ def parse_webapp(source):
            for depth, line, number in body_lines]
     widget_count = 0
 
-    def body(pos, indent, nesting=0, row_fields=None):
+    def body(pos, indent, nesting=0, row_fields=None, row_mode=None):
         nonlocal widget_count
         if nesting > MAX_BLOCK_DEPTH:
             fail(Span(lex[pos][2], 1), "WebApp UI nesting limit exceeded")
@@ -190,7 +191,7 @@ def parse_webapp(source):
             else:
                 fail(items[0].span, "Unsupported WebApp component " + str(kind))
             is_block = items[-1].value == ":" and not items[-1].quoted
-            if is_block != definition.children:
+            if is_block != definition.children and kind != "remote":
                 fail(items[0].span, "Invalid component block structure")
             args = items[1:-1] if is_block else items[1:]
             given = {}
@@ -249,9 +250,11 @@ def parse_webapp(source):
                 if kind in ("input", "checkbox", "select") and not given["label"].value.strip():
                     fail(given["label"].span, "Accessible label must not be empty")
             if kind in ('field','row-when','pick'):
-                if row_fields is None:fail(items[0].span,'Row field/pick requires an each template')
+                if row_fields is None:fail(items[0].span,'Row field/pick requires a collection template')
+                if kind=='pick' and row_mode!='each':fail(items[0].span,'Pick requires a local stable-ID collection')
                 if kind!='pick' and given['field'].value not in row_fields:fail(items[0].span,'Unknown row field')
                 if kind=='row-when' and row_fields[given['field'].value] is not bool:fail(items[0].span,'Row condition requires bool field')
+            if row_mode=='remote' and kind=='button':fail(items[0].span,'Remote templates do not authorize local record actions')
             if row_fields is not None:
                 if kind in ('each','input','checkbox','select','form','submit','dialog','open','close','remote','request','cancel','navigate','back') or 'id' in given:fail(items[0].span,'Unsupported nested row control or duplicate-prone id')
             if kind in ("list", "table", "each"):
@@ -290,7 +293,8 @@ def parse_webapp(source):
             if is_block:
                 if pos >= len(lex) or lex[pos][0] <= indent:
                     fail(items[0].span, "Empty component block")
-                nested, pos = body(pos, indent + 4, nesting + 1, ({"id":int,**fields} if kind=="each" else row_fields))
+                nested_fields={"id":int,**fields} if kind=="each" else ({f.name:{"int32":int,"text":str,"bool":bool}[f.kind] for f in service.schema.fields} if kind=="remote" else row_fields)
+                nested, pos = body(pos, indent + 4, nesting + 1, nested_fields, kind if kind in ('each','remote') else row_mode)
                 if not nested:
                     fail(items[0].span, "Empty component block")
             if kind=='select':
@@ -427,7 +431,7 @@ def generate_webapp(document, source_dir=".", _inputs=None):
         if kind=='remote':
             attrs=attr('data-remote',props['service'])+attr('aria-label',props.get('label',props['service']))
             attrs+=''.join(attr('data-remote-'+k,props[k]) for k in ('search','title') if k in props)
-            return common[:-1]+attrs+'><p data-remote-status role="status" aria-live="polite">idle</p><div data-remote-results class="s-remote-grid"></div></section>'
+            return common[:-1]+attrs+'>'+('<template>'+''.join(render(child) for child in node.children)+'</template>' if node.children else '')+'<p data-remote-status role="status" aria-live="polite">idle</p><div data-remote-results class="s-remote-grid"></div></section>'
         if kind=='select':
             field_id='choice-'+ident
             choices=''.join('<option'+attr('value',json.dumps(n.properties['value'].value,ensure_ascii=False))+'>'+html.escape(n.properties['text'].value)+'</option>' for n in node.children)

@@ -60,19 +60,25 @@ view main:
         column gap 24:
             heading "A live catalog"
             paragraph "Validated public JSON. Cached data remains visible when the network fails." variant lead
-            input search_text label "Search catalog"
+            input search_text label "Search catalog" kind text
             row:
                 request "Refresh catalog" service catalog
                 cancel "Cancel loading" service catalog
                 navigate "Manage products" to manage
-            remote catalog search search_text title title label "Product catalog"
+            remote catalog search search_text title title label "Product catalog":
+                card:
+                    column gap 12:
+                        field title label "Product" size 24 weight bold
+                        row-when available:
+                            paragraph "Available now" variant eyebrow
+                        field id label "Product ID"
 view manage at "/manage":
     container max 960 padding 24:
         column gap 20:
             heading "Manage public demo products"
             paragraph "These requests require an independently secured server. No authentication or secrets are generated."
             back "Back to catalog"
-            input product_title label "Product name"
+            input product_title label "Product name" kind text
             checkbox product_available label "Available"
             input selected_id label "Product ID"
             row:

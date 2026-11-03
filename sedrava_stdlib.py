@@ -31,7 +31,7 @@ def apply(name,args):
     return (datetime.date(1970,1,1)+datetime.timedelta(days=result)).isoformat()
 
 JS_RUNTIME=r'''
-function sdrDate(value){const m=/^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.exec(value);if(!m)throw RangeError('Expected YYYY-MM-DD');const y=Number(m[1]),month=Number(m[2]),day=Number(m[3]);const d=new Date(0);d.setUTCFullYear(y,month-1,day);if(y<1||y>9999||d.getUTCFullYear()!==y||d.getUTCMonth()!==month-1||d.getUTCDate()!==day)throw RangeError('Invalid civil date');return d;}
+function sdrDate(value){const m=/^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.exec(value);if(!m||m[0]!==value)throw RangeError('Expected YYYY-MM-DD');const y=Number(m[1]),month=Number(m[2]),day=Number(m[3]);const d=new Date(0);d.setUTCFullYear(y,month-1,day);if(y<1||y>9999||d.getUTCFullYear()!==y||d.getUTCMonth()!==month-1||d.getUTCDate()!==day)throw RangeError('Invalid civil date');return d;}
 function sdrIsDate(value){try{sdrDate(value);return true;}catch(_){return false;}}
 function sdrDateDays(value){return sdrDate(value).valueOf()/86400000;}
 function sdrDateAdd(value,n){const days=sdrDateDays(value)+n;if(days< -719162||days>2932896)throw RangeError('Date outside 0001..9999');return new Date(days*86400000).toISOString().slice(0,10);}

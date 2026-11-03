@@ -64,6 +64,8 @@ class Platform(unittest.TestCase):
         source=ROOT/'examples/platform_crm.sdr';build_webapp(source.read_text(),cls.root/'crm',source)
         dynamic='webapp "Parameter cache"\nstate target=1\nservice product:\n    origin self\n    path "/api/products/:target"\n    auto true\n    cache true\n    response one:\n        id int32\n        title text\n        available bool\nview main:\n    heading "Parameter cache"\n    input target label "Product ID"\n    request "Reload" service product\n    remote product title title label "Product"\n'
         build_webapp(dynamic,cls.root/'dynamic',ROOT/'examples/platform_catalog.sdr')
+        routing='webapp "Pairs"\nstate a=0\nstate b=0\nrule a==b\nview main:\n    heading "Home"\nview pair at "/pair/:a/:b":\n    heading "Pair"\n    value a label "A"\n    value b label "B"\n    back "Home"\n'
+        build_webapp(routing,cls.root/'routing',ROOT/'examples/platform_catalog.sdr')
         cls.server=ThreadingHTTPServer(('127.0.0.1',0),functools.partial(Quiet,directory=cls.folder.name))
         cls.thread=threading.Thread(target=cls.server.serve_forever,daemon=True);cls.thread.start()
         cls.driver=sync_playwright().start();cls.engine=os.environ.get('SEDRAVA_BROWSER','chromium')
@@ -90,13 +92,19 @@ class Platform(unittest.TestCase):
     def test_crud_routes_history_dialog_and_reload(self):
         p=self.page;self.add('First task');self.add('Second task');self.select('First task')
         p.get_by_role('button',name='Open selected task').click();self.assertTrue(p.url.endswith('#/tasks/1'))
+        self.assertEqual(p.evaluate('document.activeElement.textContent'),'Task details')
         p.get_by_label('Rename selected task').fill('Renamed');p.get_by_role('button',name='Rename task',exact=True).click()
         p.get_by_role('button',name='Toggle completion').click();p.reload();self.assertTrue(p.url.endswith('#/tasks/1'))
         p.get_by_role('button',name='Back to tasks').click();p.wait_for_url('**#/')
         self.assertIn('Completed',p.get_by_role('listitem').filter(has=p.get_by_role('button',name='Select Renamed',exact=True)).inner_text())
         p.go_forward();p.wait_for_url('**#/tasks/1')
         p.get_by_role('button',name='Delete task',exact=True).click();self.assertTrue(p.get_by_role('dialog',name='Confirm task deletion',exact=True).evaluate('e=>e.open'))
+        for _ in range(6):
+            p.keyboard.press('Tab')
+            # Native Tab may visit browser chrome, but must never focus background page controls.
+            self.assertTrue(p.locator('dialog').evaluate('e=>e.contains(document.activeElement)||!document.hasFocus()'))
         p.keyboard.press('Escape');self.assertFalse(p.locator('dialog').evaluate('e=>e.open'))
+        self.assertEqual(p.evaluate('document.activeElement.textContent'),'Delete task')
         p.get_by_role('button',name='Delete task',exact=True).click();p.get_by_role('button',name='Confirm delete').click()
         p.wait_for_url('**#/');self.assertFalse(p.locator('dialog').evaluate('e=>e.open'))
         self.assertEqual(p.get_by_role('button',name='Select Renamed',exact=True).count(),0)
@@ -134,6 +142,14 @@ class Platform(unittest.TestCase):
         self.assertIn('cancelled',panel.locator('[data-remote-status]').inner_text())
         Quiet.mode='normal';p.get_by_role('button',name='Refresh catalog',exact=True).click()
         panel.locator('[data-remote-status]').get_by_text('success',exact=True).wait_for()
+        Quiet.rows=[{'id':1,'title':'<img src=x onerror=alert(1)>','available':True}]
+        p.get_by_role('button',name='Refresh catalog',exact=True).click()
+        panel.get_by_label('Product',exact=True).filter(has_text='<img src=x').wait_for()
+        self.assertEqual(panel.locator('img').count(),0)
+        self.assertTrue(panel.get_by_text('Available now',exact=True).is_visible())
+        Quiet.rows=[{'id':1,'title':'A public product','available':True}]
+        p.get_by_role('button',name='Refresh catalog',exact=True).click()
+        panel.get_by_label('Product',exact=True).filter(has_text='A public product').wait_for()
         p.get_by_role('button',name='Manage products',exact=True).click()
         p.get_by_label('Product name',exact=True).fill('<img src=x onerror=alert(1)>')
         for button,service in [('Create product','create_product'),('Update product','update_product'),('Replace product','replace_product')]:
@@ -147,6 +163,17 @@ class Platform(unittest.TestCase):
         p.get_by_role('button',name='Back to catalog',exact=True).click();p.wait_for_url('**#/')
         Quiet.mode='error';p.reload();self.assertIn('A public product',p.locator('[data-remote="catalog"]').inner_text())
         (self.evidence/'http-calls.json').write_text(json.dumps(Quiet.calls,indent=2))
+
+    def test_correlated_route_parameters_commit_together(self):
+        p=self.page;p.goto(self.url+'/routing/index.html#/pair/3/3')
+        self.assertEqual(p.locator('[data-state="a"]').inner_text(),'3')
+        self.assertEqual(p.locator('[data-state="b"]').inner_text(),'3')
+        self.assertTrue(p.url.endswith('#/pair/3/3'))
+        p.goto(self.url+'/routing/index.html#/pair/3/4')
+        p.wait_for_url('**#/')
+        self.assertEqual(p.locator('[data-state="a"]').text_content(),'3')
+        self.assertEqual(p.locator('[data-state="b"]').text_content(),'3')
+        self.assertTrue(p.locator('#sedrava-error').is_visible())
 
     def test_parameterized_http_cache_and_stale_response_isolation(self):
         p=self.page;p.goto(self.url+'/dynamic/index.html');panel=p.locator('[data-remote="product"]')
@@ -166,6 +193,14 @@ class Platform(unittest.TestCase):
         panel.get_by_role('heading',name='Product 2',exact=True).wait_for()
         keys=p.evaluate('Object.keys(localStorage).filter(k=>k.startsWith("sedrava-api:"))')
         self.assertEqual(len(keys),2)
+        rejected=next(key for key in keys if key.endswith(':/api/products/2'))
+        p.evaluate('([key])=>localStorage.setItem(key,"{broken")',[rejected])
+        Quiet.mode='normal';p.reload()
+        # Reload starts with target 1; selecting 2 must not overwrite its bad original.
+        p.get_by_label('Product ID',exact=True).fill('2')
+        panel.get_by_role('heading',name='Product 2',exact=True).wait_for()
+        self.assertIn('original retained',panel.locator('[data-remote-status]').inner_text())
+        self.assertEqual(p.evaluate('(key)=>localStorage.getItem(key)',rejected),'{broken')
 
     def test_static_project_composition_seo_font_and_navigation(self):
         p=self.page;p.goto(self.url+'/site/index.html');p.evaluate('document.fonts.ready')
@@ -185,7 +220,7 @@ class Platform(unittest.TestCase):
         p=self.page;p.goto(self.url+'/crm/index.html')
         p.get_by_role('button',name='Companies',exact=True).click()
         p.get_by_label('Company name',exact=True).fill('Acme');p.get_by_label('Industry',exact=True).fill('Engineering')
-        p.get_by_role('button',name='Add company',exact=True).click();p.get_by_role('button',name='Select Acme',exact=True).click()
+        p.get_by_label('Industry',exact=True).press('Enter');p.get_by_role('button',name='Select Acme',exact=True).click()
         self.assertEqual(p.evaluate('document.activeElement.textContent'),'Acme')
         p.get_by_role('button',name='Company contacts',exact=True).click();p.wait_for_url('**#/companies/1')
         p.get_by_label('Contact name',exact=True).fill('Ada');p.get_by_label('Email',exact=True).fill('invalid')
@@ -214,6 +249,9 @@ class Platform(unittest.TestCase):
             p.screenshot(path=str(self.evidence/f'crm-{width}.png'),full_page=True)
         p.get_by_role('button',name='Back to companies',exact=True).click();p.wait_for_url('**#/companies')
         p.get_by_role('button',name='Back to dashboard',exact=True).click();p.wait_for_url('**#/')
+        self.assertEqual(p.locator('[data-state=company_count]').inner_text(),'1')
+        self.assertEqual(p.locator('[data-state=contact_count]').inner_text(),'1')
+        self.assertEqual(p.locator('[data-state=active_count]').inner_text(),'0')
         p.get_by_role('button',name='Settings',exact=True).click();p.get_by_label('Color theme',exact=True).select_option('"dark"')
         self.assertEqual(p.evaluate('document.documentElement.dataset.theme'),'dark');p.reload()
         self.assertEqual(p.evaluate('document.documentElement.dataset.theme'),'dark')
