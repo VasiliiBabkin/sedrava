@@ -1,0 +1,10 @@
+app "Counter baseline"
+state count = 0
+action increment: count = count + 1
+action decrement: count = count - 1
+action reset: count = 0
+screen main:
+    value count
+    button "Add" -> increment
+    button "Subtract" -> decrement
+    button "Reset" -> reset
