@@ -18,7 +18,7 @@ class Browser(unittest.TestCase):
                 with sync_playwright() as p:
                     engine=os.environ.get('SEDRAVA_BROWSER','chromium');options={'executable_path':shutil.which('chromium'),'args':['--no-sandbox']} if engine=='chromium' else {}
                     browser=getattr(p,engine).launch(**options);page=browser.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
-                    page.goto('http://127.0.0.1:'+str(server.server_port)+'/');frame=page.frame_locator('iframe')
+                    page.goto('http://127.0.0.1:'+str(server.server_port)+'/');page.locator('iframe').scroll_into_view_if_needed();frame=page.frame_locator('iframe')
                     frame.get_by_role('button',name='Add',exact=True).click();self.assertEqual(frame.locator('output').inner_text(),'1')
                     page.get_by_role('button',name='Reload / Перезагрузить').click();self.assertEqual(frame.locator('output').inner_text(),'1')
                     self.assertEqual(page.locator('.doc-demo code').text_content(),COUNTER)
