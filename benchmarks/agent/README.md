@@ -54,3 +54,29 @@ cross-language behavioral comparison. A real benchmark must use task-specific
 acceptance tests and agent-produced candidate source. Token usage and cost
 remain `null` until independently recorded. A run marked `manual-baseline`
 must never be presented as an autonomous agent trial.
+
+## Browser acceptance evaluator (counter-v0)
+
+The standalone Playwright evaluator in
+`acceptance/counter_web_browser.py` executes cases C01–C08 against an
+**already running local HTTP Web app**. It does not inspect source or
+application storage keys. Supply the CSS selector for the displayed count
+and the visible accessible button labels for each candidate. Example:
+
+```bash
+python -m pip install playwright
+python -m playwright install chromium
+python benchmarks/agent/acceptance/counter_web_browser.py \
+  --url http://127.0.0.1:8000/index.html \
+  --value-selector 'output[data-state="count"]' \
+  --increment-label Add --decrement-label Subtract --reset-label Reset \
+  --output /tmp/counter-acceptance.json
+```
+
+Start the local server separately and point it at the **built** candidate.
+The selector above is illustrative; inspect each implementation's public
+UI and record the mapping before running. The evaluator rejects non-local
+URLs, uses a fresh browser context per invocation, and writes a JSON report.
+A passed result establishes the observed Web counter behavior only, not
+language-wide agent success. Keep each candidate's build logs and trial
+metadata alongside the browser report. No benchmark agent runs are bundled.
