@@ -11,6 +11,7 @@ from sedrava_core import MAX_SOURCE_CHARS, parse, run, resolve, transition
 from sedrava_version import VERSION
 from sedrava_frontend import parse_document
 from sedrava_site import Site
+from sedrava_webapp import WebApp
 
 def atomic_write_text(path, raw):
     """Replace complete output only after a successful, flushed write."""
@@ -43,7 +44,7 @@ def main(argv=None):
     test = commands.add_parser("test", help="Run embedded Sedrava tests")
     test.add_argument("source", type=Path)
     build = commands.add_parser("build", help="Generate an application")
-    build.add_argument("target", choices=("web", "android", "site"))
+    build.add_argument("target", choices=("web", "android", "site", "webapp"))
     build.add_argument("source", type=Path)
     build.add_argument("--output", type=Path)
     build.add_argument("--application-id", help="Stable Android package identity (lowercase reverse-domain name)")
@@ -56,6 +57,15 @@ def main(argv=None):
         with args.source.open(encoding="utf-8") as handle:
             source = handle.read(MAX_SOURCE_CHARS + 1)
         document = parse_document(source)
+        if isinstance(document, WebApp):
+            if args.command == 'check':
+                print(f"OK: {args.source} (webapp)")
+                return 0
+            if args.command == 'build' and args.target == 'webapp':
+                from sedrava_webapp import build_webapp
+                print(build_webapp(source,args.output or Path('build/webapp'),args.source))
+                return 0
+            raise ValueError('WebApp B1 is Web-only; use check or sedrava build webapp (run/test/android/site not yet supported)')
         if isinstance(document, Site):
             if args.command == 'check':
                 from site_codegen import generate_site
@@ -67,8 +77,8 @@ def main(argv=None):
                 print(build_site(source,args.output or Path('build/site'),args.source))
                 return 0
             raise ValueError('Site mode is static and Web-only; use check or sedrava build site (no app actions/tests)')
-        if args.command == 'build' and args.target == 'site':
-            raise ValueError('build site requires a site document, not app')
+        if args.command == 'build' and args.target in ('site','webapp'):
+            raise ValueError('build '+args.target+' requires a '+args.target+' document, not app')
         if args.command == "check":
             print(f"OK: {args.source}")
         elif args.command == "run":

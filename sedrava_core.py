@@ -253,6 +253,8 @@ def parse(source):
     lines = source_lines(source, limit=MAX_SOURCE_CHARS)
     if lines and lines[0][1].split()[0] == 'site':
         raise ValueError(f"Line {lines[0][2]}: column 1: Site mode is Web-only; use sedrava build site")
+    if lines and lines[0][1].split()[0] == 'webapp':
+        raise ValueError(f"Line {lines[0][2]}: column 1: WebApp mode requires sedrava build webapp")
     states, actions, rules, tests, widgets, derived = {}, {}, [], [], [], {}
     persistent = []
     records = {}
