@@ -35,6 +35,17 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_agent_*.py' -v
       - name: Validate example and produce report
         run: python benchmarks/agent/analyze.py benchmarks/agent/sample-result.json --output agent-benchmark-summary.json
+      - name: Freeze ten neutral Web trial inputs (no agent invocation)
+        run: |
+          python benchmarks/agent/prepare_web_experiment.py --commit "$(git rev-parse HEAD)" --model gpt-5.4 --agent "codex-cli 0.159.0-alpha.3 (requested; not invoked in CI)" --toolchain "Execution toolchain must be recorded by authorized agent runner" --seconds 600 --tokens 20000 --attempts 3 --output build/agent-web-experiment
+      - name: Upload prepared inputs and truthful not-run comparison
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: agent-benchmark-web-prepared-not-run
+          path: |
+            build/agent-web-experiment/
+            benchmarks/agent/evidence/2026-11-03-preflight/
+            benchmarks/agent/reports/counter-web-2026-11-03.md
       - name: Upload example report
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -65,6 +76,8 @@ jobs:
         run: ./node_modules/.bin/tsc --project benchmarks/agent/baselines/typescript/tsconfig.json
       - name: Run browser acceptance on both baselines
         run: python benchmarks/agent/run_baselines.py
+      - name: Browser negative controls (not agent trials)
+        run: python benchmarks/agent/test_web_evaluator.py
       - name: Upload browser evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

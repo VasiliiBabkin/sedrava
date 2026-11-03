@@ -7,16 +7,19 @@ import argparse
 import json
 import pathlib
 import sys
-import time
+from urllib.parse import urlsplit
 
 
-def evaluate(page, url, value_selector, buttons):
-    observations = []
+def evaluate(page, url, value_selector, buttons, observations=None):
+    if observations is None:
+        observations = []
 
     def expect(expected, case):
         locator = page.locator(value_selector)
         if locator.count() != 1:
             raise AssertionError(f"{case}: expected one count display, got {locator.count()}")
+        if not locator.is_visible():
+            raise AssertionError(f"{case}: count display must be visible")
         actual = locator.inner_text().strip()
         if actual != str(expected):
             raise AssertionError(f"{case}: expected {expected}, got {actual!r}")
@@ -51,6 +54,18 @@ def evaluate(page, url, value_selector, buttons):
     return observations
 
 
+def validate_local_url(value):
+    try:
+        parsed = urlsplit(value)
+        valid = (parsed.scheme == 'http' and parsed.hostname in ('127.0.0.1', 'localhost')
+                 and parsed.port is not None and parsed.username is None and parsed.password is None)
+    except ValueError:
+        valid = False
+    if not valid:
+        raise ValueError('Only local HTTP candidates with an explicit port are supported')
+    return value
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--url", required=True, help="Locally served candidate URL")
@@ -62,8 +77,10 @@ def main(argv=None):
     parser.add_argument("--output", required=True, type=pathlib.Path)
     parser.add_argument("--chromium", default=None, help="Optional Chromium executable path")
     args = parser.parse_args(argv)
-    if not args.url.startswith(("http://127.0.0.1:", "http://localhost:")):
-        parser.error("Only local HTTP candidates are supported")
+    try:
+        validate_local_url(args.url)
+    except ValueError as exc:
+        parser.error(str(exc))
     try:
         from playwright.sync_api import sync_playwright
         import importlib.metadata
@@ -80,14 +97,14 @@ def main(argv=None):
                 executable_path=args.chromium, args=["--no-sandbox"])
             report["browser_version"] = browser.version
             context = browser.new_context()
+            errors = []
+            context.on("page", lambda p: p.on("pageerror", lambda error: errors.append(str(error))))
             page = context.new_page()
             page.set_default_timeout(5000)
-            errors = []
-            page.on("pageerror", lambda error: errors.append(str(error)))
             report["observations"] = evaluate(
                 page, args.url, args.value_selector,
                 {"increment": args.increment_label, "decrement": args.decrement_label,
-                 "reset": args.reset_label})
+                 "reset": args.reset_label}, report["observations"])
             if errors:
                 raise AssertionError("Browser exceptions: " + "; ".join(errors))
             report["passed"] = True

@@ -105,3 +105,25 @@ and emits the exact coding-agent prompt plus a manifest with outcome not_run.
 It has no access to an AI model and does not generate success measurements.
 The first agent trials must be executed by an actual coding-agent harness,
 followed by independent browser/Android acceptance and measured telemetry.
+
+## First Web measurement attempt (2026-11-03)
+
+[Execution report / отчёт](reports/counter-web-2026-11-03.md): **0 actual agent trials**.
+The real Codex CLI preflight was blocked by the managed proxy (HTTP CONNECT 403);
+model access was not verified. There is no measured Sedrava-versus-TypeScript
+pass rate, generation time, token consumption or cost.
+
+`prepare_web_experiment.py` creates five neutral frozen bundles per language
+through the existing bundle builder, an explicit not-run comparison, scheduling
+order and evaluator hashes. Prepared directories are not isolated executions.
+`evaluate_web_candidate.py` serves built candidates and invokes the independent
+C01–C08 evaluator; keep its output outside the served directory. The agent must
+never see the evaluator, baselines or prior candidates. Real runs additionally
+need an authorized model endpoint, a budget-enforcing adapter and fresh isolated
+containers; see the report for exact requirements and commands.
+
+The evaluator now rejects hidden count displays, monitors errors on every tab,
+retains partial failure evidence, and validates local URLs structurally.
+`test_web_evaluator.py` exercises three deliberately broken baseline variants;
+these controls are not coding-agent measurements. Existing baseline jobs and
+all eight behavioral cases remain enabled.
