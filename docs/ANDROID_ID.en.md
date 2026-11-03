@@ -1,4 +1,4 @@
-# Android application identity (unreleased 0.10)
+# Android application identity (Sedrava 0.10.0)
 
 The display title is the `.sdr` `app "…"` declaration. Android installation identity is a build setting; it does not change language semantics.
 

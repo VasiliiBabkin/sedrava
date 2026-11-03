@@ -1,9 +1,11 @@
 {
   "actions/checkout@v4": "11d5960a326750d5838078e36cf38b85af677262",
+  "actions/download-artifact@v4": "d3f86a106a0bac45b974a628896c90dbdf5c8093",
   "actions/setup-java@v5": "b6effb05e454b25005698d916606bdc6ffcbf961",
   "actions/setup-node@v4": "49933ea5288caeca8642d1e84afbd3f7d6820020",
   "actions/setup-python@v5": "a26af69be951a213d495a4c3e4e4022e16d87065",
   "actions/upload-artifact@v4": "ea165f8d65b6e75b540449e92b4886f43607fa02",
   "gradle/actions/setup-gradle@v4": "ed408507eac070d1f99cc633dbcf757c94c7933a",
+  "pypa/gh-action-pypi-publish@v1.14.3": "7245906fb61fa33a13554f9d5fb856fe61758086",
   "reactivecircus/android-emulator-runner@v2": "a421e43855164a8197daf9d8d40fe71c6996bb0d"
 }

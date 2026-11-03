@@ -1,32 +1,26 @@
-# Quick Start / Быстрый старт
+# Quick Start / Быстрый старт — Sedrava 0.10.0
 
-For the current unreleased sources: [unreleased first-class text guide](LANGUAGE_0_10_TEXT.md). Published baseline: 0.9.0a1; current experimental candidate: 0.10.0rc2, not a published 0.10.
-
-**Describe the application; get the application. / Опиши приложение — получи приложение.**
-
-Sedrava describes local application state, rules, actions and a small UI. The 0.9 alpha targets learning and experimental offline applications; it is not a production framework. No accounts, cloud service or runtime Python dependencies are required.
+**Published release:** [GitHub v0.10.0](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.10.0) · [PyPI](https://pypi.org/project/sedrava/0.10.0/). Sedrava remains experimental, not a production-support guarantee.
 
 ## Install / Установка
 
-Install Python 3.10+ and Git. From a terminal:
+Requires Python **3.10+**. Use a virtual environment:
 
 ```sh
-git clone https://github.com/VasiliiBabkin/sedrava.git
-cd sedrava
-python -m venv .venv
-# Linux/macOS:
+# Linux: use python3, since some distributions have no 'python' alias.
+python3 -m venv .venv
 . .venv/bin/activate
-# Windows PowerShell instead: .venv\Scripts\Activate.ps1
-python -m pip install .
+python -m pip install sedrava==0.10.0
 sedrava --version
-sedrava --help
 ```
 
-Text, records and navigation are integrated in the current sources. Read the [stability audit](STABILITY_AUDIT_010.md) before distributing applications; the audit recommends rc2 and does not replace the original rc1 kit. Do not `pip install sedrava` from PyPI: no Sedrava package has been published there. On Windows `py -3` may be needed instead of `python`; quote paths containing spaces.
+On Windows, create the environment with `py -3 -m venv .venv`, activate with `.venv\Scripts\Activate.ps1`, then run `python -m pip install sedrava==0.10.0`. To work from a repository checkout instead, use `python -m pip install .` after activation. If `python3 -m venv` is unavailable on Ubuntu/Debian, install the distro's `python3-venv` package.
 
-Create `hello.sdr` (plain UTF-8):
+## First app / Первое приложение
 
-```sedrava
+Create a UTF-8 file `hello.sdr`:
+
+```text
 app "Hello Sedrava"
 state count = 0
 action add: count = count + 1
@@ -46,58 +40,28 @@ sedrava build web hello.sdr --output build/web/index.html
 python -m http.server 8000 --directory build/web
 ```
 
-Open http://localhost:8000. `run` prints `{"count": 2}`; it is a deterministic interpreter, with no UI or event loop. `check` checks declarations, types, initial values and rules; `test` executes embedded tests. Builds also execute embedded tests. Ctrl+C stops the HTTP server.
+Open http://localhost:8000. The `run` command prints `{"count": 2}`; it is not a GUI. The Web generator produces a standalone HTML application.
 
-Next: [language syntax and semantics](LANGUAGE_0_9.md), [complete examples](../examples/README.md), [Web/Android build guide](BUILD.md), [FAQ](FAQ.md), [known limitations](KNOWN_LIMITATIONS.md).
+## Text, records and navigation / Текст, записи и навигация
 
-Русский: установите Python и Git, создайте виртуальное окружение и установите проект командой `python -m pip install .`. Сохраните пример в UTF-8, проверьте его командами `check` и `test`. `run` выводит состояние после указанных действий; `build web` создаёт HTML, а `build android` — исходный Gradle-проект. Для APK нужны дополнительные инструменты из инструкции сборки. Синтаксис языка остаётся английским.
+Included in **0.10.0**: [text](LANGUAGE_0_10_TEXT.md), [records and bounded lists](RECORDS_COLLECTIONS_010.md), [multi-screen navigation](NAVIGATION_010_CONTRACT.md). Clone the repository to use the checked-in examples:
 
-## First-class text / Полноценный текст
+```sh
+git clone https://github.com/VasiliiBabkin/sedrava.git
+cd sedrava
+sedrava check examples/task_manager_navigation.sdr
+sedrava test examples/task_manager_navigation.sdr
+sedrava build android examples/task_manager_navigation.sdr --output build/tasks-android
+```
 
-Run `sedrava check examples/text_profile.sdr`, `sedrava test examples/text_profile.sdr`, `sedrava run examples/text_profile.sdr rename`, then `sedrava build web examples/text_profile.sdr --output build/text-web/index.html`. Serve that directory as above. `sedrava build android examples/text_profile.sdr --output build/text-android` produces the Android project without manual application-code changes. Follow the [text guide](LANGUAGE_0_10_TEXT.md) for APK/JVM/Lint commands and input/restore semantics.
+`build android` generates Kotlin/Compose source, **not an APK**. Compile with JDK, Android SDK and Gradle per [BUILD.md](BUILD.md). Data migrations and encrypted persistence are not provided. Final 0.10 APK physical-device acceptance is not recorded.
 
-## Records and collections / Записи и коллекции (unreleased 0.10)
+`sedrava build site` is experimental in [draft PR #22](https://github.com/VasiliiBabkin/sedrava/pull/22), **not** part of the released CLI. [sedrava-site](https://github.com/VasiliiBabkin/sedrava-site) is a separate Astro/Starlight website.
 
-The development branch integrates typed records and bounded ordered lists into `.sdr`,
-with stable IDs, atomic actions, strict snapshots and generated Web/Compose UI.
-Записи и списки доступны в языке на ветке разработки; 0.10 не выпущена.
 
-- [English task-manager guide](RECORDS_QUICKSTART.en.md)
-- [Руководство на русском](RECORDS_QUICKSTART.ru.md)
-- [Measured coverage / Фактические проверки](COLLECTIONS_010_REPORT.md)
+## Post-release Linux smoke test / Ручная проверка Linux
 
-## Multi-screen navigation / Многоэкранная навигация (unreleased 0.10)
-
-Named screens, guarded atomic transitions and a bounded Back stack are implemented
-in the core and both generators. One `.sdr` file generates the two-screen task manager.
-Экраны и переходы — возможность языка; опубликованного выпуска 0.10 нет.
-
-- [English guide](NAVIGATION_QUICKSTART.en.md)
-- [Русское руководство](NAVIGATION_QUICKSTART.ru.md)
-- [Syntax and semantics](NAVIGATION_010_CONTRACT.md)
-- [Measured report](NAVIGATION_010_REPORT.md)
-
-## Release readiness / Подготовка к RC (unreleased 0.10)
-
-Independent deterministic Android IDs and `--application-id` are implemented.
-Независимые Android-приложения собираются с постоянным ID; название отделено от пакета.
-[English identity/build guide](ANDROID_ID.en.md) · [Русская инструкция](ANDROID_ID.ru.md).
-Wheel/sdist include examples, documentation and license under `sys.prefix/share/sedrava`.
-Дистрибутив содержит примеры, документацию и лицензию; публикация 0.10 не выполнялась.
-
-Measured RC readiness / Фактическая готовность RC: [report / отчёт](RELEASE_READINESS_010_REPORT.md).
-
-## 0.10.0rc1 preparation / Подготовка RC (not published)
-
-[Release notes EN](RELEASE_NOTES_0_10_0rc1.en.md) · [RU](RELEASE_NOTES_0_10_0rc1.ru.md) · [Upgrade/rollback EN](UPGRADE_0_10_0rc1.en.md) · [RU](UPGRADE_0_10_0rc1.ru.md) · [RC report](RC_010_REPORT.md).
-Use a verified local wheel in a separate environment; no PyPI/TestPyPI RC has been published.
-Установка — из проверенного локального wheel в отдельное окружение; автоматической миграции данных нет.
-
-## 0.10.0rc2 preparation / Подготовка RC2 (not published)
-
-[Release notes EN](RELEASE_NOTES_0_10_0rc2.en.md) · [RU](RELEASE_NOTES_0_10_0rc2.ru.md) · [Upgrade/rollback EN](UPGRADE_0_10_0rc2.en.md) · [RU](UPGRADE_0_10_0rc2.ru.md) · [RC2 report](RC2_010_REPORT.md).
-Current source version: **0.10.0rc2**, Android versionCode **10002**. This is a separately prepared experimental candidate, not stable 0.10.0 or a publication. The original rc1 kit remains immutable.
-Текущая версия исходников — 0.10.0rc2, код Android — 10002. Публикация требует отдельного решения владельца; физическое устройство не проверено.
+Installation from PyPI, CLI `check`/`test`/`run`, HTML generation and tester-confirmed browser interaction passed on 2026-11-01 in a Linux virtual environment using Python 3.13. See the [evidence and scope](MANUAL_LINUX_WEB_SMOKE_0_10_0_2026-11-01.md). Physical Android acceptance is separate.
 
 ## Experimental Web UI 0.11 / Экспериментальный Web UI 0.11
 

@@ -1,6 +1,6 @@
 # Sedrava 0.10 multi-screen navigation — implementation contract
 
-**Status:** normative, experimental implementation on the navigation development branch; not a released 0.10. Baseline: merged records/collections PR #14. Measured coverage: [report](NAVIGATION_010_REPORT.md).
+**Status:** implemented in the published experimental Sedrava 0.10.0 release. The development-branch references below are historical; coverage: [report](NAVIGATION_010_REPORT.md).
 
 ## Objective / Цель
 

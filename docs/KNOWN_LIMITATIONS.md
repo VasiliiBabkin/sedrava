@@ -1,6 +1,6 @@
-# Known limitations / Известные ограничения (unreleased 0.10)
+# Known limitations / Известные ограничения (0.10.0)
 
-Implemented: int32/bool/text, typed records, ordered bounded collections, atomic actions, strict snapshots, guarded multi-screen navigation, Web/Compose and independent [Android identities](ANDROID_ID.en.md). Sedrava 0.10 is **not released**; 0.9.0a1 is the historical published baseline.
+Implemented: int32/bool/text, typed records, ordered bounded collections, atomic actions, strict snapshots, guarded multi-screen navigation, Web/Compose and independent [Android identities](ANDROID_ID.en.md). Version 0.10.0 is published on [PyPI](https://pypi.org/project/sedrava/0.10.0/) and [GitHub](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.10.0). 0.9.0a1 remains the historical GitHub baseline.
 
 - Experimental grammar/API; no stable pre-1.0 compatibility promise. No division, modules, loops, services, timers, deep links, route parameters, nested records or migrations. [Records](RECORDS_COLLECTIONS_010.md), [navigation](NAVIGATION_010_CONTRACT.md).
 - Bounds: int32, text 1024 Unicode scalars, list capacity 100, 16 record fields, 16 record/list declarations; 32 screens/stack entries, 64 navigation bindings. Further source/AST/resource guards apply. These are safeguards, not an adversarial sandbox; very large valid programs may exceed native compiler limits.
@@ -11,7 +11,7 @@ Implemented: int32/bool/text, typed records, ordered bounded collections, atomic
 - No Gradle wrapper, release signing/version management, dependency lockfiles or SBOM. Direct toolchain/dependency versions are pinned; first builds download dependencies. Generated source/Web and archive payload reproducibility are tested; bit-for-bit APK/archive timestamps and transitive dependency immutability are not guaranteed.
 - Emulator checks are bounded scenarios, not every Android/device configuration. Historical physical-device acceptance covers 0.9 only; new 0.10 APKs have **not** been tested on a physical device. Debug certificates differ between machines. See [readiness evidence](RELEASE_READINESS_010_REPORT.md).
 
-Русский: строки, записи, списки, навигация и независимые Android ID реализованы. Холодный запуск открывает начальный экран; поворот сохраняет принятое состояние. Хранение не зашифровано, миграций нет. Одинаковые названия дают одинаковый ID; используйте [явный ID](ANDROID_ID.ru.md) для независимых приложений. Нет произвольной вёрстки и полной сертификации доступности. Новые APK проверяются эмулятором; физическое устройство для 0.10 недоступно. Версия ещё не выпущена.
+Русский: строки, записи, списки, навигация и независимые Android ID реализованы. Холодный запуск открывает начальный экран; поворот сохраняет принятое состояние. Хранение не зашифровано, миграций нет. Одинаковые названия дают одинаковый ID; используйте [явный ID](ANDROID_ID.ru.md) для независимых приложений. Нет произвольной вёрстки и полной сертификации доступности. Новые APK проверяются эмулятором; полный протокол проверки физического устройства для 0.10.0 ожидается. Публикация проводится отдельно.
 
 ## 0.10.0rc1 preparation / Подготовка RC (not published)
 
@@ -23,10 +23,10 @@ Use a verified local wheel in a separate environment; no PyPI/TestPyPI RC has be
 
 [Audit](STABILITY_AUDIT_010.md) · [Compatibility](COMPATIBILITY_010.md) · [Stable gates](STABLE_RELEASE_GATES_010.md). Rejected saved data is preserved; edits may remain temporary until recovery. Concurrent writers are last-writer-wins; no migration or power-cut certification. The audit recommends rc2 before stable 0.10.0.
 
-Отвергнутые данные защищены от перезаписи; перед ручным сбросом сделайте копию. Новые изменения могут оставаться в памяти. Рекомендуется rc2, а не немедленный стабильный выпуск.
+Отвергнутые данные защищены от перезаписи; перед ручным сбросом сделайте копию. Новые изменения могут оставаться в памяти. В историческом аудите рекомендовался rc2 до стабильного выпуска.
 
 ## 0.10.0rc2 preparation / Подготовка RC2 (not published)
 
 [Release notes EN](RELEASE_NOTES_0_10_0rc2.en.md) · [RU](RELEASE_NOTES_0_10_0rc2.ru.md) · [Upgrade/rollback EN](UPGRADE_0_10_0rc2.en.md) · [RU](UPGRADE_0_10_0rc2.ru.md) · [RC2 report](RC2_010_REPORT.md).
-Current source version: **0.10.0rc2**, Android versionCode **10002**. This is a separately prepared experimental candidate, not stable 0.10.0 or a publication. The original rc1 kit remains immutable.
-Текущая версия исходников — 0.10.0rc2, код Android — 10002. Публикация требует отдельного решения владельца; физическое устройство не проверено.
+The historical rc2 source was 0.10.0rc2 (Android 10002); **published 0.10.0** uses Android versionCode **10003**. Historical artifacts and tags remain immutable.
+Версия 0.10.0 опубликована, Android versionCode 10003. Проверка конечного APK на физическом устройстве требует отдельного подтверждения.

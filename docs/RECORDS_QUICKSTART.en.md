@@ -1,11 +1,10 @@
-# Build an offline task manager (unreleased 0.10)
+# Build an offline task manager (Sedrava 0.10.0)
 
-Use branch `feature/010-records-collections-spec` and Python 3.10+:
+Use Python 3.10+ and the published Sedrava 0.10.0 package; clone the repository for example files:
 
 ```sh
 git clone https://github.com/VasiliiBabkin/sedrava.git
 cd sedrava
-git checkout feature/010-records-collections-spec
 python -m pip install '.[test]'
 sedrava check examples/task_manager.sdr
 sedrava test examples/task_manager.sdr

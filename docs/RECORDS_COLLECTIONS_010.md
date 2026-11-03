@@ -1,6 +1,6 @@
-# Records and collections / Записи и коллекции — unreleased 0.10
+# Records and collections / Записи и коллекции — Sedrava 0.10.0
 
-Normative development syntax (not a release):
+Normative 0.10.0 syntax (published experimental implementation):
 
 ```sdr
 record Task:

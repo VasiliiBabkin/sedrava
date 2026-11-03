@@ -1,6 +1,6 @@
-# Multi-screen task manager — unreleased 0.10
+# Multi-screen task manager — Sedrava 0.10.0
 
-Use Python 3.10+ and branch `feature/010-multiscreen-navigation`:
+Use Python 3.10+ and Sedrava 0.10.0. Run the example from a repository checkout:
 
 ```sh
 python -m pip install '.[test]'

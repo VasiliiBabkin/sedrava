@@ -1,4 +1,4 @@
 """Single source of package, CLI and generated Android release version."""
-VERSION = "0.10.0rc2"
-# Second experimental RC; increase versionCode for in-place upgrades from rc1 (10001).
-ANDROID_VERSION_CODE = 10002
+VERSION = "0.10.0"
+# Stable source; monotonic versionCode for upgrades from rc2 (10002).
+ANDROID_VERSION_CODE = 10003

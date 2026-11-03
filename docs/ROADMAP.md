@@ -1,110 +1,40 @@
-> Current development increment: [first-class text](LANGUAGE_0_10_TEXT.md), [measured report](TEXT_010_REPORT.md). 0.9.0a1 is published; 0.10 remains unreleased; [release-readiness evidence](RELEASE_READINESS_010_REPORT.md) supports technical first-RC review.
-
 # Sedrava — Roadmap / Дорожная карта
 
-**Status / Статус:** development plan, not a release commitment.  
-**Published package / Опубликованный пакет:** historical `intent-lng` 0.7 series; Sedrava has not been published on PyPI.  
-**Active work / Текущая разработка:** Sedrava 0.9.0a1 is published on GitHub; 0.10 text/records/navigation work is an unreleased development increment.
+**Released / Опубликовано:** [Sedrava 0.10.0](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.10.0) and [PyPI](https://pypi.org/project/sedrava/0.10.0/), 31 October 2026.
+**Status:** an experimental public release, not a 1.0 compatibility commitment or a production certification. Final 0.10 Android physical-device acceptance is still not documented.
+**In development:** [Web UI 0.11](https://github.com/VasiliiBabkin/sedrava/pull/22) is a draft PR, not released. Its experimental `build site` command is separate from the Astro/Starlight documentation site.
 
 ## Vision / Видение
 
-**Describe the application; get the application. / Опиши приложение — получи приложение.**
-
-Sedrava should turn concise, declarative descriptions into useful applications without platform boilerplate. The goal is not to reproduce Kotlin, Python or JavaScript. See [Origin and Vision](ORIGIN_AND_VISION.md).
-
-## Principles / Принципы
-
-1. **Minimal ceremony / Минимум служебного кода:** describe what the app does, not how to initialize its framework.
-2. **Shared semantics / Общая семантика:** actions, state, rules and tests behave consistently across backends.
-3. **Native experience / Нативность:** each platform should feel natural, not pixel-identical.
-4. **Safe defaults / Безопасность:** validate input, bound computations, declare permissions and persistence explicitly.
-5. **Working examples / Практическая проверка:** each milestone includes a real app and automated tests.
-6. **Offline-first where possible / По возможности без сервера:** simple apps should run locally.
-7. **Honest releases / Честные выпуски:** branches and prototypes are not published versions.
+Describe the application; get the application. / Опиши приложение — получи приложение. State, actions, invariants, tests and UI are described without copying platform boilerplate. Python and generated Web/Android semantics are tested against bounded scenarios; no universal equivalence is claimed.
 
 ## Milestones / Этапы
 
-| Version | Focus / Направление | Exit criteria / Результат |
+| Version | Scope / Направление | Status / Статус |
 | --- | --- | --- |
-| **0.9** | Reliable foundations / Надёжная основа: checked arithmetic, persistence, numeric input, conditional widgets, diagnostics | Clear input validation feedback; Android/Web regression and conformance tests; device check |
-| **0.10** | Text, records, bounded collections and richer UI / Строки, записи, списки и интерфейс | Multi-screen example runs on Android and Web; accessibility basics |
-| **0.11** | Data / Данные: migrations, nested schemas, local data model | Type and persistence semantics specified; migration strategy; working sample |
-| **0.12** | Device capabilities / Устройство: files, notifications, permissions, camera | Explicit capability declarations, graceful unsupported-platform behavior |
-| **0.13** | App architecture / Архитектура: reusable components, modules, structured errors | Tested multi-file reference application |
-| **0.14** | Developer tools / Инструменты: editor integration, syntax highlighting, completion, preview, debugger | Documented, repeatable edit-build-preview workflow |
-| **0.15** | Desktop / Настольные приложения: Windows-first target | Verified executable app and packaging workflow on Windows |
-| **0.16–0.19** | Hardening / Стабилизация: performance, accessibility, security, compatibility | Supported platform matrix and representative apps pass release gates |
-| **1.0** | Stable language / Стабильный язык: specification, CLI, compatibility and migration policy | Versioned specification, repeatable releases, documented support commitments |
+| **0.9** | Checked integers, actions, rules, basic Web/Android | Historical GitHub alpha |
+| **0.10** | Unicode text, records, bounded lists, multi-screen navigation | **Released** on GitHub and PyPI |
+| **0.11** | Extended Web UI and responsive website generation | **Draft PR #22**, not in released CLI |
+| **0.12+** | Device capabilities, module/reuse architecture, editors and desktop | Proposed, not committed |
+| **1.0** | Versioned specification, compatible storage and support policy | Long-term goal |
 
-**Version numbers are planning labels, not promised release dates. / Номера версий — ориентиры, не сроки и не гарантии.**
+Version numbers are planning milestones, **not release dates**. / Номера — ориентиры, а не сроки.
 
-## Immediate backlog / Ближайшие задачи
+## Principles / Принципы
 
-- [x] Android validation errors and preserved editable draft confirmed on physical device; see [acceptance report](ANDROID_09_ACCEPTANCE.md).
-- [x] Extend Web parity tests to cover empty, invalid, overflow, corrected input and persistence after restart (basic checks exist).
-- [x] Accepted persistent goal, progress and sessions survive relaunch in the tested Android scenario; see [acceptance report](ANDROID_09_ACCEPTANCE.md).
-- [x] Complete normative 0.9 language syntax/semantics and platform-difference specification: [reference](LANGUAGE_0_9.md).
-- [x] Distinguish the historical Intent 0.7 release from the published Sedrava 0.9 alpha.
-- [x] Define separate integration branch and 0.9.0a1 candidate version; PyPI publication deferred.
-- [x] Implement the two-screen [task manager](../examples/task_manager_navigation.sdr) on the navigation branch; measured checks are in [the report](NAVIGATION_010_REPORT.md). The single-screen 0.9 [reference app](REFERENCE_09.md) is separate.
+- Predictable, atomic state transitions with typed values and explicit invariants.
+- Offline-first where practical; safe resource bounds.
+- Comparable semantics across target runtimes with transparent platform-specific limitations.
+- Source builds, test evidence and documentation before release.
+- Separate experiments, historical records and published features.
 
-## Release gate / Условия завершения этапа
+## 0.10 release evidence / Проверки 0.10
 
-A milestone is ready only when its behavior is specified, relevant generators and interpreter are tested, examples run, documentation is updated, CI is green and device-specific behavior is verified or explicitly labeled unverified. A Git branch or pull request is **not** a release.
+Release tag `v0.10.0` resolves to commit `688a320025a0d38235eb90c780362ec26b0708e2`. The [release workflow](https://github.com/VasiliiBabkin/sedrava/actions/runs/41237159326) published wheel/sdist on PyPI with digital attestations. Main CI, Android build and text conformance succeeded. [RC1](RC_010_REPORT.md), [RC2](RC2_010_REPORT.md) and [stability audit](STABILITY_AUDIT_010.md) reports describe historical states and are retained unchanged.
 
-## Beyond 1.0 / После 1.0
+**Still open:** [final 0.10 physical-device acceptance](PHYSICAL_DEVICE_010.md). Do not imply all Android devices are supported or that the source contains automatic migrations, encrypted persistence or security certification. See [limitations](KNOWN_LIMITATIONS.md) and [compatibility](COMPATIBILITY_010.md).
 
-Visual app builder, reusable component ecosystem, optional AI-assisted authoring and additional platforms. **AI is optional; the language runtime must work without it.**
-
-## Historical progress / Уже сделано
-
-- [x] Parser, interpreter, actions, invariants and independent tests.
-- [x] Shared typed AST and experimental Kotlin/Compose Android generator.
-- [x] Standalone Web/JavaScript generator.
-- [x] historical Intent 0.7 releases; Sedrava has not been published on PyPI.
-- [x] Android APK builds in GitHub Actions and device tests.
-- [x] Initial cross-backend differential tests and CI.
-- [x] Normative alpha language reference and expanded conformance/browser suite; exhaustive coverage is not claimed.
-
-## Sedrava integration status (2026-10-29)
-
-0.9.0a1 is published on GitHub; its checked source, tag and release assets are preserved. Basic Android Workflow launch and actions were confirmed on a physical device on 2026-10-29; advanced numeric input, invalid-input rejection, overflow rejection and persistence passed the documented physical-device acceptance scenarios. See [reference test plan](REFERENCE_09.md). The historical Intent 0.7 PyPI release is not a Sedrava release. English-language syntax only. Release gates: CI, clean install, Android and Web builds, conformance, documentation, device testing. No PyPI publication planned.
-
-### Physical device evidence (2026-10-29)
-
-A tester installed the 0.9 Lab reference APK and supplied screenshots of initial state and accepted goal 6/progress 6/sessions 6/reached true, confirming launch, actions, derived state and conditional UI. See [reference verification](REFERENCE_09.md). Subsequent device tests confirmed rejected-input handling, overflow rejection and persistence after relaunch; see [Android acceptance](ANDROID_09_ACCEPTANCE.md).
-
-### Device acceptance closure
-
-The planned physical Android 0.9 Lab acceptance tests passed, including accepted-state persistence and rejection of invalid, relationally inconsistent and overflowing input. Evidence and limitations: [Android 0.9 acceptance](ANDROID_09_ACCEPTANCE.md). The later alpha engineering pass closed its release gates; new 0.10 binaries need their own measured verification.
-
-## First 0.10 increment
-
-Text state/derive/equality/actions, inferred text input and persistence are implemented and merged into main with Python/JS/JVM and browser conformance. Main integrates records, collections and a single-screen task manager; see [coverage](COLLECTIONS_010_REPORT.md). Guarded multi-screen navigation is implemented and merged into main; see [coverage](NAVIGATION_010_REPORT.md). The [Describe → Get contract](DESCRIBE_GET_010.md) remains the product gate for the full milestone.
-
-## Release-readiness increment / Подготовка RC
-
-- [x] Deterministic independent Android IDs, explicit overrides and escaped launcher titles.
-- [x] Installed wheel/sdist include offline examples and documentation; CLI checks run outside checkout.
-- [x] Responsive long-text/large-font checks and invalid-draft action states.
-- [ ] Physical-device acceptance for the new 0.10 APKs (unavailable in this environment).
-
-See [readiness report](RELEASE_READINESS_010_REPORT.md) for measured CI/emulator results and GO/NO-GO.
-Это техническая подготовка; релиз, тег, PyPI и развёртывание не выполнялись.
-
-## First experimental RC preparation / Подготовка первого RC
-
-Version `0.10.0rc1` is prepared, not published. Same-SHA read-only artifact assembly, version agreement, checksums, published-0.9 rollback and a real Android update gate are implemented. See [report](RC_010_REPORT.md) and [controlled publication procedure](RC_PUBLISHING.md). A technical GO does not grant owner authorization.
-
-## Stabilization / Стабилизация 0.10
-
-The independent [audit](STABILITY_AUDIT_010.md) fixes rejected-data overwrite, signed-minimum parsing, CLI output safety and duplicate editor errors. [Compatibility](COMPATIBILITY_010.md) and [measurable stable gates](STABLE_RELEASE_GATES_010.md) define actual guarantees. Next recommendation: separately versioned rc2 and observation before stable 0.10.0; rc1 artifacts stay immutable.
-
-Рекомендация: новый rc2 после исправлений и период наблюдения перед стабильной версией. Публикация требует отдельного решения владельца.
-
-## RC2 verification / Проверка RC2
-
-Version 0.10.0rc2 / Android 10002 includes the audit fixes. [RC2 contract](RC2_010_PREPARATION.md) and [report](RC2_010_REPORT.md) require real increasing-code rc1 updates, independent corpus evidence and immutable same-SHA artifacts. Technical GO and owner authorization remain separate; stable release requires an owner-defined observation period.
+[Documentation website repository](https://github.com/VasiliiBabkin/sedrava-site) · [issues](https://github.com/VasiliiBabkin/sedrava/issues).
 
 ## Web UI 0.11 — Slice A / Срез A
 

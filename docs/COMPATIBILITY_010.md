@@ -1,6 +1,6 @@
 # Compatibility / Совместимость Sedrava 0.10
 
-This is an observed development contract, not a stable-version announcement.
+This describes the observed 0.10 storage/update contract. The 0.10.0 version number does not imply migration support or future compatibility.
 The audit does not change the public grammar, Android IDs, storage encoding,
 or the immutable rc1 kit. See [audit](STABILITY_AUDIT_010.md).
 

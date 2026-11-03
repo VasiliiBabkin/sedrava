@@ -1,11 +1,10 @@
-# Офлайн-список задач (разработка 0.10, не выпуск)
+# Офлайн-список задач (Sedrava 0.10.0)
 
-Нужны Python 3.10+ и ветка `feature/010-records-collections-spec`:
+Нужны Python 3.10+ и опубликованная Sedrava 0.10.0; исходники клонируются для файлов примеров:
 
 ```sh
 git clone https://github.com/VasiliiBabkin/sedrava.git
 cd sedrava
-git checkout feature/010-records-collections-spec
 python -m pip install '.[test]'
 sedrava check examples/task_manager.sdr
 sedrava test examples/task_manager.sdr

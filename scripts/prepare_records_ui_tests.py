@@ -41,11 +41,27 @@ class RecordsUiTest {
       prefs.edit().clear().apply { if(original!=null) putString("snapshot",original) }.commit()
     }
   }
+  private fun assertRowWithEvidence(expected: String) {
+    try {
+      ui.waitUntil(timeoutMillis = 5000L) {
+        ui.onAllNodesWithText(expected).fetchSemanticsNodes().isNotEmpty()
+      }
+      ui.onNodeWithText(expected).assertExists()
+    } catch (failure: Throwable) {
+      ui.onRoot(useUnmergedTree = true).printToLog("SedravaUiFailure")
+      val prefs=ui.activity.getSharedPreferences("sedrava_state",android.content.Context.MODE_PRIVATE)
+      android.util.Log.e("SedravaUiFailure","Missing row: "+expected+
+        " snapshot="+prefs.getString("snapshot",null))
+      throw failure
+    }
+  }
   @Test fun addEditCompleteRotateDeleteAndReject() {
     ui.onNodeWithText("No tasks yet / Список пуст").assertExists()
     ui.onNode(hasSetTextAction()).performTextReplacement("first 😀")
+    ui.onNode(hasSetTextAction()).assertTextContains("first 😀")
+    ui.waitForIdle()
     ui.onNodeWithText("Add / Добавить").performScrollTo().performClick()
-    ui.onNodeWithText("title: first 😀 · done: false").assertExists()
+    assertRowWithEvidence("title: first 😀 · done: false")
     ui.onNodeWithText("Select / Выбрать").performScrollTo().performClick()
     ui.onNodeWithText("Complete / Выполнено").performScrollTo().performClick()
     ui.onNodeWithText("title: first 😀 · done: true").assertExists()

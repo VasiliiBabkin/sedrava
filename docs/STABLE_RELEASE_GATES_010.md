@@ -1,7 +1,8 @@
+> **Historical gate checklist:** Sedrava 0.10.0 was published on 31 October 2026 ([GitHub](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.10.0), [PyPI](https://pypi.org/project/sedrava/0.10.0/)). The checklist describes pre-release criteria; it does **not** certify that every criterion was completed. In particular, the owner physical-device protocol remains **open**. Preparation instructions below are historical.
+
 # Stable release gates / Условия стабильного выпуска 0.10
 
-Passing CI is necessary, not sufficient. This audit recommends **rc2**, because
-rc1 contains reproduced storage and int32 defects. No stable version is announced.
+Passing CI is necessary, not sufficient. The historical audit recommended **rc2** because rc1 contained reproduced storage and int32 defects. RC2 was prepared separately. This document remains the gate checklist for release 0.10.0.
 
 1. **Zero open P0/P1** from this audit and subsequent candidate use. Each closed
    defect needs a failing baseline reproduction and a passing regression. P0:
@@ -36,18 +37,18 @@ rc1 contains reproduced storage and int32 defects. No stable version is announce
    test evidence. Test the upgrade from rc1 again with the real candidate's ID,
    key and increasing versionCode. Allow a documented owner-defined observation
    period for rc2; do not invent evidence of field stability.
-9. Physical 0.10 device verification is currently unavailable. Before stable
-   Android support, either obtain a recorded device model/OS/scenario result or
-   explicitly narrow the support claim to the tested emulator configuration and
-   accept that limitation in the owner's stable-release decision. Do not reuse
-   historical 0.9 physical-device evidence as 0.10 evidence.
+9. **PENDING OWNER EVIDENCE.** The uploaded kit claims a run on OPPO Reno 13F
+   (Android 16) but contains unchecked scenarios and a future-dated verification.
+   The owner must record the actual date, commit/APK, results for CRUD, Back,
+   rotation, cold restart, data retention and in-place update in
+   [PHYSICAL_DEVICE_010.md](PHYSICAL_DEVICE_010.md), or explicitly limit the support
+   claim to emulator-tested configurations. Do not reuse 0.9 device results.
 10. All applicable final-SHA workflows successful, no hidden cancelled/failed
     required job; working tree clean. Explicit owner authorization remains
     necessary for merge/tag/release/index upload/deployment. Technical GO does
     not grant publication authorization.
 
 Русский: стабильный выпуск требует отсутствия открытых P0/P1, согласованной
-семантики на трёх реализациях и полного CI на одном SHA. После исправлений нужен
-новый rc2 с неизменяемыми артефактами и повторной проверкой обновления, затем период
-наблюдения по решению владельца. Физическое устройство не проверено. Никакая
-успешная проверка сама по себе не разрешает публикацию.
+семантики трёх реализаций и полного CI на одном SHA. Результаты реального
+устройства должны быть подтверждены либо поддержка явно ограничена эмулятором.
+Решение владельца о периоде наблюдения и публикации требуется отдельно.

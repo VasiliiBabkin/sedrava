@@ -2,6 +2,10 @@
 # Run inside android-emulator-runner, after generating the task manager test harness.
 set -euo pipefail
 sedrava_package=$(python -c "import json;print(json.load(open('build/tasks-android/sedrava-android.json'))['application_id'])")
+# Isolate this suite from earlier emulator applications/tests: instrumentation must
+# start with an empty app-data directory, not an inherited in-memory snapshot.
+adb uninstall "$sedrava_package" >/dev/null 2>&1 || true
+adb uninstall "${sedrava_package}.test" >/dev/null 2>&1 || true
 gradle -p build/tasks-android --no-daemon -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true :app:connectedDebugAndroidTest
 adb shell am force-stop "$sedrava_package"
 adb shell run-as "$sedrava_package" cat shared_prefs/sedrava_state.xml > build/tasks-preferences.xml

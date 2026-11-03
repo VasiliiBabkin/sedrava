@@ -18,7 +18,7 @@ from android_codegen_v03 import generate
 from scripts.rc_archive import read_zip,read_sdist,inspect_payload,deterministic_zip,sha256
 from scripts.rc_api import SafeRedirect
 from scripts.prepare_rc import validate_run,artifact,write_bundle,verify_bundle,checked_wheel_inventory,verify_uploaded_kit
-from scripts.audit_release_security import audit
+from scripts.audit_release_security import audit, approved_publisher
 
 ROOT=Path(__file__).resolve().parents[1]
 SHA='a'*40
@@ -28,7 +28,7 @@ class RCPreparationTests(unittest.TestCase):
     def test_version_and_unchanged_android_identity(self):
         import sedrava
         self.assertEqual(VERSION,CLI_VERSION);self.assertEqual(VERSION,sedrava.__version__)
-        self.assertRegex(VERSION,r'^0\.10\.0rc2$');self.assertEqual(ANDROID_VERSION_CODE,10002)
+        self.assertRegex(VERSION,r'^0\.10\.0$');self.assertEqual(ANDROID_VERSION_CODE,10003)
         expected={'task_manager_navigation':'org.sedrava.app.af44c2608593529f9c803c46e60a5a99d','task_manager':'org.sedrava.app.ae42ed66f07aefa1c223e4fbcec5fa57b'}
         for name,package in expected.items():
             with self.subTest(name=name),tempfile.TemporaryDirectory() as folder:
@@ -113,7 +113,11 @@ class RCPreparationTests(unittest.TestCase):
                     if (output/'unexpected').exists():(output/'unexpected').unlink()
     def test_safe_readonly_workflow_policy(self):
         result=audit()
-        self.assertEqual(result['publication_steps'],0)
-        self.assertGreaterEqual(result['workflow_count'],18)
+        self.assertEqual(result['publication_steps'],1)
+        self.assertGreaterEqual(result['workflow_count'],19)
+        source=(ROOT/'.github/workflows/publish-pypi.yml').read_bytes()
+        self.assertTrue(approved_publisher(source))
+        with self.assertRaisesRegex(ValueError,'Unreviewed'):
+            approved_publisher(source.replace(b'v0.10.0',b'v*',1))
 
 if __name__=='__main__':unittest.main()

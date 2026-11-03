@@ -1,6 +1,6 @@
 # Security and dependency review / Безопасность
 
-Sedrava 0.9 accepts a restricted integer/boolean AST. It never passes application source to Python `eval`/`exec`, a shell or a network service. Calls, attributes and arbitrary host access are rejected. Size, AST, nested-block, derived-expansion and interpreter-step limits bound common malformed inputs. This is not a certified sandbox; compile untrusted sources in an isolated process with time/memory limits.
+Sedrava 0.10.0 accepts a restricted typed AST with int32, bool, Unicode text, records and bounded collections; the 0.9 integer/boolean subset is a historical baseline. It never passes application source to Python `eval`/`exec`, a shell or a network service. Calls, attributes and arbitrary host access are rejected. Size, AST, nested-block, derived-expansion and interpreter-step limits bound common malformed inputs. This is not a certified sandbox; compile untrusted sources in an isolated process with time/memory limits.
 
 Generators encode labels for HTML and Kotlin, including HTML script-end sequences and Kotlin `$` interpolation. Application identifiers do not become executable JavaScript fragments; Kotlin state names use a generated prefix. CLI uses `pathlib` rather than shell commands; user-selected output paths intentionally overwrite generated target files. Do not generate into a directory containing irreplaceable edits. No telemetry, accounts, advertisements or cloud runtime dependencies are added.
 

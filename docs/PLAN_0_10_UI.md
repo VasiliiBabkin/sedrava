@@ -1,8 +1,9 @@
 # Sedrava 0.10 UI status / Состояние интерфейсов
 
-Unreleased experimental development; this is not a published 0.10 release.
-Records, bounded collections, text input and multi-screen navigation are language
-features on the current navigation branch. They are not deferred to 0.11.
+Historical 0.10 UI implementation record. The capabilities described below are included
+in the published [0.10.0](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.10.0).
+This document describes the pre-release implementation status and is retained for provenance.
+More general site layout and themes are explored separately in the draft 0.11 Web UI PR.
 
 ## Implemented / Реализовано
 
@@ -28,4 +29,4 @@ are required or promised. Existing 0.9 and records/text examples retain their sy
 Русский: экраны и переходы описываются в `.sdr`, семантика проверяется в ядре.
 Текст, записи и списки уже реализованы. Полный набор тем, компонентов и глубоких
 ссылок пока отсутствует. Успешный APK не заменяет проверку UI; отчёт разделяет
-JVM, эмулятор и физическое устройство. Релиз 0.10 не объявляется.
+JVM, эмулятор и физическое устройство. Релиз 0.10.0 опубликован; испытания конечного APK на физическом устройстве остаются неподтверждёнными.

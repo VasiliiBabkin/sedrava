@@ -62,50 +62,9 @@ Generated sources request no permissions. SDK/AndroidX may contribute manifest m
 
 Русский: генератор Android создаёт проект, который затем собирается Gradle. Используйте полный JDK с `javac`, SDK 35 и Gradle 8.11.1. При отсутствии устройства APK можно проверить подписью, `aapt` и Lint, но это не проверяет интерфейс. Состояние и ограничения описаны в [справочнике](LANGUAGE_0_9.md).
 
-## Records and collections / Записи и коллекции (unreleased 0.10)
+## Released 0.10 feature references / Возможности 0.10
 
-The development branch integrates typed records and bounded ordered lists into `.sdr`,
-with stable IDs, atomic actions, strict snapshots and generated Web/Compose UI.
-Записи и списки доступны в языке на ветке разработки; 0.10 не выпущена.
-
-- [English task-manager guide](RECORDS_QUICKSTART.en.md)
-- [Руководство на русском](RECORDS_QUICKSTART.ru.md)
-- [Measured coverage / Фактические проверки](COLLECTIONS_010_REPORT.md)
-
-## Multi-screen navigation / Многоэкранная навигация (unreleased 0.10)
-
-Named screens, guarded atomic transitions and a bounded Back stack are implemented
-in the core and both generators. One `.sdr` file generates the two-screen task manager.
-Экраны и переходы — возможность языка; опубликованного выпуска 0.10 нет.
-
-- [English guide](NAVIGATION_QUICKSTART.en.md)
-- [Русское руководство](NAVIGATION_QUICKSTART.ru.md)
-- [Syntax and semantics](NAVIGATION_010_CONTRACT.md)
-- [Measured report](NAVIGATION_010_REPORT.md)
-
-## Release readiness / Подготовка к RC (unreleased 0.10)
-
-Independent deterministic Android IDs and `--application-id` are implemented.
-Независимые Android-приложения собираются с постоянным ID; название отделено от пакета.
-[English identity/build guide](ANDROID_ID.en.md) · [Русская инструкция](ANDROID_ID.ru.md).
-Wheel/sdist include examples, documentation and license under `sys.prefix/share/sedrava`.
-Дистрибутив содержит примеры, документацию и лицензию; публикация 0.10 не выполнялась.
-
-Measured RC readiness / Фактическая готовность RC: [report / отчёт](RELEASE_READINESS_010_REPORT.md).
-
-## 0.10.0rc1 preparation / Подготовка RC (not published)
-
-[Release notes EN](RELEASE_NOTES_0_10_0rc1.en.md) · [RU](RELEASE_NOTES_0_10_0rc1.ru.md) · [Upgrade/rollback EN](UPGRADE_0_10_0rc1.en.md) · [RU](UPGRADE_0_10_0rc1.ru.md) · [RC report](RC_010_REPORT.md).
-Use a verified local wheel in a separate environment; no PyPI/TestPyPI RC has been published.
-Установка — из проверенного локального wheel в отдельное окружение; автоматической миграции данных нет.
-
-The complete two-APK RC kit is assembled by [the read-only preparation workflow](../.github/workflows/rc-prepare.yml) from successful same-SHA producer artifacts; use [the controlled procedure](RC_PUBLISHING.md), not the historical one-APK compatibility helper, for RC delivery.
-
-## 0.10.0rc2 preparation / Подготовка RC2 (not published)
-
-[Release notes EN](RELEASE_NOTES_0_10_0rc2.en.md) · [RU](RELEASE_NOTES_0_10_0rc2.ru.md) · [Upgrade/rollback EN](UPGRADE_0_10_0rc2.en.md) · [RU](UPGRADE_0_10_0rc2.ru.md) · [RC2 report](RC2_010_REPORT.md).
-Current source version: **0.10.0rc2**, Android versionCode **10002**. This is a separately prepared experimental candidate, not stable 0.10.0 or a publication. The original rc1 kit remains immutable.
-Текущая версия исходников — 0.10.0rc2, код Android — 10002. Публикация требует отдельного решения владельца; физическое устройство не проверено.
+Sedrava 0.10.0 is published on [PyPI](https://pypi.org/project/sedrava/0.10.0/) and [GitHub](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.10.0). Unicode text, records/collections and guarded multi-screen navigation are included. See [text](LANGUAGE_0_10_TEXT.md), [records](RECORDS_COLLECTIONS_010.md), [navigation](NAVIGATION_010_CONTRACT.md), and [Android identity](ANDROID_ID.en.md). RC reports describe historical stages only. Android APK builds are separate from Python package publication; final physical-device 0.10 acceptance remains unconfirmed.
 
 ## Experimental Web UI 0.11 / Экспериментальный Web UI 0.11
 

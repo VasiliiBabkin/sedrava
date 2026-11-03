@@ -1,6 +1,6 @@
-# Unreleased 0.10 text increment / Строковое ядро 0.10
+# Sedrava 0.10 text semantics / Строковое ядро Sedrava 0.10
 
-This branch implements first-class immutable text across the shared typed AST, Python interpreter/CLI, Web and Android. It is **an intermediate development increment, not a completed or published 0.10 release**. Development packages/CLI use `0.10.0.dev0`; the published `v0.9.0a1` tag, release and its assets remain unchanged. The [0.9 reference](LANGUAGE_0_9.md) remains the historical compatibility baseline; this page specifies the new subset.
+Sedrava **0.10.0** includes immutable text in the shared AST, Python interpreter/CLI, Web and Android generators. It is [published on PyPI](https://pypi.org/project/sedrava/0.10.0/) and [GitHub](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.10.0). The [0.9 reference](LANGUAGE_0_9.md) remains historical; this page specifies exact text semantics.
 
 ## Describe → Get
 
@@ -74,10 +74,10 @@ The test-preparation script adds only test sources; generated application code i
 Collection programs use strict whole-snapshot restoration; scalar-only programs retain
 the text restoration contract above. See [collection specification](RECORDS_COLLECTIONS_010.md).
 
-## Release readiness / Подготовка к RC (unreleased 0.10)
+## Release engineering / История проверки перед выпуском
 
 Independent deterministic Android IDs and `--application-id` are implemented.
 Независимые Android-приложения собираются с постоянным ID; название отделено от пакета.
 [English identity/build guide](ANDROID_ID.en.md) · [Русская инструкция](ANDROID_ID.ru.md).
 Wheel/sdist include examples, documentation and license under `sys.prefix/share/sedrava`.
-Дистрибутив содержит примеры, документацию и лицензию; публикация 0.10 не выполнялась.
+Дистрибутив 0.10.0 опубликован на PyPI; исходные отчёты проверки относятся к подготовке.
