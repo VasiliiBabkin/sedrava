@@ -64,6 +64,10 @@ def main(argv=None):
             document = parse_document(source, args.source)
             if isinstance(document, WebApp):
                 if args.command == 'check':
+                    from sedrava_webapp import generate_webapp
+                    from sedrava_web_assets import collect
+                    generate_webapp(document,args.source.parent)
+                    collect(document.settings,args.source.parent)
                     print(f"OK: {args.source} (webapp)")
                     return 0
                 if args.command == 'build' and args.target == 'webapp':

@@ -58,8 +58,8 @@ def validate_services(blocks, program, types):
         body=None
         if 'body' in props:
             if method in ('GET','DELETE'):raise ValueError('GET/DELETE do not accept a request body')
-            body=parse_expr(props['body'],{**program.records,**types})
-            if not isinstance(type_of(body,{**program.records,**types}),RecordType):raise ValueError('HTTP body requires a typed record')
+            body=parse_expr(props['body'],{**program.records,**(program.functions or {}),**types})
+            if not isinstance(type_of(body,{**program.records,**(program.functions or {}),**types}),RecordType):raise ValueError('HTTP body requires a typed record')
         elif method in ('POST','PUT','PATCH'):raise ValueError('Mutation requires a typed body')
         for key in re.findall(r':([A-Za-z][A-Za-z0-9_]*)',capability.path):
             if types.get(key) is not int:raise ValueError('HTTP path parameters require integer state')
@@ -103,7 +103,7 @@ function renderRemote(){
     const config=serviceConfigs[el.dataset.remote];let rows=service.data===null?[]:(config.many?service.data:[service.data]);
     if(el.dataset.remoteSearch){const query=valuesOfState()[el.dataset.remoteSearch].toLowerCase();rows=rows.filter(row=>Object.values(row).some(v=>String(v).toLowerCase().includes(query)));}
     for(const row of rows){const card=document.createElement('article');card.className='s-card';
-      for(const [key,value] of Object.entries(row)){const node=document.createElement(key===el.dataset.remoteTitle?'h3':'p');node.textContent=String(value);card.append(node);}fragment.append(card);}
+      for(const [key,value] of Object.entries(row)){const node=document.createElement(key===el.dataset.remoteTitle?'h2':'p');node.textContent=String(value);card.append(node);}fragment.append(card);}
     if(service.status==='success'&&!rows.length){const empty=document.createElement('p');empty.textContent='No matching data';fragment.append(empty);}
     list.replaceChildren(fragment);
   });

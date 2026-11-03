@@ -14,6 +14,8 @@ persist tasks
 derive empty = count(tasks) == 0
 derive task_count = count(tasks)
 derive chosen = has(tasks, selected)
+derive selected_title = get(tasks, selected).title if has(tasks, selected) else ""
+derive selected_done = get(tasks, selected).done if has(tasks, selected) else false
 action add:
     require new_title != ""
     tasks = append(tasks, Task(title=new_title, done=false))
@@ -48,7 +50,15 @@ view main:
             select filter_done label "Completion status":
                 option "In progress" value false
                 option "Completed" value true
-            list tasks select selected title title status done search search_text sort title where done equals filter_done active filter_enabled empty "No matching tasks" label "Task list"
+            each tasks select selected title title status done search search_text sort title where done equals filter_done active filter_enabled empty "No matching tasks" label "Task list":
+                card:
+                    column gap 12:
+                        field title label "Task" weight bold size 20
+                        row-when done:
+                            paragraph "Completed" variant muted
+                        row:
+                            pick "Select"
+                            button "Toggle" action toggle variant secondary
             when chosen:
                 navigate "Open selected task" to details
 view details at "/tasks/:selected" when chosen:
@@ -56,6 +66,8 @@ view details at "/tasks/:selected" when chosen:
         column gap 20:
             heading "Task details"
             back "Back to tasks"
+            value selected_title label "Task name"
+            value selected_done label "Completed"
             when chosen:
                 card:
                     column gap 12:

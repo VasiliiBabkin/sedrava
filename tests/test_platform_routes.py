@@ -30,6 +30,11 @@ class Routes(unittest.TestCase):
         result=subprocess.run(['node','-e',script],capture_output=True,text=True,check=True)
         self.assertEqual(json.loads(result.stdout),expected)
 
+    def test_each_templates_have_checked_fields_and_row_scopes(self):
+        source=(ROOT/'examples/platform_tasks.sdr').read_text()
+        for old,new in [('field title','field missing'),('row-when done','row-when title'),('pick "Select"','input new_title label "Nested"')]:
+            with self.assertRaises(ValueError):parse_webapp(source.replace(old,new))
+
     def test_select_types_and_dialog_targets(self):
         source=(ROOT/'examples/platform_tasks.sdr').read_text()
         for old,new in [('value false','value "false"'),('to confirm_delete','to missing')]:

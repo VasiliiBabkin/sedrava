@@ -17,17 +17,17 @@ class ExamplesAlpha(unittest.TestCase):
         for path in sorted((ROOT / 'examples').glob('*.sdr')):
             with self.subTest(example=path.name):
                 source = path.read_text(encoding='utf-8')
-                program = parse_document(source)
+                program = parse_document(source,path)
                 if isinstance(program,WebApp):
                     first=generate_webapp(program)
-                    second=generate_webapp(parse_document(source))
+                    second=generate_webapp(parse_document(source,path))
                     self.assertEqual(first,second)
                     self.assertIn("index.html",first)
                     self.assertIn("app.js",first)
                     continue
                 if isinstance(program,Site):
                     first,_=generate_site(program,path.parent)
-                    second,_=generate_site(parse_document(source),path.parent)
+                    second,_=generate_site(parse_document(source,path),path.parent)
                     self.assertEqual(first,second)
                     self.assertIn('index.html',first)
                     continue

@@ -1,7 +1,7 @@
 """Deterministic presentation queries. They never mutate collection identity/state."""
 def query_rows(rows, *, search='', title=None, sort=None, where=None, equals=False, active=True):
     result=list(rows)
-    if where and active: result=[r for r in result if r[where] is equals]
+    if where and active: result=[r for r in result if type(r[where]) is type(equals) and r[where] == equals]
     if search:
         needle=search.lower()
         def string(value):return ('true' if value else 'false') if type(value) is bool else str(value)

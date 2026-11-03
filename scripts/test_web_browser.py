@@ -385,7 +385,7 @@ screen main:
         from sedrava_webapp import WebApp
         for path in sorted((ROOT / 'examples').glob('*.sdr')):
             source = path.read_text()
-            document=parse_document(source)
+            document=parse_document(source,path)
             if isinstance(document,(Site,WebApp)):
                 continue # Dedicated site/WebApp Chromium suites exercise these modes.
             if document.widgets:

@@ -13,7 +13,7 @@ def application_examples(root=ROOT):
     """Validate every example, then select applications with UI for app artifacts."""
     for path in sorted((root / 'examples').glob('*.sdr')):
         source = path.read_text(encoding='utf-8')
-        document = parse_document(source)
+        document = parse_document(source,path)
         if not isinstance(document, (Site, WebApp)) and document.widgets:
             yield path, source
 

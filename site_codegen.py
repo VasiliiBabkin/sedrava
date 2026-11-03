@@ -138,7 +138,7 @@ def generate_site(source,source_dir='.'):
                 css=declarations(node.kind,media[breakpoint])
                 if css:styles.append('@media(min-width:'+str(width)+'px){.s-node.'+cls+'{'+css+'}}')
             tag=definition.tag(props) if callable(definition.tag) else definition.tag
-            attrs={'class':'s-node s-'+node.kind+' '+cls+' v-'+props.get('variant','default'),**definition.fixed_attributes}
+            attrs={'class':'s-node s-'+node.kind+' '+cls+' v-'+props.get('variant','default')+' '+props.get('class',''),**definition.fixed_attributes}
             if 'id' in props:attrs['id']=props['id']
             if 'label' in props:attrs['aria-label']=props['label']
             for key,attribute in definition.attributes.items():
@@ -181,6 +181,8 @@ def generate_site(source,source_dir='.'):
     files['favicon.svg']=('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><rect width="48" height="48" rx="12" fill="'+site.theme['background']+'"/><path d="M24 7L40 24L24 41L8 24Z" fill="'+site.theme['accent']+'"/><circle cx="24" cy="24" r="5" fill="'+site.theme['gold']+'"/></svg>\n').encode('utf-8')
     files['site.css']=(theme+page_css+'\n'+'\n'.join(styles)+'\n').encode('utf-8')
     files.update(assets.files)
+    from sedrava_web_assets import attach
+    assets.paths.update(attach(files,site.settings,source_dir,site.pages))
     return files,assets.paths
 
 

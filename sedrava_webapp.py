@@ -32,11 +32,15 @@ class WebApp:
     mode: str = "webapp"
     views: dict = field(default_factory=dict)
     services: dict = field(default_factory=dict)
+    theme: dict = field(default_factory=lambda:dict(THEME))
+    styles: dict = field(default_factory=dict)
+    settings: dict = field(default_factory=dict)
+    themes: dict = field(default_factory=dict)
 
 
 UI_LAYOUT = frozenset(("container", "row", "column", "grid", "card",
                        "callout", "heading", "paragraph", "code",
-                       "spacer", "divider"))
+                       "spacer", "divider", "link", "image", "navbar", "footer"))
 UI_DYNAMIC = {
     "request": Definition("button", positional="text", required=("text","service"), parameters={"text":Parameter(text),"service":Parameter(identifier)}),
     "cancel": Definition("button", positional="text", required=("text","service"), parameters={"text":Parameter(text),"service":Parameter(identifier)}),
@@ -53,7 +57,7 @@ UI_DYNAMIC = {
     "value": Definition("output", required=("state",),
                         parameters={"state": Parameter(identifier)}),
     "input": Definition("input", required=("state", "label"),
-                        parameters={"state": Parameter(identifier)}),
+                        parameters={"state": Parameter(identifier),"kind":Parameter(choice("text","textarea","email","url"))}),
     "checkbox": Definition("input", required=("state", "label"),
                            parameters={"state": Parameter(identifier)}),
     "when": Definition("section", children=True, required=("state",),
@@ -71,10 +75,37 @@ UI_DYNAMIC = {
                          variants=("primary", "secondary", "ghost")),
 }
 
+from dataclasses import replace
+UI_DYNAMIC['field']=Definition('output',required=('field',),parameters={'field':Parameter(identifier)})
+UI_DYNAMIC['row-when']=Definition('section',children=True,required=('field',),parameters={'field':Parameter(identifier)})
+UI_DYNAMIC['pick']=Definition('button',positional='text',required=('text',),parameters={'text':Parameter(text)})
+UI_DYNAMIC['each']=replace(UI_DYNAMIC['list'],tag='section',children=True)
+UI_DYNAMIC['table']=replace(UI_DYNAMIC['list'],tag='div',parameters={**UI_DYNAMIC['list'].parameters,'fields':Parameter(text)})
+
 
 def parse_webapp(source):
     from sedrava_modules import components
     source = components(source)
+    from sedrava_web_assets import read_directives
+    source, settings = read_directives(source)
+    raw=source.splitlines();kept=[];presentation=[];named_themes={};pos=0
+    while pos<len(raw):
+        named=re.fullmatch(r'theme ([A-Za-z][A-Za-z0-9_-]*):',raw[pos])
+        if named:
+            if named[1] in named_themes or len(named_themes)>=8:raise ValueError('Duplicate/excessive named theme')
+            theme_lines=['theme:'];kept.append('');pos+=1
+            while pos<len(raw) and (not raw[pos].strip() or raw[pos].startswith(' ')):
+                theme_lines.append(raw[pos]);kept.append('');pos+=1
+            named_themes[named[1]]='\n'.join(theme_lines);continue
+        if re.fullmatch(r'theme:|style [A-Za-z][A-Za-z0-9_-]*:',raw[pos]):
+            presentation.append(raw[pos]);kept.append('');pos+=1
+            while pos<len(raw) and (not raw[pos].strip() or raw[pos].startswith(' ')):
+                presentation.append(raw[pos]);kept.append('');pos+=1
+        else:kept.append(raw[pos]);pos+=1
+    from sedrava_site import parse_site
+    style_doc=parse_site('site "settings"\n'+'\n'.join(presentation)+'\npage home at "/":\n    title "settings"\n    heading "settings"\n')
+    theme_palettes={name:parse_site('site "theme"\n'+text+'\npage home at "/":\n    title "theme"\n    heading "theme"\n').theme for name,text in named_themes.items()}
+    source='\n'.join(kept)+'\n' 
     from sedrava_web_services import extract_services, validate_services
     source, service_blocks = extract_services(source)
     lines = source_lines(source)
@@ -109,13 +140,22 @@ def parse_webapp(source):
         fail(Span(view_lineno, 1), "WebApp B1 does not support multi-view navigation")
     declared = {key: value_type(value) for key, value in program.states.items()}
     for key, expr in program.derived.items():
-        declared[key] = type_of(expr, declared)
+        declared[key] = type_of(expr, {**(program.functions or {}),**declared})
     from sedrava_web_routes import route_parameters
     for name,spec in views.items():
         for key in route_parameters(spec['path']):
             if key not in program.states or declared[key] is not int:fail(Span(view_lineno,1),"Route parameters require mutable integer state")
         if spec['guard'] and declared.get(spec['guard']) is not bool:fail(Span(view_lineno,1),"View guard requires boolean state")
     services=validate_services(service_blocks,program,declared)
+    if 'theme-state' in settings:
+        key=settings['theme-state']
+        if key not in program.states or declared[key] is not str or program.states[key] not in theme_palettes:raise ValueError('Theme state requires a mutable text state and matching named palettes')
+        from sedrava_core import parse_expr
+        allowed=parse_expr(' or '.join(key+' == '+json.dumps(name) for name in theme_palettes),declared)
+        program=replace(program,rules=(*program.rules,allowed))
+        style_doc=replace(style_doc,theme=theme_palettes[program.states[key]])
+        run(program)
+    elif theme_palettes:raise ValueError('Named themes require theme-state')
     body_lines=[]
     for position,(start,(_,header,number)) in enumerate(view_lines):
         end=view_lines[position+1][0] if position+1<len(view_lines) else len(lines)
@@ -131,7 +171,7 @@ def parse_webapp(source):
            for depth, line, number in body_lines]
     widget_count = 0
 
-    def body(pos, indent, nesting=0):
+    def body(pos, indent, nesting=0, row_fields=None):
         nonlocal widget_count
         if nesting > MAX_BLOCK_DEPTH:
             fail(Span(lex[pos][2], 1), "WebApp UI nesting limit exceeded")
@@ -152,7 +192,7 @@ def parse_webapp(source):
                 fail(items[0].span, "Invalid component block structure")
             args = items[1:-1] if is_block else items[1:]
             given = {}
-            if kind in ("value", "input", "checkbox", "when", "list", "select", "remote"):
+            if kind in ("value", "input", "checkbox", "when", "list", "table", "each", "field", "row-when", "select", "remote"):
                 if not args or args[0].quoted or type(args[0].value) is not str:
                     fail(items[0].span, "State identifier required")
                 name = args[0].value
@@ -160,18 +200,27 @@ def parse_webapp(source):
                     identifier(name)
                 except ValueError as exc:
                     fail(args[0].span, str(exc))
-                given[{"list":"collection","remote":"service"}.get(kind,"state")] = Property(name, args[0].span)
+                given[{"list":"collection","table":"collection","each":"collection","field":"field","row-when":"field","remote":"service"}.get(kind,"state")] = Property(name, args[0].span)
                 args = args[1:]
             elif args and args[0].quoted and definition.positional:
                 given[definition.positional] = Property(args[0].value, args[0].span)
                 args = args[1:]
-            params = {k: v for k, v in COMMON.items() if k != "style"}
+            params = dict(COMMON)
             params.update(definition.parameters)
             params["variant"] = Parameter(choice(*definition.variants))
             extra = properties(args, params)
             if set(extra) & set(given):
                 fail(items[0].span, "Duplicate component parameter")
             given.update(extra)
+            if 'style' in given:
+                from sedrava_site import parameter_for
+                name=given['style'].value
+                if name not in style_doc.styles:fail(items[0].span,'Unknown parameter style reference '+name)
+                for key,prop in style_doc.styles[name].properties.items():
+                    spec=parameter_for(key,params)
+                    if spec is None:fail(items[0].span,'Style parameter not supported by component')
+                    try:spec.validate(prop.value)
+                    except ValueError as exc:fail(items[0].span,str(exc))
             for field in definition.required:
                 if field not in given:
                     fail(items[0].span, "Missing required parameter " + field)
@@ -188,6 +237,7 @@ def parse_webapp(source):
                 actual = declared[key]
                 if kind in ("input", "checkbox", "select") and key not in program.states:
                     fail(given["state"].span, "Input cannot edit derived state")
+                if kind=="input" and "kind" in given and actual is not str:fail(items[0].span,"Input kind requires text state")
                 if kind == "input" and actual not in (int, str):
                     fail(given["state"].span, "Input requires integer or text state")
                 if kind in ("checkbox", "when") and actual is not bool:
@@ -196,7 +246,13 @@ def parse_webapp(source):
                     fail(given["state"].span, "Value requires scalar or derived scalar state")
                 if kind in ("input", "checkbox", "select") and not given["label"].value.strip():
                     fail(given["label"].span, "Accessible label must not be empty")
-            if kind == "list":
+            if kind in ('field','row-when','pick'):
+                if row_fields is None:fail(items[0].span,'Row field/pick requires an each template')
+                if kind!='pick' and given['field'].value not in row_fields:fail(items[0].span,'Unknown row field')
+                if kind=='row-when' and row_fields[given['field'].value] is not bool:fail(items[0].span,'Row condition requires bool field')
+            if row_fields is not None:
+                if kind in ('each','input','checkbox','select','form','submit','dialog','open','close','remote','request','cancel','navigate','back') or 'id' in given:fail(items[0].span,'Unsupported nested row control or duplicate-prone id')
+            if kind in ("list", "table", "each"):
                 key = given["collection"].value
                 collection_type = declared.get(key)
                 if not isinstance(collection_type, ListType):
@@ -209,10 +265,11 @@ def parse_webapp(source):
                     fail(given["title"].span, "List title requires a text record field")
                 if "status" in given and fields.get(given["status"].value) is not bool:
                     fail(given["status"].span, "List status requires a boolean record field")
+                if 'fields' in given and (not given['fields'].value.split() or any(f not in fields for f in given['fields'].value.split()) or len(set(given['fields'].value.split()))!=len(given['fields'].value.split())):fail(items[0].span,'Table fields must be distinct record fields')
                 if 'search' in given and declared.get(given['search'].value) is not str:fail(items[0].span,'List search requires text state')
                 if 'sort' in given and given['sort'].value not in fields:fail(items[0].span,'Unknown sort field')
                 if 'where' in given:
-                    if fields.get(given['where'].value) is not bool or 'equals' not in given or declared.get(given['equals'].value) is not bool:fail(items[0].span,'Filter requires bool field and equals bool state')
+                    if given['where'].value not in fields or 'equals' not in given or declared.get(given['equals'].value) is not fields[given['where'].value]:fail(items[0].span,'Filter requires matching scalar field and state')
                 elif 'equals' in given or 'active' in given:fail(items[0].span,'Filter options require where')
                 if 'active' in given and declared.get(given['active'].value) is not bool:fail(items[0].span,'Filter active requires bool state')
             if kind in ('request','cancel','remote'):
@@ -231,7 +288,7 @@ def parse_webapp(source):
             if is_block:
                 if pos >= len(lex) or lex[pos][0] <= indent:
                     fail(items[0].span, "Empty component block")
-                nested, pos = body(pos, indent + 4, nesting + 1)
+                nested, pos = body(pos, indent + 4, nesting + 1, ({"id":int,**fields} if kind=="each" else row_fields))
                 if not nested:
                     fail(items[0].span, "Empty component block")
             if kind=='select':
@@ -274,7 +331,7 @@ def parse_webapp(source):
             if node.kind=='dialog':dialog_ids.add(key)
     for node in walk(all_widgets):
         if node.kind in ('open','close') and node.properties['to'].value not in dialog_ids:fail(node.span,'Unknown dialog')
-    return WebApp(program.name, program, tuple(all_widgets), views=views, services=services)
+    return WebApp(program.name, program, tuple(all_widgets), views=views, services=services, theme=style_doc.theme, styles=style_doc.styles, settings=settings, themes=theme_palettes)
 
 
 APP_CSS = r"""
@@ -303,12 +360,14 @@ APP_CSS = r"""
 """
 
 
-def generate_webapp(document):
+def generate_webapp(document, source_dir=".", _inputs=None):
     if not isinstance(document, WebApp):
         document = parse_webapp(document)
     program = document.program
     # Extract the exact validated 0.10 core runtime. No new action interpreter.
     domain_js = generate_legacy_web("", _program=program, _domain_only=True)
+    from site_codegen import Assets
+    assets=Assets(source_dir)
     selectors = []
     counter = 0
 
@@ -318,6 +377,8 @@ def generate_webapp(document):
         ident = "a" + str(counter)
         definition = UI_DYNAMIC.get(node.kind) or COMPONENTS[node.kind]
         props = dict(definition.defaults)
+        if 'style' in node.properties:
+            props.update({k:p.value for k,p in document.styles[node.properties['style'].value].properties.items()})
         props.update({k: p.value for k, p in node.properties.items()})
         base = {k: v for k, v in props.items()
                 if not any(k.startswith(prefix + "-") for prefix in BREAKPOINTS)}
@@ -344,11 +405,16 @@ def generate_webapp(document):
         elif kind in ("input", "checkbox"):
             tag = "div"
         attrs = {"class": "s-node s-" + kind + " " + ident +
-                 " v-" + props.get("variant", "default") + (" s-button" if kind in ("navigate","back","open","close","submit","request","cancel") else "")}
+                 " v-" + props.get("variant", "default") + (" s-button" if kind in ("navigate","back","open","close","submit","request","cancel","pick") else "") + " " + props.get("class", "")}
         if "id" in props:
             attrs["id"] = props["id"]
-        if "label" in props and kind not in ("input", "checkbox", "value"):
+        if "label" in props and kind not in ("input", "checkbox", "value", "list", "table", "each", "remote", "select"):
             attrs["aria-label"] = props["label"]
+        attrs.update(definition.fixed_attributes)
+        for prop,attribute in definition.attributes.items():
+            if prop in props:attrs[attribute]=props[prop]
+        if kind=='image':attrs['src']=assets.image(node,props['src'])
+        if props.get('target')=='blank':attrs.update(target='_blank',rel='noopener noreferrer')
         def attr(k, v):
             return " " + k + '="' + html.escape(str(v), quote=True) + '"'
         common = "<" + tag + "".join(attr(k, v) for k, v in attrs.items()) + ">"
@@ -398,13 +464,21 @@ def generate_webapp(document):
                        '<input type="text" inputmode="numeric"' + attr("id", field_id) +
                        attr("data-input", key) + attr("aria-describedby", error_id) +
                        ' aria-invalid="false">')
+            if actual is str and props.get('kind','textarea')!='textarea':
+                control='<input'+attr('type',props['kind'])+attr('id',field_id)+attr('data-input',key)+attr('aria-describedby',error_id)+' aria-invalid="false">'
             return (common + '<label for="' + field_id + '">' + label + "</label>" +
                     control + '<small id="' + error_id +
                     '" role="alert" hidden>Value rejected by declared type or rules</small></div>')
         if kind == "when":
             return common[:-1] + attr("data-when", props["state"]) + " hidden>" + (
                 "".join(render(child) for child in node.children)) + "</section>"
-        if kind == "list":
+        if kind=='field':
+            return common[:-1]+attr('data-row-field',props['field'])+'></output>'
+        if kind=='row-when':
+            return common[:-1]+attr('data-row-when',props['field'])+'>'+''.join(render(c) for c in node.children)+'</section>'
+        if kind=='pick':
+            return common[:-1]+' type="button" data-pick="true">'+html.escape(props['text'])+'</button>'
+        if kind in ("list", "table", "each"):
             field_attrs = (
                 attr("data-list", props["collection"]) +
                 attr("data-select", props["select"]) +
@@ -413,15 +487,25 @@ def generate_webapp(document):
                 attr("aria-label", props.get("label", props["collection"])) +
                 ''.join(attr('data-query-'+key,props[key]) for key in ('search','sort','where','equals','active','empty') if key in props)
             )
-            return common[:-1] + field_attrs + "></ul>"
+            if kind=='each':
+                field_attrs=field_attrs.replace('data-list=', 'data-each=')
+                return common[:-1]+field_attrs+'><template>'+''.join(render(c) for c in node.children)+'</template><div data-each-items role="list"></div></section>'
+            if kind=='table':field_attrs+=attr('data-table',props.get('fields',' '.join(k for k,_ in document.program.states[props['collection']].kind.record.fields)))
+            return common[:-1] + field_attrs + ('></div>' if kind=='table' else '></ul>')
         if kind == "code":
             return common + "<code>" + html.escape(props["text"]) + "</code></pre>"
         return common + html.escape(props.get("text", "")) + (
             "".join(render(child) for child in node.children)) + "</" + tag + ">"
 
     markup = ''.join('<section data-view="'+name+'"'+(' hidden' if name!='main' else '')+'>'+''.join(render(n) for n in spec['widgets'])+'</section>' for name,spec in document.views.items()) if len(document.views)>1 else ''.join(render(n) for n in document.widgets)
-    theme_css = ":root{" + "".join("--" + k + ":" + v + ";" for k, v in THEME.items()) + "}\n"
-    css = theme_css + CSS + "\n" + APP_CSS + "\n" + "\n".join(selectors) + "\n"
+    theme_rules=''
+    for name,palette in document.themes.items():
+        from sedrava_web_assets import theme_styles
+        scheme=theme_styles(palette,'color-scheme:dark')
+        theme_rules+=':root[data-theme="'+name+'"]{'+''.join('--'+k+':'+v+';' for k,v in palette.items())+scheme+'}\n'
+    theme_css = theme_rules+":root{" + "".join("--" + k + ":" + v + ";" for k, v in document.theme.items()) + "}\n"
+    from sedrava_web_assets import theme_styles
+    css = theme_css + theme_styles(document.theme,CSS) + "\n" + APP_CSS + "\n" + "\n".join(selectors) + "\n"
     names = {key: "values[" + json_script(key) + "]" for key in program.states}
     derived = []
     for key, expr in program.derived.items():
@@ -440,14 +524,14 @@ def generate_webapp(document):
         '  document.querySelectorAll("[data-input]").forEach(el=>{if(document.activeElement!==el)el.value=String(state[el.dataset.input]);});',
         '  document.querySelectorAll("[data-check]").forEach(el=>{el.checked=state[el.dataset.check];});',
         '  document.querySelectorAll("[data-choice]").forEach(el=>el.value=JSON.stringify(state[el.dataset.choice]));',
-        '  renderLists();',
+        '  renderLists();renderEach();',
         '  if(typeof activeView!=="undefined"){if(!canView(activeView))goView("main",true);showView();}',
         '  syncButtons();',
         '  if(typeof remoteReady!=="undefined" && remoteReady)renderRemote();',
         '}',
         'function syncButtons(){',
         '  const invalid=!!document.querySelector("[data-input][aria-invalid=true]");',
-        '  document.querySelectorAll("button[data-action], [data-list] button").forEach(el=>{el.disabled=invalid;});',
+        '  document.querySelectorAll("button[data-action], [data-list] button, [data-each] button, button[type=submit], [data-navigate], [data-request]").forEach(el=>{el.disabled=invalid;});',
         '}',
         'function persistAccepted(){',
         "  try{saveSnapshot();return true;}catch(_){showError('Could not save state; existing stored data retained');return false;}",
@@ -467,7 +551,7 @@ def generate_webapp(document):
         '  const key=el.dataset.input, isText=typeof initialState[key]==="string";',
         '  const raw=isText?el.value:el.value.trim();',
         '  const candidate=isText?raw:(/^-?[0-9]+$/.test(raw)?Number(raw):null);',
-        '  const valid=isText?validText(candidate):(raw!=="" && Number.isInteger(candidate) && candidate>=-2147483648 && candidate<=2147483647);',
+        '  const valid=(isText?validText(candidate):(raw!=="" && Number.isInteger(candidate) && candidate>=-2147483648 && candidate<=2147483647)) && el.checkValidity();',
         '  const next=valid?editState(state,key,candidate):state;',
         '  const rejected=next===state;',
         '  el.setAttribute("aria-invalid",String(rejected));',
@@ -486,13 +570,14 @@ def generate_webapp(document):
         '});',
         'function renderLists() {',
         '  document.querySelectorAll("[data-list]").forEach(el => {',
-        '    const collection=state[el.dataset.list];',
+        '    const collection=valuesOfState()[el.dataset.list];',
         '    const selected=state[el.dataset.select];',
         '    const titleField=el.dataset.titleField, statusField=el.dataset.statusField;',
         '    const fragment=document.createDocumentFragment();',
         '    const values=valuesOfState();',
         '    const rows=queryRows(collection.items,{title:titleField,search:el.dataset.querySearch?values[el.dataset.querySearch]:"",sort:el.dataset.querySort,where:el.dataset.queryWhere,equals:el.dataset.queryEquals?values[el.dataset.queryEquals]:false,active:el.dataset.queryActive?values[el.dataset.queryActive]:true});',
-        '    if(!rows.length && el.dataset.queryEmpty){const empty=document.createElement("li");empty.setAttribute("role","status");empty.textContent=el.dataset.queryEmpty||"No matching records";fragment.append(empty);}',
+        '    if(el.dataset.table){renderTable(rows,el,selected,fragment);el.replaceChildren(fragment);return;}',
+        '    if(!rows.length && el.dataset.queryEmpty){const empty=document.createElement("li");const note=document.createElement("span");note.setAttribute("role","status");note.textContent=el.dataset.queryEmpty;empty.append(note);fragment.append(empty);}',
         '    for(const row of rows){',
         '      const item=document.createElement("li");item.dataset.id=String(row.id);',
         '      const button=document.createElement("button");button.type="button";',
@@ -532,6 +617,9 @@ def generate_webapp(document):
     ui_js=QUERY_JS+ui_js
     from sedrava_web_ui import EXTRA_JS, EXTRA_CSS
     ui_js+=EXTRA_JS
+    if 'theme-state' in document.settings:
+        key=document.settings['theme-state']
+        ui_js=ui_js.replace('  const values=valuesOfState();','  const values=valuesOfState();document.documentElement.dataset.theme=state['+json_script(key)+'];',1)
     css+=EXTRA_CSS
     if document.services:
         from sedrava_web_services import generate_services
@@ -542,7 +630,7 @@ def generate_webapp(document):
              '<meta name="viewport" content="width=device-width,initial-scale=1">'
              '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; '
              'script-src \'self\'; style-src \'self\'; base-uri \'none\'; '
-             'img-src \'self\'; connect-src \'none\'; form-action \'none\'">'
+             'img-src \'self\' https:; connect-src \'none\'; form-action \'none\'">'
              '<title>' + title + '</title><link rel="stylesheet" href="app.css">'
              '<script src="app.js" defer></script></head><body>'
              '<main id="content" class="s-webapp">' + markup + '</main>'
@@ -550,9 +638,12 @@ def generate_webapp(document):
     if document.services:
         origins=sorted({item.origin for item in document.services.values() if item.origin})
         index=index.replace("connect-src 'none'", "connect-src 'self'"+(' '+ ' '.join(origins) if origins else ''))
-    return {"index.html": index.encode("utf-8"),
+    files={"index.html": index.encode("utf-8"),
             "app.css": css.encode("utf-8"),
             "app.js": (domain_js + ui_js).encode("utf-8")}
+    files.update(assets.files)
+    if _inputs is not None:_inputs.update(assets.paths)
+    return files
 
 
 MARKER = "sedrava-webapp.json"
@@ -569,7 +660,10 @@ def build_webapp(source, output, source_path):
         raise ValueError("WebApp output must not contain its source")
     if output.is_symlink():
         raise ValueError("WebApp output cannot be a symlink")
-    files = generate_webapp(document)
+    files = generate_webapp(document,source_path.parent,modules)
+    from sedrava_web_assets import attach
+    modules.update(attach(files,document.settings,source_path.parent))
+    if any(path.is_relative_to(resolved) for path in modules):raise ValueError('Output must not contain imported modules/assets')
     if output.exists():
         saved = tree_bytes(output)
         if saved:
@@ -595,7 +689,9 @@ def build_webapp(source, output, source_path):
         staging.mkdir()
         backup = Path(folder) / "previous"
         for name, data in sorted(files.items()):
-            (staging / name).write_bytes(data)
+            target=staging / name
+            target.parent.mkdir(parents=True,exist_ok=True)
+            target.write_bytes(data)
         previous = output.exists()
         if previous:
             os.replace(output, backup)

@@ -50,6 +50,9 @@ class Platform(unittest.TestCase):
         build_webapp(source.read_text(),cls.root/'tasks',source)
         source=ROOT/'examples/platform_catalog.sdr'
         build_webapp(source.read_text(),cls.root/'catalog',source)
+        from site_codegen import build_site
+        source=ROOT/'examples/platform_site.sdr';build_site(source.read_text(),cls.root/'site',source)
+        source=ROOT/'examples/platform_crm.sdr';build_webapp(source.read_text(),cls.root/'crm',source)
         cls.server=ThreadingHTTPServer(('127.0.0.1',0),functools.partial(Quiet,directory=cls.folder.name))
         cls.thread=threading.Thread(target=cls.server.serve_forever,daemon=True);cls.thread.start()
         cls.driver=sync_playwright().start();cls.browser=cls.driver.chromium.launch(executable_path=shutil.which('chromium'),args=['--no-sandbox'])
@@ -75,7 +78,7 @@ class Platform(unittest.TestCase):
         p.get_by_label('Rename selected task').fill('Renamed');p.get_by_role('button',name='Rename task',exact=True).click()
         p.get_by_role('button',name='Toggle completion').click();p.reload();self.assertTrue(p.url.endswith('#/tasks/1'))
         p.get_by_role('button',name='Back to tasks').click();p.wait_for_url('**#/')
-        self.assertIn('Completed',p.get_by_role('button',name='Select Renamed',exact=True).inner_text())
+        self.assertIn('Completed',p.get_by_role('listitem').filter(has=p.get_by_role('button',name='Select Renamed',exact=True)).inner_text())
         p.go_forward();p.wait_for_url('**#/tasks/1')
         p.get_by_role('button',name='Delete task',exact=True).click();self.assertTrue(p.locator('dialog').evaluate('e=>e.open'))
         p.keyboard.press('Escape');self.assertFalse(p.locator('dialog').evaluate('e=>e.open'))
@@ -85,14 +88,14 @@ class Platform(unittest.TestCase):
         p.goto(self.url+'/tasks/index.html#/tasks/999');self.assertIn('no longer exists',p.locator('#sedrava-error').inner_text())
     def test_search_filter_and_all_required_viewports(self):
         p=self.page;self.add('Alpha');self.add('Zulu');self.select('Zulu');p.get_by_role('button',name='Open selected task').click();p.get_by_role('button',name='Toggle completion').click();p.get_by_role('button',name='Back to tasks').click();p.wait_for_url('**#/')
-        p.get_by_label('Search tasks').fill('ALP');self.assertEqual(p.locator('[data-list] button').count(),1)
+        p.get_by_label('Search tasks').fill('ALP');self.assertEqual(p.locator('[data-each] [data-pick]').count(),1)
         p.get_by_label('Search tasks').fill('');p.get_by_label('Filter by completion').check();p.get_by_label('Completion status',exact=True).select_option('true')
-        self.assertEqual(p.locator('[data-list] button').count(),1);self.assertIn('Zulu',p.locator('[data-list]').inner_text())
+        self.assertEqual(p.locator('[data-each] [data-pick]').count(),1);self.assertIn('Zulu',p.locator('[data-each]').inner_text())
         for width in (320,360,390,768,1024,1440):
             p.set_viewport_size({'width':width,'height':900})
             self.assertLessEqual(p.evaluate('document.documentElement.scrollWidth'),width+1)
             p.screenshot(path=str(self.evidence/f'tasks-{width}.png'),full_page=True)
-        p.get_by_label('Search tasks').fill('missing');self.assertIn('No matching tasks',p.locator('[data-list]').inner_text())
+        p.get_by_label('Search tasks').fill('missing');self.assertIn('No matching tasks',p.locator('[data-each]').inner_text())
         p.get_by_label('Search tasks').fill('');p.get_by_label('Filter by completion').uncheck()
         self.select('Alpha');p.get_by_role('button',name='Open selected task').click();p.get_by_role('button',name='Delete task',exact=True).click()
         p.screenshot(path=str(self.evidence/'tasks-dialog.png'),full_page=True)
@@ -129,5 +132,58 @@ class Platform(unittest.TestCase):
         p.get_by_role('button',name='Back to catalog',exact=True).click();p.wait_for_url('**#/')
         Quiet.mode='error';p.reload();self.assertIn('A public product',p.locator('[data-remote="catalog"]').inner_text())
         (self.evidence/'http-calls.json').write_text(json.dumps(Quiet.calls,indent=2))
+
+    def test_static_project_composition_seo_font_and_navigation(self):
+        p=self.page;p.goto(self.url+'/site/index.html');p.evaluate('document.fonts.ready')
+        self.assertTrue(p.evaluate('document.fonts.check("16px PlatformInter")'))
+        self.assertEqual(p.locator('link[rel=canonical]').get_attribute('href'),'https://preview.example.com/')
+        self.assertEqual(p.locator('meta[property="og:title"]').get_attribute('content'),'Sedrava Studio — describe what matters')
+        self.assertIn('Disallow: /',p.request.get(self.url+'/site/robots.txt').text())
+        self.assertEqual(p.request.get(self.url+'/site/sitemap.xml').text().count('<url>'),3)
+        for width in (320,360,390,768,1024,1440):
+            p.set_viewport_size({'width':width,'height':900});self.assertLessEqual(p.evaluate('document.documentElement.scrollWidth'),width+1)
+            p.screenshot(path=str(self.evidence/f'site-{width}.png'),full_page=True)
+        p.get_by_role('link',name='Read the guide',exact=True).click();p.wait_for_url('**/guide/index.html')
+        self.assertIn('From description',p.locator('h1').inner_text());p.go_back();p.wait_for_url('**/site/index.html')
+        p.keyboard.press('Tab');self.assertEqual(p.evaluate('document.activeElement.textContent'),'Skip to content')
+
+    def test_crm_forms_related_table_modal_settings_and_recovery(self):
+        p=self.page;p.goto(self.url+'/crm/index.html')
+        p.get_by_role('button',name='Companies',exact=True).click()
+        p.get_by_label('Company name',exact=True).fill('Acme');p.get_by_label('Industry',exact=True).fill('Engineering')
+        p.get_by_role('button',name='Add company',exact=True).click();p.get_by_role('button',name='Select Acme',exact=True).click()
+        self.assertEqual(p.evaluate('document.activeElement.textContent'),'Acme')
+        p.get_by_role('button',name='Company contacts',exact=True).click();p.wait_for_url('**#/companies/1')
+        p.get_by_label('Contact name',exact=True).fill('Ada');p.get_by_label('Email',exact=True).fill('invalid')
+        self.assertTrue(p.get_by_role('button',name='Add contact',exact=True).is_disabled())
+        p.get_by_label('Email',exact=True).fill('ada@example.com');p.get_by_role('button',name='Add contact',exact=True).click()
+        p.get_by_role('button',name='Select Ada',exact=True).click();p.get_by_role('button',name='Edit selected contact',exact=True).click()
+        self.assertTrue(p.locator('dialog').evaluate('e=>e.open'))
+        p.get_by_label('New contact name',exact=True).fill('Ada Lovelace');p.get_by_role('button',name='Save contact name',exact=True).click();p.get_by_role('button',name='Close editor',exact=True).click()
+        p.get_by_role('button',name='Toggle active',exact=True).click()
+        self.assertIn('false',p.get_by_role('table',name='Contacts',exact=True).inner_text())
+        p.reload();p.wait_for_url('**#/companies/1');self.assertIn('Ada Lovelace',p.get_by_role('table',name='Contacts',exact=True).inner_text())
+        for width in (320,360,390,768,1024,1440):
+            p.set_viewport_size({'width':width,'height':900});self.assertLessEqual(p.evaluate('document.documentElement.scrollWidth'),width+1)
+            p.screenshot(path=str(self.evidence/f'crm-{width}.png'),full_page=True)
+        p.get_by_role('button',name='Back to companies',exact=True).click();p.wait_for_url('**#/companies')
+        p.get_by_role('button',name='Back to dashboard',exact=True).click();p.wait_for_url('**#/')
+        p.get_by_role('button',name='Settings',exact=True).click();p.get_by_label('Color theme',exact=True).select_option('"dark"')
+        self.assertEqual(p.evaluate('document.documentElement.dataset.theme'),'dark');p.reload()
+        self.assertEqual(p.evaluate('document.documentElement.dataset.theme'),'dark')
+        self.assertEqual(p.locator('body').evaluate('e=>getComputedStyle(e).backgroundColor'),'rgb(16, 16, 26)')
+        p.screenshot(path=str(self.evidence/'crm-dark-settings.png'),full_page=True)
+
+    def test_accessibility_of_four_generated_projects(self):
+        axe=(ROOT/'build/platform-a11y/node_modules/axe-core/axe.min.js').read_text()
+        reports={}
+        for app in ('site','tasks','catalog','crm'):
+            p=self.page;p.goto(self.url+'/'+app+'/index.html');p.evaluate('document.fonts.ready')
+            if app=='catalog':p.locator('[data-remote="catalog"] [data-remote-status]').get_by_text('success',exact=True).wait_for()
+            p.evaluate(axe)
+            result=p.evaluate('async()=>await axe.run(document,{runOnly:{type:"tag",values:["wcag2a","wcag2aa","wcag21aa"]}})')
+            reports[app]={'violations':result['violations'],'passes':len(result['passes']),'incomplete':result['incomplete']}
+            self.assertEqual(result['violations'],[],json.dumps(result['violations'],indent=2))
+        (self.evidence/'accessibility.json').write_text(json.dumps(reports,indent=2))
 
 if __name__=='__main__':unittest.main(verbosity=2)

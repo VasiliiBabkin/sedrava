@@ -53,6 +53,7 @@ class Site:
     styles: dict
     pages: tuple
     mode: str = field(default='site', init=False)
+    settings: dict = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -162,7 +163,12 @@ def safe_url(value, image=False):
     return value
 
 
+def css_classes(value):
+    if type(value) is not str or not 1<=len(value.split())<=16 or any(not re.fullmatch(r'[A-Za-z][A-Za-z0-9_-]{0,63}',v) for v in value.split()):raise ValueError('Expected up to 16 safe CSS class names')
+    return value
+
 COMMON = {
+    'class':Parameter(css_classes),
     'id':Parameter(identifier), 'style':Parameter(identifier), 'label':Parameter(text),
     'gap':Parameter(integer(0,4096)), 'padding':Parameter(integer(0,4096)),
     'margin':Parameter(integer(0,4096)), 'width':Parameter(dimension), 'max':Parameter(integer(1,4096)),
@@ -198,7 +204,7 @@ COMPONENTS = {
 
 }
 STYLE_PARAMETERS = {**COMMON,'columns':Parameter(integer(1,12)),'wrap':Parameter(boolean,True),'variant':Parameter(text)}
-STYLE_PARAMETERS = {k:v for k,v in STYLE_PARAMETERS.items() if k not in ('id','style','label')}
+STYLE_PARAMETERS = {k:v for k,v in STYLE_PARAMETERS.items() if k not in ('id','style','label','class')}
 
 
 def tokens(line,number,indent):
@@ -279,6 +285,8 @@ def route(value):
 def parse_site(source):
     from sedrava_modules import components
     source = components(source)
+    from sedrava_web_assets import read_directives
+    source, settings = read_directives(source)
     lines=source_lines(source)
     if not lines:raise ValueError('Line 1: column 1: Missing site')
     lex=[(depth,tokens(line,n,depth),n) for depth,line,n in lines]
@@ -376,7 +384,7 @@ def parse_site(source):
             pages.append(Page(name,path,meta['title'],meta.get('description',''),lang,children,t[0].span))
         else:fail(t[0].span,'Expected theme, style or page in site mode')
     if not pages or not any(p.path=='/' for p in pages):fail(first[0].span,'Site requires a page at /')
-    site=Site(first[1].value,theme,styles,tuple(pages));ids={}
+    site=Site(first[1].value,theme,styles,tuple(pages),settings=settings);ids={}
     for page in pages:
         root=page.children
         for index,node in enumerate(root):

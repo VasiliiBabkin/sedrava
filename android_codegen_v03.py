@@ -5,14 +5,25 @@ from pathlib import Path
 from sedrava_android_identity import application_id as resolve_id, prepare_identity, kotlin_path, write_title
 from sedrava_records import ListValue
 from sedrava_records_codegen import kt_support, kt_persistence
-from sedrava_core import parse, run, Assign, If, Require
+from sedrava_core import parse, run, Assign, If, Require, Let
 from android_codegen import generate as scaffold
 
 def kt(node, names):
     if isinstance(node, ast.Attribute): return '(' + kt(node.value, names) + ').sdr_' + node.attr
     if isinstance(node, ast.Call):
+        if hasattr(node,"pure_builtin"):
+            from sedrava_stdlib import kt_call
+            return kt_call(node.pure_builtin,[kt(arg,names) for arg in node.args])
+        if hasattr(node,'pure_function'):
+            function=node.pure_function
+            params={key:'_sdr_arg'+str(i) for i,(key,_) in enumerate(function.parameters)}
+            def parameter_kind(kind):return {int:'Int',str:'String',bool:'Boolean'}.get(kind,'SdrRecord_'+getattr(kind,'name',''))
+            declaration=','.join(params[key]+':'+parameter_kind(kind) for key,kind in function.parameters)
+            return '({'+declaration+' -> '+kt(function.body,params)+'})('+','.join(kt(arg,names) for arg in node.args)+')'
+
         if hasattr(node, 'record_type'): return 'SdrRecord_' + node.record_type.name + '(' + ','.join('sdr_'+k.arg+'='+kt(k.value,names) for k in node.keywords) + ')'
         return 'sdr_'+node.func.id+'('+','.join(kt(a,names) for a in node.args)+')'
+    if isinstance(node,ast.IfExp):return "(if ("+kt(node.test,names)+") "+kt(node.body,names)+" else "+kt(node.orelse,names)+")"
     if isinstance(node, ast.Constant):
         if type(node.value) is str: return quoted(node.value)
         return str(node.value).lower() if type(node.value) is bool else str(node.value)
@@ -72,6 +83,7 @@ def generate(source, output, _program=None, _domain_only=False, application_id=N
     def state_args(prefix):
         return ", ".join(prefix + "." + user[key] for key in keys)
     guard = " && ".join(kt(rule, next_names) for rule in program.rules) or "true"
+    from sedrava_stdlib import KT_RUNTIME
     lines = [
         "package " + package,
         "import android.os.Bundle",
@@ -100,6 +112,7 @@ def generate(source, output, _program=None, _domain_only=False, application_id=N
         "  return true",
         "}",
         'internal fun checkedText(value: String): String { require(validText(value)) { "Invalid text value" }; return value }',
+        KT_RUNTIME,
         *(kt_support(program, quoted) if (program.records or program.has_navigation) else []),
         "internal " + ("data " if keys else "") + "class SedravaState(" + ", ".join("val " + user[key] + ": " + kind(val) + " = " + literal(val) for key, val in program.states.items()) + ")",
         "internal fun checkDerivedState(" + params + ") {",
@@ -138,19 +151,24 @@ def generate(source, output, _program=None, _domain_only=False, application_id=N
     for key in keys:
         lines.append("  var next_" + key + " = state." + user[key])
     lines += ["  return try {", "    when (action) {"]
-    def emit(body, depth):
+    def emit(body, depth, scope=None):
+        scope=dict(next_names if scope is None else scope)
         for stmt in body:
-            if isinstance(stmt, Require):
-                lines.append(' ' * depth + 'require(' + kt(stmt.condition, next_names) + ')')
+            if isinstance(stmt, Let):
+                local="_sdr_local_"+stmt.name
+                lines.append(" "*depth+"val "+local+" = "+kt(stmt.expr,scope))
+                scope[stmt.name]=local
+            elif isinstance(stmt, Require):
+                lines.append(' ' * depth + 'require(' + kt(stmt.condition, scope) + ')')
             elif isinstance(stmt, Assign):
-                lines.append(" " * depth + next_names[stmt.name] + " = " + kt(stmt.expr, next_names))
+                lines.append(" " * depth + scope[stmt.name] + " = " + kt(stmt.expr, scope))
                 lines.append(" " * depth + "checkDerivedState(" + next_args + ")")
             else:
-                lines.append(" " * depth + "if (" + kt(stmt.condition, next_names) + ") {")
-                emit(stmt.yes, depth + 2)
+                lines.append(" " * depth + "if (" + kt(stmt.condition, scope) + ") {")
+                emit(stmt.yes, depth + 2, scope)
                 if stmt.no:
                     lines.append(" " * depth + "} else {")
-                    emit(stmt.no, depth + 2)
+                    emit(stmt.no, depth + 2, scope)
                 lines.append(" " * depth + "}")
     for key, body in program.actions.items():
         lines.append("      " + quoted(key) + " -> {")
