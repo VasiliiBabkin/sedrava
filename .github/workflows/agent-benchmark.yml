@@ -1,0 +1,141 @@
+name: Sedrava agent benchmark reporting
+
+on:
+  push:
+    paths:
+      - "benchmarks/agent/**"
+      - "tests/test_agent_*.py"
+      - ".github/workflows/agent-benchmark.yml"
+  pull_request:
+    paths:
+      - "benchmarks/agent/**"
+      - "tests/test_agent_*.py"
+      - ".github/workflows/agent-benchmark.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-reporting:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+      - name: Compile benchmark tooling
+        run: python -m compileall -q benchmarks/agent
+      - name: Test reporting implementation
+        run: python -m unittest discover -s tests -p 'test_agent_*.py' -v
+      - name: Validate example and produce report
+        run: python benchmarks/agent/analyze.py benchmarks/agent/sample-result.json --output agent-benchmark-summary.json
+      - name: Freeze ten neutral Web trial inputs (no agent invocation)
+        run: |
+          python benchmarks/agent/prepare_web_experiment.py --commit "$(git rev-parse HEAD)" --model gpt-5.4 --agent "codex-cli 0.159.0-alpha.3 (requested; not invoked in CI)" --toolchain "Execution toolchain must be recorded by authorized agent runner" --seconds 600 --tokens 20000 --attempts 3 --output build/agent-web-experiment
+      - name: Upload prepared inputs and truthful not-run comparison
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: agent-benchmark-web-prepared-not-run
+          path: |
+            build/agent-web-experiment/
+            benchmarks/agent/evidence/2026-11-03-preflight/
+            benchmarks/agent/reports/counter-web-2026-11-03.md
+      - name: Upload example report
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: agent-benchmark-example-summary
+          path: agent-benchmark-summary.json
+
+  browser-baselines:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+      - name: Install browser test dependencies
+        run: |
+          python -m pip install playwright==1.56.0
+          python -m playwright install --with-deps chromium
+          npm install --no-save --no-package-lock typescript@5.9.3
+      - name: Compile TypeScript baseline
+        run: ./node_modules/.bin/tsc --project benchmarks/agent/baselines/typescript/tsconfig.json
+      - name: Run browser acceptance on both baselines
+        run: python benchmarks/agent/run_baselines.py
+      - name: Browser negative controls (not agent trials)
+        run: python benchmarks/agent/test_web_evaluator.py
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: agent-benchmark-browser-baselines
+          if-no-files-found: warn
+          path: build/agent-benchmark-baselines/
+
+  android-baselines:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
+        with:
+          gradle-version: "8.11.1"
+      - name: Generate independently implemented Android baselines
+        run: |
+          python -m sedrava_cli check benchmarks/agent/baselines/sedrava/counter.sdr
+          python -m sedrava_cli build android benchmarks/agent/baselines/sedrava/counter.sdr --output build/agent-benchmark-android/sedrava --application-id org.sedrava.benchmark.sedrava
+          python benchmarks/agent/prepare_kotlin_android_baseline.py --output build/agent-benchmark-android/kotlin
+      - name: Build both Android APKs
+        run: |
+          gradle -p build/agent-benchmark-android/sedrava --no-daemon :app:assembleDebug
+          gradle -p build/agent-benchmark-android/kotlin --no-daemon :app:assembleDebug
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Independent Android UI and restart acceptance
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          script: |
+            set -eu
+            python benchmarks/agent/acceptance/counter_android_device.py --apk build/agent-benchmark-android/sedrava/app/build/outputs/apk/debug/app-debug.apk --package org.sedrava.benchmark.sedrava --output build/agent-benchmark-android/evidence/sedrava.json
+            python benchmarks/agent/acceptance/counter_android_device.py --apk build/agent-benchmark-android/kotlin/app/build/outputs/apk/debug/app-debug.apk --package org.sedrava.benchmark.kotlin --output build/agent-benchmark-android/evidence/kotlin.json
+      - name: Upload Android acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: agent-benchmark-android-baselines
+          if-no-files-found: warn
+          path: |
+            build/agent-benchmark-android/evidence/
+            build/agent-benchmark-android/*/app/build/outputs/apk/debug/*.apk
