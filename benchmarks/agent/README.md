@@ -80,3 +80,28 @@ URLs, uses a fresh browser context per invocation, and writes a JSON report.
 A passed result establishes the observed Web counter behavior only, not
 language-wide agent success. Keep each candidate's build logs and trial
 metadata alongside the browser report. No benchmark agent runs are bundled.
+
+
+## Android baseline acceptance (not agent trials)
+
+The native Kotlin reference implementation is hand-written in
+baselines/kotlin-android/MainActivity.kt. The separate
+prepare_kotlin_android_baseline.py builds only an Android Gradle project
+around that source. Sedrava Android is generated from
+baselines/sedrava/counter.sdr. Both APKs are tested using the same
+acceptance/counter_android_device.py script against emulator API 35.
+
+The Android suite covers A01–A08: fresh install, increment, decrement,
+reset, multiple operations, process death/relaunch, home/reopen, and persisted
+reset. It reads displayed UI text through ADB/UIAutomator, not storage or
+application internals. GitHub Actions uploads both JSON evidence files and
+APKs. Android CI builds and baseline passes are *not* model performance data.
+
+## Reproducible agent trial inputs
+
+See prompts/experiment-protocol-v0.md and prepare_trial_bundle.py.
+The bundle builder freezes each starter, reference and task with SHA-256,
+and emits the exact coding-agent prompt plus a manifest with outcome not_run.
+It has no access to an AI model and does not generate success measurements.
+The first agent trials must be executed by an actual coding-agent harness,
+followed by independent browser/Android acceptance and measured telemetry.
