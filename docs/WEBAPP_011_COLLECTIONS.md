@@ -30,9 +30,7 @@ or JavaScript dependencies.
         new_title = ""
     action toggle:
         require has(tasks, selected)
-        tasks = update(tasks, selected,
-                       Task(title=get(tasks, selected).title,
-                            done=not get(tasks, selected).done))
+        tasks = update(tasks, selected, Task(title=get(tasks, selected).title, done=not get(tasks, selected).done))
     action remove_selected:
         require has(tasks, selected)
         tasks = remove(tasks, selected)
