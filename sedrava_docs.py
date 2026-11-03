@@ -166,11 +166,12 @@ for(const panel of document.querySelectorAll('.doc-code')){
 }
 for(const demo of document.querySelectorAll('[data-demo]')){
  const frame=demo.querySelector('iframe'),status=demo.querySelector('[data-demo-status]');let observer=null;
- frame.addEventListener('load',()=>{observer?.disconnect();status.textContent='Loaded / Загружено';try{
-  const document=frame.contentDocument;if(!document)return;
+ const connect=()=>{observer?.disconnect();try{
+  const document=frame.contentDocument;if(!document){status.textContent='Preview unavailable: unexpected origin';return;}if(document.URL==='about:blank')return;status.textContent='Loaded / Загружено';
   observer=new MutationObserver(records=>{if(records.some(record=>record.target.tagName==='DIALOG'&&record.target.open))frame.scrollIntoView({block:'center',behavior:'instant'});});
   observer.observe(document.documentElement,{attributes:true,attributeFilter:['open'],subtree:true});
- }catch(_){status.textContent='Preview unavailable: unexpected origin';}});
+ }catch(_){status.textContent='Preview unavailable: unexpected origin';}};
+ frame.addEventListener('load',connect);window.addEventListener('pageshow',connect);connect();
  window.addEventListener('pagehide',()=>observer?.disconnect());
  demo.querySelector('[data-demo-reload]').addEventListener('click',()=>{try{const current=new URL(frame.contentWindow.location.href),expected=new URL(frame.src);if(current.origin!==location.origin||current.pathname!==expected.pathname)throw Error('unexpected demo location');frame.contentWindow.location.reload();}catch(_){status.textContent='Reload refused: unexpected demo origin/path';}});
  demo.querySelector('[data-demo-reset]').addEventListener('click',()=>{
