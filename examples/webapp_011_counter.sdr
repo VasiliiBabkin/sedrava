@@ -1,0 +1,35 @@
+# Sedrava 0.11 B1 (experimental): interactive scalar WebApp.
+# This file is not an app 0.10 or a static site 0.11.
+webapp "Sedrava · Interactive Demo"
+state count = 0
+state note = "Welcome"
+state show_note = true
+persist count
+persist note
+persist show_note
+derive double_count = count * 2
+rule count >= -100 and count <= 100
+action increment: count = count + 1
+action decrement: count = count - 1
+action reset: count = 0
+view main:
+    container max 920 padding 20:
+        column gap 24:
+            heading "A real Sedrava WebApp"
+            paragraph "Typed state, atomic actions and responsive UI from one .sdr file." variant lead
+            card:
+                column gap 20:
+                    row gap 24:
+                        value count label "Count"
+                        value double_count label "Twice the count"
+                    row gap 12:
+                        button "Add" action increment
+                        button "Subtract" action decrement variant secondary
+                        button "Reset" action reset variant ghost
+                    input count label "Edit count"
+                    input note label "Your note"
+                    checkbox show_note label "Show note"
+                    when show_note:
+                        callout:
+                            value note label "Note"
+            paragraph "Stored locally in this browser; no server is required." variant muted
