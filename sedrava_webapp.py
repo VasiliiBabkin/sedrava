@@ -59,6 +59,8 @@ UI_DYNAMIC = {
 
 
 def parse_webapp(source):
+    from sedrava_modules import components
+    source = components(source)
     lines = source_lines(source)
     if not lines or not re.fullmatch(r'webapp\s+".+"', lines[0][1]):
         raise ValueError("Line 1: column 1: Expected webapp \"Title\"")
@@ -438,11 +440,13 @@ MARKER = "sedrava-webapp.json"
 
 
 def build_webapp(source, output, source_path):
-    document = source if isinstance(source, WebApp) else parse_webapp(source)
+    from sedrava_modules import expand
+    expanded, modules = (None, set()) if isinstance(source, WebApp) else expand(source, source_path)
+    document = source if isinstance(source, WebApp) else parse_webapp(expanded)
     source_path = Path(source_path).resolve()
     output = Path(output)
     resolved = output.resolve()
-    if source_path.is_relative_to(resolved):
+    if source_path.is_relative_to(resolved) or any(p.is_relative_to(resolved) for p in modules):
         raise ValueError("WebApp output must not contain its source")
     if output.is_symlink():
         raise ValueError("WebApp output cannot be a symlink")

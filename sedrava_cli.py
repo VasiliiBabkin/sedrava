@@ -61,7 +61,7 @@ def main(argv=None):
             source = handle.read(MAX_SOURCE_CHARS + 1)
         from sedrava_syntax import document_kind
         if document_kind(source) in ("site", "webapp"):
-            document = parse_document(source)
+            document = parse_document(source, args.source)
             if isinstance(document, WebApp):
                 if args.command == 'check':
                     print(f"OK: {args.source} (webapp)")

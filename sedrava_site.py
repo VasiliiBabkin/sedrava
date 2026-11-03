@@ -277,6 +277,8 @@ def route(value):
 
 
 def parse_site(source):
+    from sedrava_modules import components
+    source = components(source)
     lines=source_lines(source)
     if not lines:raise ValueError('Line 1: column 1: Missing site')
     lex=[(depth,tokens(line,n,depth),n) for depth,line,n in lines]

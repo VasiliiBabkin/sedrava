@@ -210,7 +210,10 @@ def validate_existing(output):
 
 def build_site(source,output,source_path):
     output=Path(output);source_path=Path(source_path).resolve()
-    files,inputs=generate_site(source,source_path.parent)
+    from sedrava_modules import expand
+    expanded, modules = expand(source, source_path)
+    files,inputs=generate_site(expanded,source_path.parent)
+    inputs.update(modules)
     if source_path.is_relative_to(output.resolve()) or any(p.is_relative_to(output.resolve()) for p in inputs):
         raise ValueError('Site output must not contain the source or source assets')
     validate_existing(output)

@@ -4,6 +4,8 @@ Run: python -m unittest tests.test_http_browser_e2e -v
 Requires: pip install playwright && python -m playwright install chromium
 """
 import contextlib
+import os
+import shutil
 import functools
 import http.server
 import tempfile
@@ -53,7 +55,7 @@ class HttpBrowserE2E(unittest.TestCase):
             source.write_text(SOURCE, encoding="utf-8")
             self.assertEqual(main(["build", "api-page", str(source), "--output", str(output)]), 0)
             with serve(output) as url, sync_playwright() as playwright:
-                browser = playwright.chromium.launch(headless=True)
+                browser = playwright.chromium.launch(headless=True, executable_path=os.environ.get("SEDRAVA_CHROMIUM") or shutil.which("chromium"), args=["--no-sandbox"])
                 try:
                     page = browser.new_page()
                     state = {"code": 200, "payload": [{"id": 1, "title": "<img src=x onerror=alert(1)>"}]}
@@ -99,7 +101,7 @@ class HttpBrowserE2E(unittest.TestCase):
             self.assertEqual(main(["check", str(source)]), 0)
             self.assertEqual(main(["build", "web", str(source), "--output", str(output)]), 0)
             with serve(output.parent) as url, sync_playwright() as playwright:
-                browser = playwright.chromium.launch(headless=True)
+                browser = playwright.chromium.launch(headless=True, executable_path=os.environ.get("SEDRAVA_CHROMIUM") or shutil.which("chromium"), args=["--no-sandbox"])
                 try:
                     page = browser.new_page()
                     state = {"code": 200, "payload": [{"id": 1, "title": "<script>alert(1)</script>"}]}

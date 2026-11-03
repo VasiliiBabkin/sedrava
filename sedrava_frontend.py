@@ -2,7 +2,10 @@
 from sedrava_syntax import document_kind
 
 
-def parse_document(source):
+def parse_document(source, source_path=None):
+    from sedrava_modules import expand
+    if document_kind(source) in ("site", "webapp"):
+        source, _ = expand(source, source_path)
     if document_kind(source) == 'site':
         from sedrava_site import parse_site
         return parse_site(source)
