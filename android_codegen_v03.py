@@ -20,7 +20,7 @@ def kt(node, names):
         if hasattr(node,'pure_function'):
             function=node.pure_function
             params={key:'_sdr_arg'+str(i) for i,(key,_) in enumerate(function.parameters)}
-            def parameter_kind(kind):return {int:'Int',str:'String',bool:'Boolean'}.get(kind,'SdrRecord_'+getattr(kind,'name',''))
+            from sedrava_functions import kotlin_type as parameter_kind
             declaration=','.join(params[key]+':'+parameter_kind(kind) for key,kind in function.parameters)
             return '({'+declaration+' -> '+kt(function.body,params)+'})('+','.join(kt(arg,names) for arg in node.args)+')'
 

@@ -84,7 +84,7 @@ def js_query(node, emit, names):
 
 def kt_query(node,emit,names):
     extras=['_query_extra'+str(i) for i in range(len(node.query_extra_types))]
-    def kind(t):return {int:'Int',str:'String',bool:'Boolean'}.get(t,'SdrRecord_'+getattr(t,'name',''))
+    from sedrava_functions import kotlin_type as kind
     if hasattr(node,'query_function'):
         body=emit(node.query_function.body,selector_names(node,'_query_record','_query_identity',extras))
     else:

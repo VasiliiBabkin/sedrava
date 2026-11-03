@@ -4,7 +4,7 @@ import keyword
 import re
 from sedrava_records import RecordType, ListType, RecordValue, ListValue, value_type, validate, operation
 from dataclasses import dataclass
-from sedrava_functions import FunctionType, expression_cost
+from sedrava_functions import FunctionType, expression_cost, signature_type
 from sedrava_stdlib import SIGNATURES
 from sedrava_queries import NAMES as QUERY_NAMES, type_query
 from sedrava_navigation import Span, Widget, Screen, Navigation, MAX_SCREENS, MAX_NAV_COMMANDS
@@ -370,18 +370,20 @@ def parse(source):
         if m := re.fullmatch(r'app (.+)', line):
             if name is not None: raise ValueError(f"Line {number}: duplicate app")
             name = label(m[1], number, 5)
-        elif m := re.fullmatch(r"fn ([A-Za-z][A-Za-z0-9_]*)\((.*?)\) -> ([A-Za-z][A-Za-z0-9_]*) = (.+)",line):
+        elif m := re.fullmatch(r"fn ([A-Za-z][A-Za-z0-9_]*)\((.*?)\) -> (.+?) = (.+)",line):
             if states or actions or m[1] in types or keyword.iskeyword(m[1]) or len(functions)>=32 or m[1] in SIGNATURES or m[1] in QUERY_NAMES or m[1] in ('true','false','append','update','remove','get','has','count','next_id'):raise ValueError(f'Line {number}: invalid pure function declaration')
-            kinds={'int':int,'text':str,'bool':bool,**records}
             params=[]
             for param in m[2].split(',') if m[2].strip() else ():
-                spec=re.fullmatch(r'\s*([A-Za-z][A-Za-z0-9_]*)\s*:\s*([A-Za-z][A-Za-z0-9_]*)\s*',param)
-                if not spec or spec[2] not in kinds or spec[1] in types or spec[1] in ('true','false') or spec[1] in dict(params) or keyword.iskeyword(spec[1]):raise ValueError(f'Line {number}: invalid function parameter')
-                params.append((spec[1],kinds[spec[2]]))
-            if len(params)>8 or m[3] not in kinds:raise ValueError(f'Line {number}: invalid function signature')
+                spec=re.fullmatch(r'\s*([A-Za-z][A-Za-z0-9_]*)\s*:\s*(.+?)\s*',param)
+                if not spec or spec[1] in types or spec[1] in ('true','false') or spec[1] in dict(params) or keyword.iskeyword(spec[1]):raise ValueError(f'Line {number}: invalid function parameter')
+                try:params.append((spec[1],signature_type(spec[2],records)))
+                except ValueError as exc:raise ValueError(f'Line {number}: invalid function parameter type') from exc
+            if len(params)>8:raise ValueError(f'Line {number}: invalid function signature')
+            try:result_type=signature_type(m[3],records)
+            except ValueError as exc:raise ValueError(f'Line {number}: invalid function return type') from exc
             body=expression(m[4],{**records,**functions,**dict(params)},number,m.start(4)+1)
-            if type_of(body,{**records,**functions,**dict(params)})!=kinds[m[3]]:raise ValueError(f'Line {number}: function return type mismatch')
-            function=FunctionType(m[1],tuple(params),kinds[m[3]],body,expression_cost(body))
+            if type_of(body,{**records,**functions,**dict(params)})!=result_type:raise ValueError(f'Line {number}: function return type mismatch')
+            function=FunctionType(m[1],tuple(params),result_type,body,expression_cost(body))
             functions[m[1]]=function;types[m[1]]=function
         elif m := re.fullmatch(r"record ([A-Za-z_][A-Za-z_0-9]*):", line):
             if states or actions or len(records) >= 16 or m[1] in types or keyword.iskeyword(m[1]) or m[1] in ('true','false','append','update','remove','get','has','count','next_id'): raise ValueError(f"Line {number}: column 1: invalid record declaration")

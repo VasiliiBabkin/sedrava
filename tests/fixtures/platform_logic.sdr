@@ -6,6 +6,8 @@ record Item:
 record Label:
     title: text
 fn labeled(row: Item) -> Label = Label(title=row.title)
+fn copied(pool: list<Item>(max=8)) -> list<Item>(max=8) = sort(pool, "title")
+fn member(row: Item, pool: list<Item>(max=8)) -> bool = has(pool, row.score)
 fn matches(row: Item, query: text) -> bool = contains(row.title, query)
 fn raised(row: Item, extra: int) -> Item = Item(title=row.title, score=row.score+extra, done=row.done)
 state rows: list<Item>(max=8) = []
@@ -27,7 +29,7 @@ action query:
     total=sum(rows,"score")
     found=find(rows,matches,"a")
     yes=any(rows,"done",false)
-    every=all(rows,"done",true)
+    every=all(rows,member,rows)
 action transform:
     let old_day=day
     day=date_add(old_day,1)
@@ -36,7 +38,7 @@ action transform:
 action remove_first:
     rows=remove(rows,1)
 action unicode_sort:
-    projected=sort(rows,"title")
+    projected=copied(rows)
 action overflow:
     found=99
     rows=map(rows,raised,2147483647)

@@ -32,6 +32,7 @@ record Contact:
     company: int
     active: bool
 import "assets/crm-logic.sdr"
+fn linked(contact: Contact, pool: list<Company>(max=100)) -> bool = has(pool, contact.company)
 state companies: list<Company>(max=100) = []
 state contacts: list<Contact>(max=100) = []
 state company_id = 0
@@ -52,6 +53,7 @@ derive company_count = count(companies)
 derive contact_count = count(contacts)
 derive company_selected = has(companies, company_id)
 derive contact_selected = has(contacts, contact_id)
+rule all(contacts, linked, companies)
 action add_company:
     require company_name != ""
     companies = append(companies, Company(name=company_name, industry=industry))
