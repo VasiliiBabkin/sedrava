@@ -165,8 +165,13 @@ for(const panel of document.querySelectorAll('.doc-code')){
  button.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(panel.querySelector('code').textContent);status.textContent='Copied / Скопировано';}catch(_){status.textContent='Copy unavailable; select the code / Выделите код';}});
 }
 for(const demo of document.querySelectorAll('[data-demo]')){
- const frame=demo.querySelector('iframe'),status=demo.querySelector('[data-demo-status]');
- frame.addEventListener('load',()=>{status.textContent='Loaded / Загружено';});
+ const frame=demo.querySelector('iframe'),status=demo.querySelector('[data-demo-status]');let observer=null;
+ frame.addEventListener('load',()=>{observer?.disconnect();status.textContent='Loaded / Загружено';try{
+  const document=frame.contentDocument;if(!document)return;
+  observer=new MutationObserver(records=>{if(records.some(record=>record.target.tagName==='DIALOG'&&record.target.open))frame.scrollIntoView({block:'center',behavior:'instant'});});
+  observer.observe(document.documentElement,{attributes:true,attributeFilter:['open'],subtree:true});
+ }catch(_){status.textContent='Preview unavailable: unexpected origin';}});
+ window.addEventListener('pagehide',()=>observer?.disconnect());
  demo.querySelector('[data-demo-reload]').addEventListener('click',()=>{try{const current=new URL(frame.contentWindow.location.href),expected=new URL(frame.src);if(current.origin!==location.origin||current.pathname!==expected.pathname)throw Error('unexpected demo location');frame.contentWindow.location.reload();}catch(_){status.textContent='Reload refused: unexpected demo origin/path';}});
  demo.querySelector('[data-demo-reset]').addEventListener('click',()=>{
   const url=new URL(frame.src);if(url.origin!==location.origin){status.textContent='Reset refused: wrong origin';return;}
