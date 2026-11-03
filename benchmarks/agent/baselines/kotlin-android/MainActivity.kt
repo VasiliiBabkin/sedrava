@@ -35,6 +35,7 @@ class MainActivity : Activity() {
         fun button(label: String, action: () -> Unit) {
             val control = Button(this).apply {
                 text = label
+                isAllCaps = false
                 setOnClickListener { action() }
             }
             layout.addView(control, LinearLayout.LayoutParams(
