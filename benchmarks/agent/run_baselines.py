@@ -12,7 +12,7 @@ import sys
 import tempfile
 import threading
 
-ROOT = pathlib.Path(__file__).resolve().parents[3]
+ROOT = pathlib.Path(__file__).resolve().parents[2]
 BENCH = ROOT / "benchmarks/agent"
 sys.path.insert(0, str(ROOT))
 from web_codegen import generate
