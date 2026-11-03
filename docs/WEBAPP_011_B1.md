@@ -51,15 +51,17 @@ Each document requires one h1. User-supplied content is written as escaped HTML 
 
 The explicit top-level webapp document and build webapp target do not reinterpret existing app, build web, build android, site, or build site sources.
 
-Not supported in B1: records and collections, navigation and history, HTTP APIs, live server data, multi-page views, module imports, custom scripts, expressions inside UI attributes, multi-user data, or Android output for webapp. These are not shipped features.
+Supported on the stacked experimental collections branch: typed 0.10 records, bounded lists, selectable row UI and CRUD via existing named actions. See [collections WebApp guide](WEBAPP_011_COLLECTIONS.md).
 
-Next: records/list CRUD and navigation, followed by typed HTTP from API0. Each requires independent acceptance tests.
+Still not supported: navigation and history, HTTP APIs, live server data, multi-page views, module imports, custom scripts, arbitrary expressions inside UI attribute values, multi-user data, or Android output for webapp.
+
+Next: full navigation and editable record-bound UI, followed by typed HTTP from API0. Each requires independent acceptance tests.
 
 ## Evidence
 
-Unit tests: python -m unittest discover -s tests -p test_webapp.py -v
+Unit tests: python -m unittest discover -s tests -p 'test_webapp*.py' -v
 
-Browser tests: python scripts/test_webapp_browser.py with Playwright and Chromium.
+Browser tests: python scripts/test_webapp_browser.py and python scripts/test_webapp_collections_browser.py with Playwright and Chromium.
 
 Required independent browser acceptance: actual rendering at 360/768/1440 widths, persistence across reload/new page, rejected actions, invalid input, conditional display, XSS regression, corrupt saved data, CSP and keyboard use.
 
