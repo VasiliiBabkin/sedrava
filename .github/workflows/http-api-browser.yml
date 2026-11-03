@@ -1,0 +1,28 @@
+name: Sedrava HTTP API0 Chromium E2E
+on:
+  push:
+    branches:
+      - feature/011-http-api-contract
+  pull_request:
+    paths:
+      - 'sedrava_http*.py'
+      - 'sedrava_cli.py'
+      - 'tests/test_http_browser_e2e.py'
+      - '.github/workflows/http-api-browser.yml'
+permissions:
+  contents: read
+jobs:
+  chromium:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install 'playwright==1.62.0'
+      - run: python -m playwright install --with-deps chromium
+      - run: python -m unittest discover -s tests -p test_http_browser_e2e.py -v

@@ -1,0 +1,44 @@
+"""Regression tests for schema-driven HTTP panel rendering."""
+import unittest
+import json
+
+from sedrava_http_embed import embed_api_panel
+
+
+class HttpEmbedTests(unittest.TestCase):
+    def test_explicit_schema_fields_are_embedded(self):
+        page = embed_api_panel("<html><body></body></html>", "Articles", ["id", "title"])
+        self.assertIn('const visibleFields = ["id", "title"];', page)
+        self.assertIn("for (const key of visibleFields ?? Object.keys(row))", page)
+        self.assertIn("grid-template-columns", page)
+        self.assertIn("textContent = String(value)", page)
+        self.assertNotIn("innerHTML", page)
+
+    def test_heading_is_escaped(self):
+        page = embed_api_panel("<body></body>", "<script>alert(1)</script>", ["title"])
+        self.assertIn("&lt;script&gt;", page)
+        self.assertNotIn("<h2><script>", page)
+
+    def test_custom_messages_and_script_safety(self):
+        page = embed_api_panel("<body></body>", "Articles", ["title"],
+                               title="Новости", loading="Загрузка",
+                               empty="Нет данных", error="</script><script>alert(1)</script>")
+        self.assertIn("<h2>Новости</h2>", page)
+        self.assertIn(json.dumps("Загрузка", ensure_ascii=True), page)
+        self.assertIn(json.dumps("Нет данных", ensure_ascii=True), page)
+        self.assertNotIn("</script><script>alert(1)</script>", page)
+        self.assertIn("messages.error", page)
+
+    def test_invalid_display_fields_rejected(self):
+        for fields in ([], ["title", "title"], ["<script>"], ["a"] * 65, "title"):
+            with self.subTest(fields=fields):
+                with self.assertRaises(ValueError):
+                    embed_api_panel("<body></body>", "Articles", fields)
+
+    def test_missing_body_rejected(self):
+        with self.assertRaises(ValueError):
+            embed_api_panel("<html></html>", "Articles", ["title"])
+
+
+if __name__ == "__main__":
+    unittest.main()

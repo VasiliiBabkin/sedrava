@@ -14,11 +14,23 @@ Describe the application; get the application. / Опиши приложение
 | --- | --- | --- |
 | **0.9** | Checked integers, actions, rules, basic Web/Android | Historical GitHub alpha |
 | **0.10** | Unicode text, records, bounded lists, multi-screen navigation | **Released** on GitHub and PyPI |
-| **0.11** | Extended Web UI and responsive website generation | **Draft PR #22**, not in released CLI |
-| **0.12+** | Device capabilities, module/reuse architecture, editors and desktop | Proposed, not committed |
+| **0.11** | Extended Web UI, responsive sites, experimental read-only HTTP API0 and declarative data presentation | **Draft PRs #22 and #31**, not in released CLI |
+| **0.12+** | Module imports and reuse, library SDK, versioned packages; device capabilities, editors and desktop | Proposed, not committed |
 | **1.0** | Versioned specification, compatible storage and support policy | Long-term goal |
 
 Version numbers are planning milestones, **not release dates**. / Номера — ориентиры, а не сроки.
+
+## Planned sequence after HTTP API0 / Порядок следующих работ
+
+1. **Finish 0.11 Web HTTP API0** ([draft PR #31](https://github.com/VasiliiBabkin/sedrava/pull/31)): bind validated read-only JSON to explicitly declared UI fields and components; handle loading, empty results, errors and retry; preserve isolation from local persistent state. Keep the initial scope Web-only and GET-only.
+2. **Build a representative one-file Web demo** with a remote JSON collection, cards, status handling and no handwritten JavaScript. Document browser CORS constraints and reproducible Chromium tests.
+3. **Stabilize 0.11**: review security and resource limits, validate installed wheel/sdist, maintain regression coverage, align docs with the separately maintained `sedrava-site`. Release only after explicit approval and evidence.
+4. **Design a typed module/import system**: namespaces, deterministic dependency resolution, platform capability declarations, compatibility checks and diagnostics. A possible `use` keyword is only a proposal, not current language syntax.
+5. **Create a library extension SDK** that allows independently developed reusable components without changing the compiler for each feature; define sandbox/security and target-runtime contracts.
+6. **Add a versioned package manager** with lockfile, integrity verification and reproducible offline-capable builds, followed by official Web/Android component libraries and third-party packages. Do not assume arbitrary Python/JavaScript libraries are portable.
+7. **Benchmark real utility** against a conventional TypeScript/Web implementation and a native Android baseline where applicable: measure end-to-end time, handwritten source size, defects, and change-request turnaround. No speedup factor is claimed before reproducible measurement.
+
+These are **ordered planning goals, not implemented features or guaranteed version commitments**. Do not expand 0.11 API0 into POST, authentication or Android networking before its Web contract is validated.
 
 ## Principles / Принципы
 
