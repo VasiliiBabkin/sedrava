@@ -100,7 +100,7 @@ The additive Slice B branch provides `navbar`, `footer`, `callout`, and
 | `navbar` | `navbar label "Primary navigation":` with child links/rows | One top-level `<nav>`, before the main landmark |
 | `footer` | `footer:` with children | One top-level `<footer>`, after the main landmark |
 | `callout` | `callout variant warning:` with children | `<aside>` notice, variants default/info/warning |
-| `code` | `code "state x = 0\\npersist x"` | Escaped `<pre><code>` with local horizontal scrolling |
+| `code` | `code "state x = 0\npersist x"` | Escaped `<pre><code>` with local horizontal scrolling |
 
 `navbar` and `footer` are optional. When used, the navbar must be the first
 top-level element and footer the last. Neither is allowed inside a nested
