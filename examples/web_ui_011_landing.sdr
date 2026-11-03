@@ -88,7 +88,7 @@ page components at "/components/":
             paragraph "These are working primitives. Rich interactions, reusable definitions, forms and documentation search are future slices." variant lead
             callout variant info:
                 paragraph "Slice B adds semantic navigation, page footers, notices and escaped code snippets." variant muted
-            code "app \"Demo\"\\nstate value = 0\\npersist value"
+            code "app \"Demo\"\nstate value = 0\npersist value"
             grid columns 3 gap 20:
                 card style feature:
                     column gap 16:
