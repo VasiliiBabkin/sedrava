@@ -31,12 +31,16 @@ class WebApp:
     widgets: tuple
     mode: str = "webapp"
     views: dict = field(default_factory=dict)
+    services: dict = field(default_factory=dict)
 
 
 UI_LAYOUT = frozenset(("container", "row", "column", "grid", "card",
                        "callout", "heading", "paragraph", "code",
                        "spacer", "divider"))
 UI_DYNAMIC = {
+    "request": Definition("button", positional="text", required=("text","service"), parameters={"text":Parameter(text),"service":Parameter(identifier)}),
+    "cancel": Definition("button", positional="text", required=("text","service"), parameters={"text":Parameter(text),"service":Parameter(identifier)}),
+    "remote": Definition("section", required=("service",), parameters={"service":Parameter(identifier),"search":Parameter(identifier),"title":Parameter(identifier)}),
     "form": Definition("form", children=True, required=("action",), parameters={"action": Parameter(identifier)}),
     "submit": Definition("button", positional="text", required=("text",), parameters={"text": Parameter(text)}, defaults={"variant":"primary"}, variants=("primary","secondary","ghost")),
     "dialog": Definition("dialog", children=True, required=("id","label")),
@@ -71,6 +75,8 @@ UI_DYNAMIC = {
 def parse_webapp(source):
     from sedrava_modules import components
     source = components(source)
+    from sedrava_web_services import extract_services, validate_services
+    source, service_blocks = extract_services(source)
     lines = source_lines(source)
     if not lines or not re.fullmatch(r'webapp\s+".+"', lines[0][1]):
         raise ValueError("Line 1: column 1: Expected webapp \"Title\"")
@@ -109,6 +115,7 @@ def parse_webapp(source):
         for key in route_parameters(spec['path']):
             if key not in program.states or declared[key] is not int:fail(Span(view_lineno,1),"Route parameters require mutable integer state")
         if spec['guard'] and declared.get(spec['guard']) is not bool:fail(Span(view_lineno,1),"View guard requires boolean state")
+    services=validate_services(service_blocks,program,declared)
     body_lines=[]
     for position,(start,(_,header,number)) in enumerate(view_lines):
         end=view_lines[position+1][0] if position+1<len(view_lines) else len(lines)
@@ -145,7 +152,7 @@ def parse_webapp(source):
                 fail(items[0].span, "Invalid component block structure")
             args = items[1:-1] if is_block else items[1:]
             given = {}
-            if kind in ("value", "input", "checkbox", "when", "list", "select"):
+            if kind in ("value", "input", "checkbox", "when", "list", "select", "remote"):
                 if not args or args[0].quoted or type(args[0].value) is not str:
                     fail(items[0].span, "State identifier required")
                 name = args[0].value
@@ -153,7 +160,7 @@ def parse_webapp(source):
                     identifier(name)
                 except ValueError as exc:
                     fail(args[0].span, str(exc))
-                given["collection" if kind == "list" else "state"] = Property(name, args[0].span)
+                given[{"list":"collection","remote":"service"}.get(kind,"state")] = Property(name, args[0].span)
                 args = args[1:]
             elif args and args[0].quoted and definition.positional:
                 given[definition.positional] = Property(args[0].value, args[0].span)
@@ -208,6 +215,11 @@ def parse_webapp(source):
                     if fields.get(given['where'].value) is not bool or 'equals' not in given or declared.get(given['equals'].value) is not bool:fail(items[0].span,'Filter requires bool field and equals bool state')
                 elif 'equals' in given or 'active' in given:fail(items[0].span,'Filter options require where')
                 if 'active' in given and declared.get(given['active'].value) is not bool:fail(items[0].span,'Filter active requires bool state')
+            if kind in ('request','cancel','remote'):
+                service=services.get(given['service'].value)
+                if service is None:fail(items[0].span,'Unknown HTTP service')
+                if 'search' in given and declared.get(given['search'].value) is not str:fail(items[0].span,'Remote search requires text state')
+                if 'title' in given and not any(f.name==given['title'].value and f.kind=='text' for f in service.schema.fields):fail(items[0].span,'Remote title requires schema text field')
             if kind == "navigate" and given["to"].value not in views:
                 fail(items[0].span,"Unknown target view")
             if kind == "navigate" and "action" in given and given["action"].value not in program.actions:
@@ -262,7 +274,7 @@ def parse_webapp(source):
             if node.kind=='dialog':dialog_ids.add(key)
     for node in walk(all_widgets):
         if node.kind in ('open','close') and node.properties['to'].value not in dialog_ids:fail(node.span,'Unknown dialog')
-    return WebApp(program.name, program, tuple(all_widgets), views=views)
+    return WebApp(program.name, program, tuple(all_widgets), views=views, services=services)
 
 
 APP_CSS = r"""
@@ -332,7 +344,7 @@ def generate_webapp(document):
         elif kind in ("input", "checkbox"):
             tag = "div"
         attrs = {"class": "s-node s-" + kind + " " + ident +
-                 " v-" + props.get("variant", "default") + (" s-button" if kind in ("navigate","back","open","close","submit") else "")}
+                 " v-" + props.get("variant", "default") + (" s-button" if kind in ("navigate","back","open","close","submit","request","cancel") else "")}
         if "id" in props:
             attrs["id"] = props["id"]
         if "label" in props and kind not in ("input", "checkbox", "value"):
@@ -342,6 +354,12 @@ def generate_webapp(document):
         common = "<" + tag + "".join(attr(k, v) for k, v in attrs.items()) + ">"
         if definition.void:
             return common
+        if kind in ('request','cancel'):
+            return common[:-1]+attr('type','button')+attr('data-request' if kind=='request' else 'data-cancel-request',props['service'])+'>'+html.escape(props['text'])+'</button>'
+        if kind=='remote':
+            attrs=attr('data-remote',props['service'])+attr('aria-label',props.get('label',props['service']))
+            attrs+=''.join(attr('data-remote-'+k,props[k]) for k in ('search','title') if k in props)
+            return common[:-1]+attrs+'><p data-remote-status role="status" aria-live="polite">idle</p><div data-remote-results class="s-remote-grid"></div></section>'
         if kind=='select':
             field_id='choice-'+ident
             choices=''.join('<option'+attr('value',json.dumps(n.properties['value'].value,ensure_ascii=False))+'>'+html.escape(n.properties['text'].value)+'</option>' for n in node.children)
@@ -425,6 +443,7 @@ def generate_webapp(document):
         '  renderLists();',
         '  if(typeof activeView!=="undefined"){if(!canView(activeView))goView("main",true);showView();}',
         '  syncButtons();',
+        '  if(typeof remoteReady!=="undefined" && remoteReady)renderRemote();',
         '}',
         'function syncButtons(){',
         '  const invalid=!!document.querySelector("[data-input][aria-invalid=true]");',
@@ -514,6 +533,10 @@ def generate_webapp(document):
     from sedrava_web_ui import EXTRA_JS, EXTRA_CSS
     ui_js+=EXTRA_JS
     css+=EXTRA_CSS
+    if document.services:
+        from sedrava_web_services import generate_services
+        from sedrava_records_codegen import STRICT_JSON
+        ui_js='let remoteReady=false;\n'+('' if program.records or program.has_navigation else STRICT_JSON)+ui_js+generate_services(document.services, program)
     title = html.escape(document.name)
     index = ('<!doctype html>\n<html lang="en"><head><meta charset="utf-8">'
              '<meta name="viewport" content="width=device-width,initial-scale=1">'
@@ -524,6 +547,9 @@ def generate_webapp(document):
              '<script src="app.js" defer></script></head><body>'
              '<main id="content" class="s-webapp">' + markup + '</main>'
              '<p id="sedrava-error" role="alert" hidden></p></body></html>\n')
+    if document.services:
+        origins=sorted({item.origin for item in document.services.values() if item.origin})
+        index=index.replace("connect-src 'none'", "connect-src 'self'"+(' '+ ' '.join(origins) if origins else ''))
     return {"index.html": index.encode("utf-8"),
             "app.css": css.encode("utf-8"),
             "app.js": (domain_js + ui_js).encode("utf-8")}

@@ -3,6 +3,22 @@ import json
 from sedrava_records import ListValue, fingerprint
 
 
+STRICT_JSON = r'''// Strict bounded JSON parser: duplicate keys and non-JSON numeric constants reject.
+function strictJSON(raw) {
+  if (typeof raw !== 'string' || raw.length > 200000) throw Error('Snapshot too large');
+  let i=0;
+  function ws(){while (/\s/.test(raw[i]||'') && i<raw.length) { if (!' \n\r\t'.includes(raw[i])) throw Error('Invalid whitespace'); i++; }}
+  function value(depth=0){
+    if(depth>32) throw Error('JSON nesting limit'); ws(); const start=i;
+    if(raw[i]==='"'){ i++; while(i<raw.length){if(raw[i]==='\\'){i+=2;continue;} if(raw[i++]==='"') return JSON.parse(raw.slice(start,i));} throw Error('Unterminated string'); }
+    if(raw[i]==='{'){ i++;const out=Object.create(null); ws();if(raw[i]==='}'){i++;return out;} while(true){ws();if(raw[i]!=='"')throw Error('Key required');const key=value(depth+1);ws();if(raw[i++]!==':'||Object.hasOwn(out,key))throw Error('Duplicate or invalid key');out[key]=value(depth+1);ws();const end=raw[i++];if(end==='}')return out;if(end!==',')throw Error('Invalid object');}}
+    if(raw[i]==='['){i++;const out=[];ws();if(raw[i]===']'){i++;return out;}while(true){out.push(value(depth+1));ws();const end=raw[i++];if(end===']')return out;if(end!==',')throw Error('Invalid array');}}
+    const match=/^(?:true|false|null|-?(?:0|[1-9][0-9]*))/.exec(raw.slice(i));if(!match)throw Error('Invalid JSON');i+=match[0].length;return JSON.parse(match[0]);
+  }
+  const result=value();ws();if(i!==raw.length)throw Error('Trailing JSON');return result;
+}
+'''
+
 def metadata(program):
     return {k: {'capacity': v.kind.capacity, 'fields': {name: {int:'number', bool:'boolean', str:'string'}[kind] for name, kind in v.kind.record.fields}} for k, v in program.states.items() if isinstance(v, ListValue)}
 
@@ -37,21 +53,7 @@ function collectionOp(name, capacity, list, arg, record) {
   if (name === 'get') { const {id,...fields} = found; return fields; }
   return {next_id:list.next_id,items:name === 'remove' ? list.items.filter(row=>row.id!==arg) : list.items.map(row=>row.id===arg ? {id:arg,...record} : row)};
 }
-// Strict bounded JSON parser: duplicate keys and non-JSON numeric constants reject.
-function strictJSON(raw) {
-  if (typeof raw !== 'string' || raw.length > 200000) throw Error('Snapshot too large');
-  let i=0;
-  function ws(){while (/\s/.test(raw[i]||'') && i<raw.length) { if (!' \n\r\t'.includes(raw[i])) throw Error('Invalid whitespace'); i++; }}
-  function value(depth=0){
-    if(depth>32) throw Error('JSON nesting limit'); ws(); const start=i;
-    if(raw[i]==='"'){ i++; while(i<raw.length){if(raw[i]==='\\'){i+=2;continue;} if(raw[i++]==='"') return JSON.parse(raw.slice(start,i));} throw Error('Unterminated string'); }
-    if(raw[i]==='{'){ i++;const out=Object.create(null); ws();if(raw[i]==='}'){i++;return out;} while(true){ws();if(raw[i]!=='"')throw Error('Key required');const key=value(depth+1);ws();if(raw[i++]!==':'||Object.hasOwn(out,key))throw Error('Duplicate or invalid key');out[key]=value(depth+1);ws();const end=raw[i++];if(end==='}')return out;if(end!==',')throw Error('Invalid object');}}
-    if(raw[i]==='['){i++;const out=[];ws();if(raw[i]===']'){i++;return out;}while(true){out.push(value(depth+1));ws();const end=raw[i++];if(end===']')return out;if(end!==',')throw Error('Invalid array');}}
-    const match=/^(?:true|false|null|-?(?:0|[1-9][0-9]*))/.exec(raw.slice(i));if(!match)throw Error('Invalid JSON');i+=match[0].length;return JSON.parse(match[0]);
-  }
-  const result=value();ws();if(i!==raw.length)throw Error('Trailing JSON');return result;
-}
-function restoreSnapshot(raw) {
+''' + STRICT_JSON + r'''function restoreSnapshot(raw) {
   const saved = strictJSON(raw);
   if (!exactKeys(saved,['schema','signature','state']) || saved.schema !== 1 || saved.signature !== signature || !exactKeys(saved.state,persistentKeys)) throw Error('Incompatible snapshot');
   const candidate = {...initialState,...saved.state};

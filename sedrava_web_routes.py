@@ -34,7 +34,7 @@ let activeView='main';
 function routePath(name, candidate=state){return viewConfig[name].path.replace(/:([A-Za-z][A-Za-z0-9_]*)/g,(_,key)=>String(candidate[key]));}
 function canView(name,candidate=state){const spec=viewConfig[name];if(!spec)return false;const old=state;state=candidate;try{return !spec.guard||valuesOfState()[spec.guard]===true;}finally{state=old;}}
 function focusView(){const node=document.querySelector('[data-view="'+activeView+'"] h1');if(node){node.tabIndex=-1;node.focus({preventScroll:true});}}
-function showView(){document.querySelectorAll('[data-view]').forEach(el=>{el.hidden=el.dataset.view!==activeView;});document.querySelectorAll('[data-view][hidden] dialog[open]').forEach(d=>d.close());const hash='#'+routePath(activeView);if(routeReady&&location.hash!==hash)history.replaceState(history.state,'',hash);}
+function showView(){document.querySelectorAll('[data-view]').forEach(el=>{el.hidden=el.dataset.view!==activeView;});document.querySelectorAll('[data-view][hidden] dialog[open]').forEach(d=>d.close());const hash='#'+routePath(activeView);if(routeReady&&location.hash!==hash)history.replaceState(history.state,'',hash);window.dispatchEvent(new Event('sedrava:view'));}
 function goView(name, replace=false, candidate=state){
   if(!canView(name,candidate)){showError('View unavailable: missing data or invalid route');return false;}
   const depth=replace?0:(history.state?.sedravaDepth||0)+1;
