@@ -54,8 +54,8 @@ class AndroidBaselineTests(unittest.TestCase):
                 model="test-model", agent="test-agent", seed=1,
                 temperature="not exposed", toolchain="test",
                 seconds=300, tokens=12000, attempts=3,
-                starter=["examples/counter.sdr"],
-                reference=["docs/QUICKSTART.md"],
+                starter=["benchmarks/agent/starters/empty-v0.md"],
+                reference=["benchmarks/agent/references/sedrava-web-v0.md"],
                 output=Path(tmp) / "trial")
             script.prepare(args)
             manifest = json.loads((args.output / "manifest.json").read_text())

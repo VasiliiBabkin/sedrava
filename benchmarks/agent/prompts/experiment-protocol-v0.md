@@ -35,8 +35,8 @@ Example, after substituting the pinned 40-character Git SHA and actual toolchain
       --model MODEL_ID --agent AGENT_VERSION --seed 1 \
       --toolchain "Python 3.12; Chromium 141" \
       --seconds 600 --tokens 20000 --attempts 3 \
-      --starter examples/counter.sdr \
-      --reference docs/QUICKSTART.md \
+      --starter benchmarks/agent/starters/empty-v0.md \
+      --reference benchmarks/agent/references/sedrava-web-v0.md \
       --output build/agent-trials/sedrava-web-001
 
 This script copies the specified files, hashes the references and task, emits a

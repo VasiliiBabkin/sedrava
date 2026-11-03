@@ -26,6 +26,9 @@ def relative_file(value: str) -> Path:
     source = (REPO / value).resolve()
     if not source.is_relative_to(REPO) or not source.is_file():
         raise ValueError("Input must be an existing repository file: " + value)
+    relative = source.relative_to(REPO)
+    if relative.parts[:3] == ("benchmarks", "agent", "baselines") or relative.as_posix() == "examples/counter.sdr":
+        raise ValueError("Do not expose benchmark reference solutions as agent inputs: " + value)
     if source.stat().st_size > 2_000_000:
         raise ValueError("Input too large: " + value)
     return source.relative_to(REPO)
