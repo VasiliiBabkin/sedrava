@@ -10,10 +10,11 @@ import unittest
 import os
 
 from playwright.sync_api import sync_playwright
-from sedrava_webapp import build_webapp
-
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(ROOT))
+from sedrava_webapp import build_webapp
 SOURCE = ROOT / "examples/webapp_011_counter.sdr"
 
 
