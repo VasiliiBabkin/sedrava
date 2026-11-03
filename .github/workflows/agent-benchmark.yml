@@ -114,7 +114,7 @@ jobs:
           profile: pixel_2
           disable-animations: true
           script: |
-            set -euo pipefail
+            set -eu
             python benchmarks/agent/acceptance/counter_android_device.py --apk build/agent-benchmark-android/sedrava/app/build/outputs/apk/debug/app-debug.apk --package org.sedrava.benchmark.sedrava --output build/agent-benchmark-android/evidence/sedrava.json
             python benchmarks/agent/acceptance/counter_android_device.py --apk build/agent-benchmark-android/kotlin/app/build/outputs/apk/debug/app-debug.apk --package org.sedrava.benchmark.kotlin --output build/agent-benchmark-android/evidence/kotlin.json
       - name: Upload Android acceptance evidence
