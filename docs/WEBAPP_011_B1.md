@@ -1,5 +1,8 @@
 # Sedrava WebApp 0.11 — B1 Scalar Vertical Slice
 
+> Historical slice scope / исторический срез. Current integration adds routes, composition, typed HTTP, custom assets and domain queries. See [English guide](011_WEB_PLATFORM.en.md), [русское руководство](011_WEB_PLATFORM.ru.md) and [actual status](011_IMPLEMENTATION_STATUS.md). Statements below about missing features describe the original slice, not the complete integration branch.
+
+
 **Status:** experimental branch implementation, not part of the released 0.10 language. This is a limited, stateful Web application mode, distinct from static site mode and the existing 0.10 app mode.
 
 ## Quick start

@@ -1,5 +1,8 @@
 # Web UI 0.11 — экспериментальный срез A
 
+> Historical slice scope / исторический срез. Current integration adds routes, composition, typed HTTP, custom assets and domain queries. See [English guide](011_WEB_PLATFORM.en.md), [русское руководство](011_WEB_PLATFORM.ru.md) and [actual status](011_IMPLEMENTATION_STATUS.md). Statements below about missing features describe the original slice, not the complete integration branch.
+
+
 Реализован в исходниках ветки `feature/web-ui-011-slice-a`; это не опубликованная версия 0.11. Версия пакета пока остаётся 0.10.0rc2. Ранее опубликованный RC2 **не содержит** новый режим. Синтаксис приложений и команды `build web` / `build android` сохраняют прежний смысл. [English reference](WEB_UI_011.en.md).
 
 ## Сборка и просмотр

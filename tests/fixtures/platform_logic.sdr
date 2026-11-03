@@ -3,10 +3,16 @@ record Item:
     title: text
     score: int
     done: bool
+record Label:
+    title: text
+fn labeled(row: Item) -> Label = Label(title=row.title)
 fn matches(row: Item, query: text) -> bool = contains(row.title, query)
 fn raised(row: Item, extra: int) -> Item = Item(title=row.title, score=row.score+extra, done=row.done)
 state rows: list<Item>(max=8) = []
 state projected: list<Item>(max=8) = []
+state labels: list<Label>(max=8) = []
+state day="2024-02-28"
+state text_size=0
 state total=0
 state found=0
 state yes=false
@@ -16,12 +22,16 @@ action seed:
     rows=append(rows,Item(title="",score=2,done=true))
     rows=append(rows,Item(title="a",score=1,done=true))
 action query:
+    labels=map(rows,labeled)
     projected=sort(filter(rows,"done",true),"title")
     total=sum(rows,"score")
     found=find(rows,matches,"a")
     yes=any(rows,"done",false)
     every=all(rows,"done",true)
 action transform:
+    let old_day=day
+    day=date_add(old_day,1)
+    text_size=text_length("a😀é") if is_date(day) else 0
     rows=map(rows,raised,1)
 action remove_first:
     rows=remove(rows,1)

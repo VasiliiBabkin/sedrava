@@ -529,7 +529,7 @@ def generate_webapp(document, source_dir=".", _inputs=None):
         '  renderLists();renderEach();',
         '  if(typeof activeView!=="undefined"){if(!canView(activeView))goView("main",true);showView();}',
         '  syncButtons();',
-        '  if(typeof remoteReady!=="undefined" && remoteReady)renderRemote();',
+        '  if(typeof remoteReady!=="undefined" && remoteReady){syncServiceViews();renderRemote();}',
         '}',
         'function syncButtons(){',
         '  const invalid=!!document.querySelector("[data-input][aria-invalid=true]");',

@@ -30,3 +30,10 @@ Use a verified local wheel in a separate environment; no PyPI/TestPyPI RC has be
 [Release notes EN](RELEASE_NOTES_0_10_0rc2.en.md) · [RU](RELEASE_NOTES_0_10_0rc2.ru.md) · [Upgrade/rollback EN](UPGRADE_0_10_0rc2.en.md) · [RU](UPGRADE_0_10_0rc2.ru.md) · [RC2 report](RC2_010_REPORT.md).
 The historical rc2 source was 0.10.0rc2 (Android 10002); **published 0.10.0** uses Android versionCode **10003**. Historical artifacts and tags remain immutable.
 Версия 0.10.0 опубликована, Android versionCode 10003. Проверка конечного APK на физическом устройстве требует отдельного подтверждения.
+
+
+## Experimental 0.11 integration / Экспериментальная интеграция
+
+The integration preview adds shared composition, pure functions, bounded collection queries, forms/tables/dialogs, hash routes, local styling and typed public HTTP. It is not a published 0.11.0 or a backend/auth/database service.
+
+Реализованные возможности, сборка четырёх проектов и ограничения: [English guide](011_WEB_PLATFORM.en.md), [руководство](011_WEB_PLATFORM.ru.md), [actual status](011_IMPLEMENTATION_STATUS.md). Existing published 0.10.0 instructions above remain applicable to their original targets.

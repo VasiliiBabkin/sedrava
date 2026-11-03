@@ -56,6 +56,18 @@ action add_company:
     companies = append(companies, Company(name=company_name, industry=industry))
     company_name = ""
     industry = ""
+action rename_company:
+    require has(companies, company_id)
+    require company_name != ""
+    let current_company = get(companies, company_id)
+    companies = update(companies, company_id, Company(name=company_name, industry=current_company.industry))
+    company_name = ""
+action delete_company:
+    require has(companies, company_id)
+    require count(filter(contacts, "company", company_id)) == 0
+    companies = remove(companies, company_id)
+    company_id = 0
+    contact_id = 0
 action add_contact:
     require has(companies, company_id)
     require contact_name != ""
@@ -109,7 +121,17 @@ view companies at "/companies":
             input search_text label "Search companies"
             table companies select company_id title name fields "name industry" search search_text sort name label "Company directory"
             when company_selected:
-                navigate "Company contacts" to contacts
+                column:
+                    navigate "Company contacts" to contacts
+                    open "Rename company" to edit_company
+                    button "Delete company" action delete_company variant secondary
+            dialog id edit_company label "Rename selected company":
+                column:
+                    heading "Rename company" level 2
+                    form action rename_company:
+                        input company_name label "New company name" kind text
+                        submit "Save company name"
+                    close "Close company editor" to edit_company
 view contacts at "/companies/:company_id" when company_selected:
     container max 1180 padding 24 class "brand-shell":
         column gap 24:

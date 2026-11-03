@@ -113,15 +113,23 @@ function renderRemote(){
 }
 for(const [name,config] of Object.entries(serviceConfigs)){
   const current={status:'idle',data:null,error:'',sequence:0,controller:null};services[name]=current;
-  const cacheKey='sedrava-api:'+document.title+':'+name+':'+JSON.stringify(config);let cacheRejected=false;
-  if(config.cache){try{const raw=localStorage.getItem(cacheKey);if(raw!==null){current.data=checkRemote(strictJSON(raw),config);current.status='success';}}catch(_){cacheRejected=true;current.error='Saved API data rejected; original retained';}}
+  let cacheKey='',cacheRejected=false;
+  const boundPath=()=>config.path.replace(/:([A-Za-z][A-Za-z0-9_]*)/g,(_,key)=>String(valuesOfState()[key]));
+  current.sync=()=>{
+    const path=boundPath();if(current.path===path)return;
+    current.sequence++;current.controller?.abort();current.controller=null;current.path=path;
+    current.status='idle';current.data=null;current.error='';cacheRejected=false;
+    cacheKey='sedrava-api:'+location.pathname+':'+document.title+':'+name+':'+JSON.stringify(config)+':'+path;
+    if(config.cache){try{const raw=localStorage.getItem(cacheKey);if(raw!==null){current.data=checkRemote(strictJSON(raw),config);current.status='success';}}catch(_){cacheRejected=true;current.error='Saved API data rejected; original retained';}}
+  };
+  current.sync();
   current.cancel=()=>{current.sequence++;current.controller?.abort();current.controller=null;if(current.status==='loading'){current.status='idle';current.error='Request cancelled';}renderRemote();};
   current.load=async()=>{
-    current.cancel();const sequence=++current.sequence;const controller=new AbortController();current.controller=controller;let expired=false;
+    current.sync();current.cancel();const sequence=++current.sequence;const controller=new AbortController();current.controller=controller;let expired=false;
     const timer=setTimeout(()=>{expired=true;controller.abort();},config.timeout);
     current.status='loading';current.error='';renderRemote();
     try{
-      const values=valuesOfState();const path=config.path.replace(/:([A-Za-z][A-Za-z0-9_]*)/g,(_,key)=>String(values[key]));
+      const path=current.path;
       const target=new URL(config.origin+path,location.href);
       if(target.origin!==(config.origin||location.origin))throw Error('Origin capability mismatch');
       const body=serviceBodies[name]?JSON.stringify(serviceBodies[name]()):undefined;
@@ -151,6 +159,7 @@ document.querySelectorAll('[data-request]').forEach(el=>el.addEventListener('cli
 document.querySelectorAll('[data-cancel-request]').forEach(el=>el.addEventListener('click',()=>services[el.dataset.cancelRequest].cancel()));
 function syncServiceViews(){
   for(const [name,service] of Object.entries(services)){
+    service.sync();
     const panels=[...document.querySelectorAll('[data-remote]')].filter(el=>el.dataset.remote===name);
     const visible=panels.some(el=>!el.closest('[data-view][hidden]'));
     if(!visible&&service.controller)service.cancel();

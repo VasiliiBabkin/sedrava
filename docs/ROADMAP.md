@@ -53,3 +53,10 @@ Release tag `v0.10.0` resolves to commit `688a320025a0d38235eb90c780362ec26b0708
 Implemented experimentally in the feature branch: `build site`, 13 static primitives, typed styles, responsive HTML/CSS and checked local assets. Реализовано экспериментально в ветке: генерация сайтов, 13 статических компонентов, типизированные стили, адаптивность и проверка ресурсов. This does not announce a 0.11 release or change the production site. Это не выпуск 0.11 и не замена рабочего сайта.
 
 [English reference](WEB_UI_011.en.md) · [Русская справка](WEB_UI_011.ru.md). Next: semantic navigation/footer, badges/callouts, code blocks and documentation navigation; interactive forms/tabs/dialogs require later contracts and tests. Далее: семантическая навигация/footer, badge/callout, code block; интерактивные компоненты требуют следующих контрактов и тестов.
+
+
+## Experimental 0.11 integration / Экспериментальная интеграция
+
+The integration preview adds shared composition, pure functions, bounded collection queries, forms/tables/dialogs, hash routes, local styling and typed public HTTP. It is not a published 0.11.0 or a backend/auth/database service.
+
+Реализованные возможности, сборка четырёх проектов и ограничения: [English guide](011_WEB_PLATFORM.en.md), [руководство](011_WEB_PLATFORM.ru.md), [actual status](011_IMPLEMENTATION_STATUS.md). Existing published 0.10.0 instructions above remain applicable to their original targets.

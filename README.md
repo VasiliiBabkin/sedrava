@@ -136,3 +136,10 @@ python -m http.server 8000 --directory build/site
 ```
 
 13 static primitives, responsive layouts and safe assets; no deployment. 13 статических компонентов, адаптивность и безопасные ресурсы; без публикации сайта. [English](docs/WEB_UI_011.en.md) · [Русский](docs/WEB_UI_011.ru.md). Existing application commands are unchanged. Команды приложений не изменены.
+
+
+## Experimental 0.11 integration / Экспериментальная интеграция
+
+The integration preview adds shared composition, pure functions, bounded collection queries, forms/tables/dialogs, hash routes, local styling and typed public HTTP. It is not a published 0.11.0 or a backend/auth/database service.
+
+Реализованные возможности, сборка четырёх проектов и ограничения: [English guide](docs/011_WEB_PLATFORM.en.md), [руководство](docs/011_WEB_PLATFORM.ru.md), [actual status](docs/011_IMPLEMENTATION_STATUS.md). Existing published 0.10.0 instructions above remain applicable to their original targets.

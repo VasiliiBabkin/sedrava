@@ -1,5 +1,8 @@
 # Sedrava 0.11+ — From sites to complete Web applications
 
+> Historical slice scope / исторический срез. Current integration adds routes, composition, typed HTTP, custom assets and domain queries. See [English guide](011_WEB_PLATFORM.en.md), [русское руководство](011_WEB_PLATFORM.ru.md) and [actual status](011_IMPLEMENTATION_STATUS.md). Statements below about missing features describe the original slice, not the complete integration branch.
+
+
 **Status: implementation plan, not shipped functionality.** Published 0.10 app mode and experimental 0.11 static site mode remain separate. The purpose is to join them without breaking existing `.sdr` programs or weakening invariants.
 
 ## Product contract

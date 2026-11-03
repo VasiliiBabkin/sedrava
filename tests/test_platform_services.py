@@ -21,3 +21,7 @@ class Services(unittest.TestCase):
     def test_public_get_connector_is_isolated(self):
         doc=parse_webapp(SOURCE.replace('origin self','origin "https://api.example.com"'))
         self.assertIn(b"connect-src 'self' https://api.example.com",generate_webapp(doc)['index.html'])
+
+    def test_origin_is_normalized_for_browser_capability_comparison(self):
+        doc=parse_webapp(SOURCE.replace('origin self','origin "https://API.EXAMPLE.COM:443/"'))
+        self.assertEqual(doc.services['catalog'].origin,'https://api.example.com')

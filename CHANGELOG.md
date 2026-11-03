@@ -98,3 +98,13 @@ This is Sedrava's first candidate; historical Intent 0.7 and abandoned Sedrava 0
 - Same-SHA immutable RC kit with wheel/sdist/two debug APKs/Web/test evidence, actual manifests/checksums and post-upload delivery identity.
 - Clean installs cover 0.9, text, records/collections/navigation; published 0.9 wheel -> separate RC -> original environment tested. Real same-key Android development-to-RC update gate added.
 - RU/EN release notes, installation/rollback, physical-device limitations and separate owner approval instructions. No tag, release, merge, index upload or deployment.
+
+
+## Unreleased 0.11 integration preview (not a version announcement)
+
+- Preserve merge history of Web UI, WebApp scalar/collections, light theme and API0 work.
+- Add bounded local modules, typed components/slots, pure functions/local bindings/conditionals and portable text/date/collection expressions.
+- Add guarded hash routing/history, native forms/select/dialogs, stable-ID tables and typed custom row templates.
+- Add public bounded typed HTTP mutations/cancel/cache, local CSS/fonts/themes and static SEO assets.
+- Add four source-driven clients and real Chromium/axe/common-IR differential checks. Server/auth/database adapters remain unsupported; release status is NO-GO pending remaining gates.
+- Руководства RU/EN описывают фактическую поддержку и ограничения; production-сайт и опубликованные артефакты не изменялись.

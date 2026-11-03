@@ -113,7 +113,7 @@ def attach(files, settings, source_dir, pages=None):
             canonical=origin+page.path
             head+='<link rel="canonical" href="'+html.escape(canonical,quote=True)+'"><meta property="og:url" content="'+html.escape(canonical,quote=True)+'">'
             head+='<meta property="og:title" content="'+html.escape(page.title,quote=True)+'"><meta property="og:description" content="'+html.escape(page.description,quote=True)+'"><meta property="og:type" content="website">'
-            if 'social-image' in images:head+='<meta property="og:image" content="'+origin+'/'+images['social-image']+'">'
+            if 'social-image' in images:head+='<meta property="og:image" content="'+html.escape(origin+'/'+images['social-image'],quote=True)+'">'
         text=data.decode().replace('</head>',head+'</head>').replace("style-src 'self';", "style-src 'self'; font-src 'self';")
         files[path]=text.encode()
     if origin and pages:

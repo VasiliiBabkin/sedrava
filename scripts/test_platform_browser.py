@@ -1,6 +1,9 @@
 """Integration acceptance against generated Sedrava sources, never patched output."""
 import functools
 import json
+import re
+import os
+import importlib.metadata
 import time
 from urllib.parse import urlsplit
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -23,6 +26,12 @@ class Quiet(SimpleHTTPRequestHandler):
         try:self.wfile.write(payload)
         except (BrokenPipeError,ConnectionResetError):pass
     def do_GET(self):
+        detail=re.fullmatch(r'/api/products/([0-9]+)',urlsplit(self.path).path)
+        if detail:
+            identity=int(detail[1]);Quiet.calls.append(('GET',self.path,None))
+            if Quiet.mode=='error':return self.reply({'error':'offline'},503)
+            if identity==3:time.sleep(.3)
+            return self.reply({'id':identity,'title':'Product '+str(identity),'available':True})
         if urlsplit(self.path).path!='/api/products':return super().do_GET()
         Quiet.calls.append(('GET',self.path,None))
         if Quiet.mode in ('slow','timeout'):time.sleep(.5 if Quiet.mode=='slow' else 1.5)
@@ -53,11 +62,17 @@ class Platform(unittest.TestCase):
         from site_codegen import build_site
         source=ROOT/'examples/platform_site.sdr';build_site(source.read_text(),cls.root/'site',source)
         source=ROOT/'examples/platform_crm.sdr';build_webapp(source.read_text(),cls.root/'crm',source)
+        dynamic='webapp "Parameter cache"\nstate target=1\nservice product:\n    origin self\n    path "/api/products/:target"\n    auto true\n    cache true\n    response one:\n        id int32\n        title text\n        available bool\nview main:\n    heading "Parameter cache"\n    input target label "Product ID"\n    request "Reload" service product\n    remote product title title label "Product"\n'
+        build_webapp(dynamic,cls.root/'dynamic',ROOT/'examples/platform_catalog.sdr')
         cls.server=ThreadingHTTPServer(('127.0.0.1',0),functools.partial(Quiet,directory=cls.folder.name))
         cls.thread=threading.Thread(target=cls.server.serve_forever,daemon=True);cls.thread.start()
-        cls.driver=sync_playwright().start();cls.browser=cls.driver.chromium.launch(executable_path=shutil.which('chromium'),args=['--no-sandbox'])
+        cls.driver=sync_playwright().start();cls.engine=os.environ.get('SEDRAVA_BROWSER','chromium')
+        browser=getattr(cls.driver,cls.engine)
+        options={'executable_path':os.environ.get('SEDRAVA_CHROMIUM') or shutil.which('chromium'),'args':['--no-sandbox']} if cls.engine=='chromium' else {}
+        cls.browser=browser.launch(**options)
         cls.url='http://127.0.0.1:'+str(cls.server.server_port)
         cls.evidence=ROOT/'build/platform-evidence';cls.evidence.mkdir(parents=True,exist_ok=True)
+        (cls.evidence/'browser-toolchain.json').write_text(json.dumps({'engine':cls.engine,'browser_version':cls.browser.version,'playwright':importlib.metadata.version('playwright')},indent=2)+'\n')
     @classmethod
     def tearDownClass(cls):
         cls.browser.close();cls.driver.stop();cls.server.shutdown();cls.server.server_close();cls.thread.join();cls.folder.cleanup()
@@ -80,7 +95,7 @@ class Platform(unittest.TestCase):
         p.get_by_role('button',name='Back to tasks').click();p.wait_for_url('**#/')
         self.assertIn('Completed',p.get_by_role('listitem').filter(has=p.get_by_role('button',name='Select Renamed',exact=True)).inner_text())
         p.go_forward();p.wait_for_url('**#/tasks/1')
-        p.get_by_role('button',name='Delete task',exact=True).click();self.assertTrue(p.locator('dialog').evaluate('e=>e.open'))
+        p.get_by_role('button',name='Delete task',exact=True).click();self.assertTrue(p.get_by_role('dialog',name='Confirm task deletion',exact=True).evaluate('e=>e.open'))
         p.keyboard.press('Escape');self.assertFalse(p.locator('dialog').evaluate('e=>e.open'))
         p.get_by_role('button',name='Delete task',exact=True).click();p.get_by_role('button',name='Confirm delete').click()
         p.wait_for_url('**#/');self.assertFalse(p.locator('dialog').evaluate('e=>e.open'))
@@ -133,6 +148,25 @@ class Platform(unittest.TestCase):
         Quiet.mode='error';p.reload();self.assertIn('A public product',p.locator('[data-remote="catalog"]').inner_text())
         (self.evidence/'http-calls.json').write_text(json.dumps(Quiet.calls,indent=2))
 
+    def test_parameterized_http_cache_and_stale_response_isolation(self):
+        p=self.page;p.goto(self.url+'/dynamic/index.html');panel=p.locator('[data-remote="product"]')
+        panel.get_by_role('heading',name='Product 1',exact=True).wait_for()
+        p.get_by_label('Product ID',exact=True).fill('2')
+        panel.get_by_role('heading',name='Product 2',exact=True).wait_for()
+        self.assertNotIn('Product 1',panel.inner_text())
+        p.get_by_label('Product ID',exact=True).fill('3')
+        panel.locator('[data-remote-status]').get_by_text('loading',exact=True).wait_for()
+        p.get_by_label('Product ID',exact=True).fill('2')
+        panel.get_by_role('heading',name='Product 2',exact=True).wait_for()
+        p.wait_for_timeout(450)
+        self.assertNotIn('Product 3',panel.inner_text())
+        Quiet.mode='error';p.get_by_label('Product ID',exact=True).fill('1')
+        panel.get_by_role('heading',name='Product 1',exact=True).wait_for()
+        p.get_by_label('Product ID',exact=True).fill('2')
+        panel.get_by_role('heading',name='Product 2',exact=True).wait_for()
+        keys=p.evaluate('Object.keys(localStorage).filter(k=>k.startsWith("sedrava-api:"))')
+        self.assertEqual(len(keys),2)
+
     def test_static_project_composition_seo_font_and_navigation(self):
         p=self.page;p.goto(self.url+'/site/index.html');p.evaluate('document.fonts.ready')
         self.assertTrue(p.evaluate('document.fonts.check("16px PlatformInter")'))
@@ -158,11 +192,23 @@ class Platform(unittest.TestCase):
         self.assertTrue(p.get_by_role('button',name='Add contact',exact=True).is_disabled())
         p.get_by_label('Email',exact=True).fill('ada@example.com');p.get_by_role('button',name='Add contact',exact=True).click()
         p.get_by_role('button',name='Select Ada',exact=True).click();p.get_by_role('button',name='Edit selected contact',exact=True).click()
-        self.assertTrue(p.locator('dialog').evaluate('e=>e.open'))
+        self.assertTrue(p.get_by_role('dialog',name='Edit selected contact',exact=True).evaluate('e=>e.open'))
         p.get_by_label('New contact name',exact=True).fill('Ada Lovelace');p.get_by_role('button',name='Save contact name',exact=True).click();p.get_by_role('button',name='Close editor',exact=True).click()
         p.get_by_role('button',name='Toggle active',exact=True).click()
         self.assertIn('false',p.get_by_role('table',name='Contacts',exact=True).inner_text())
         p.reload();p.wait_for_url('**#/companies/1');self.assertIn('Ada Lovelace',p.get_by_role('table',name='Contacts',exact=True).inner_text())
+        # A related contact prevents deleting its company; rejection retains the records.
+        p.get_by_role('button',name='Back to companies',exact=True).click()
+        p.get_by_role('button',name='Delete company',exact=True).click()
+        self.assertTrue(p.locator('#sedrava-error').is_visible())
+        self.assertIn('Acme',p.get_by_role('table',name='Company directory',exact=True).inner_text())
+        p.get_by_role('button',name='Rename company',exact=True).click()
+        p.get_by_label('New company name',exact=True).fill('Acme Studio')
+        p.get_by_role('button',name='Save company name',exact=True).click()
+        p.get_by_role('button',name='Close company editor',exact=True).click()
+        self.assertIn('Acme Studio',p.get_by_role('table',name='Company directory',exact=True).inner_text())
+        p.get_by_role('button',name='Company contacts',exact=True).click()
+
         for width in (320,360,390,768,1024,1440):
             p.set_viewport_size({'width':width,'height':900});self.assertLessEqual(p.evaluate('document.documentElement.scrollWidth'),width+1)
             p.screenshot(path=str(self.evidence/f'crm-{width}.png'),full_page=True)

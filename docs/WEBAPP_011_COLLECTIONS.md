@@ -1,5 +1,8 @@
 # Sedrava 0.11 experimental WebApp — typed records and collections
 
+> Historical slice scope / исторический срез. Current integration adds routes, composition, typed HTTP, custom assets and domain queries. See [English guide](011_WEB_PLATFORM.en.md), [русское руководство](011_WEB_PLATFORM.ru.md) and [actual status](011_IMPLEMENTATION_STATUS.md). Statements below about missing features describe the original slice, not the complete integration branch.
+
+
 **Status:** experimental B1 collections slice, stacked on B1 scalar UI PR #34.
 Not part of the stable Sedrava release. No deployment.
 
