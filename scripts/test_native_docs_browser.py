@@ -1,0 +1,33 @@
+"""Real-browser acceptance of the compiler's optional documentation contract."""
+from pathlib import Path
+import sys
+sys.path[:0]=[str(Path(__file__).resolve().parents[1]),str(Path(__file__).resolve().parents[1]/'tests')]
+import functools
+from http.server import SimpleHTTPRequestHandler,ThreadingHTTPServer
+import os,shutil,tempfile,threading,unittest
+from playwright.sync_api import sync_playwright
+from test_native_docs import NativeDocs,SOURCE,COUNTER
+from site_codegen import build_site
+class Browser(unittest.TestCase):
+    def test_search_embedded_counter_persistence_source_and_scoped_reset(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);NativeDocs().fixture(root);build_site(SOURCE,root/'out',root/'site.sdr')
+            handler=functools.partial(SimpleHTTPRequestHandler,directory=str(root/'out'))
+            server=ThreadingHTTPServer(('127.0.0.1',0),handler);thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
+            try:
+                with sync_playwright() as p:
+                    engine=os.environ.get('SEDRAVA_BROWSER','chromium');options={'executable_path':shutil.which('chromium'),'args':['--no-sandbox']} if engine=='chromium' else {}
+                    browser=getattr(p,engine).launch(**options);page=browser.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
+                    page.goto('http://127.0.0.1:'+str(server.server_port)+'/');frame=page.frame_locator('iframe')
+                    frame.get_by_role('button',name='Add',exact=True).click();self.assertEqual(frame.locator('output').inner_text(),'1')
+                    page.get_by_role('button',name='Reload / Перезагрузить').click();self.assertEqual(frame.locator('output').inner_text(),'1')
+                    self.assertEqual(page.locator('.doc-demo code').text_content(),COUNTER)
+                    page.evaluate('localStorage.setItem("unrelated","keep")');page.get_by_role('button',name='Reset this demo / Сбросить пример').click()
+                    frame.get_by_role('button',name='Add',exact=True).wait_for();page.wait_for_function('document.querySelector("iframe").contentDocument.querySelector("output").textContent==="0"')
+                    self.assertEqual(page.evaluate('localStorage.getItem("unrelated")'),'keep')
+                    page.get_by_label('Search',exact=True).fill('ПРИВЕТ');self.assertEqual(page.locator('[data-search-results] a').count(),2)
+                    page.get_by_label('Search',exact=True).press('ArrowDown');self.assertEqual(page.evaluate('document.activeElement.tagName'),'A')
+                    page.keyboard.press('Escape');self.assertEqual(page.locator('[data-search-results] a').count(),0)
+                    self.assertEqual(errors,[]);browser.close()
+            finally:server.shutdown();server.server_close();thread.join()
+if __name__=='__main__':unittest.main(verbosity=2)

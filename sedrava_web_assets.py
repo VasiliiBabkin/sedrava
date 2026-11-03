@@ -109,6 +109,7 @@ def attach(files, settings, source_dir, pages=None):
     for path,data in list(files.items()):
         if not path.endswith('.html'):continue
         page=next((p for p in pages if p.path.lstrip('/')+'index.html'==path),None) if pages else None
+        if pages is not None and page is None:continue
         def link(target):
             import posixpath
             return posixpath.relpath(target,posixpath.dirname(path) or '.')
