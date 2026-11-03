@@ -14,8 +14,8 @@ import time
 import xml.etree.ElementTree as ET
 
 
-COUNT = re.compile(r"^count:\\s*(-?[0-9]+)$")
-BOUNDS = re.compile(r"^\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]$")
+COUNT = re.compile(r"^count:\s*(-?[0-9]+)$")
+BOUNDS = re.compile(r"^\[(\d+),(\d+)\]\[(\d+),(\d+)\]$")
 DUMP_PATH = "/sdcard/agent-benchmark-ui.xml"
 
 
@@ -142,7 +142,7 @@ def main(argv=None):
                                stderr=subprocess.DEVNULL, timeout=20)
         except Exception:
             pass
-    args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\\n",
+    args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n",
                            encoding="utf-8")
     print(json.dumps({"passed": report["passed"], "cases": len(report["observations"]),
                       "error": report["error"]}, ensure_ascii=False), flush=True)
