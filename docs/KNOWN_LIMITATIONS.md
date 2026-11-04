@@ -1,5 +1,7 @@
 # Known limitations / Известные ограничения (0.10.0)
 
+**Current release distinction:** [0.11.0rc1 was published experimentally](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0rc1) ([PyPI](https://pypi.org/project/sedrava/0.11.0rc1/)); stable **0.11.0 is still under review**, not published. The 0.10 details below describe that historical baseline. The 0.11 Web targets still do not provide a trusted backend, database, authentication, automatic migration, physical Android certification or production downgrade guarantee. [Stable gates](STABLE_RELEASE_GATES_011.md).
+
 Implemented: int32/bool/text, typed records, ordered bounded collections, atomic actions, strict snapshots, guarded multi-screen navigation, Web/Compose and independent [Android identities](ANDROID_ID.en.md). Version 0.10.0 is published on [PyPI](https://pypi.org/project/sedrava/0.10.0/) and [GitHub](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.10.0). 0.9.0a1 remains the historical GitHub baseline.
 
 - Experimental grammar/API; no stable pre-1.0 compatibility promise. No division, modules, loops, services, timers, deep links, route parameters, nested records or migrations. [Records](RECORDS_COLLECTIONS_010.md), [navigation](NAVIGATION_010_CONTRACT.md).
