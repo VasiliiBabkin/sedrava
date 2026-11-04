@@ -1,0 +1,11 @@
+webapp "Scoped functions"
+import "namespace_012_math.sdr" as math
+state count = 0
+derive value = math.double_after_increment(count)
+action increment: count = count + 1
+view main:
+    container max 720:
+        column gap 16:
+            heading "Scoped functions"
+            value value label "Double after increment"
+            button "Increment" action increment
