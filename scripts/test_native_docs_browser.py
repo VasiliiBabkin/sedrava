@@ -41,6 +41,11 @@ class Browser(unittest.TestCase):
                     page.goto(base+'/ru/');page.goto(base+'/');page.locator('iframe').scroll_into_view_if_needed()
                     frame.get_by_role('button',name='Details',exact=True).click()
                     page.go_back();self.assertTrue(page.url.endswith('/ru/'))
+                    # A real missing script must never be described as a running demo.
+                    (root/'out/live/counter/app.js').unlink()
+                    failed=browser.new_page();failed.goto(base+'/');failed.locator('iframe').scroll_into_view_if_needed()
+                    expect(failed.locator('[data-demo-status]')).to_contain_text('Preview unavailable')
+                    failed.close()
                     self.assertEqual(errors,[]);browser.close()
             finally:server.shutdown();server.server_close();thread.join()
 if __name__=='__main__':unittest.main(verbosity=2)

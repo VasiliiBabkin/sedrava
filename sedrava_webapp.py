@@ -644,6 +644,7 @@ def generate_webapp(document, source_dir=".", _inputs=None):
     if document.services:
         origins=sorted({item.origin for item in document.services.values() if item.origin})
         index=index.replace("connect-src 'none'", "connect-src 'self'"+(' '+ ' '.join(origins) if origins else ''))
+    ui_js+='\ndocument.documentElement.dataset.sedravaReady=\"true\";\n'
     files={"index.html": index.encode("utf-8"),
             "app.css": css.encode("utf-8"),
             "app.js": (domain_js + ui_js).encode("utf-8")}
