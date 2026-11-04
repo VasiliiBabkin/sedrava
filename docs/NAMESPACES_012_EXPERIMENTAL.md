@@ -4,7 +4,7 @@
 
 ## Actual source example
 
-Module `examples/namespace_012_first.sdr`:
+Module `examples/namespaces/first.sdr`:
 
 ```sedrava
 module example.first
@@ -17,8 +17,8 @@ Usage in `examples/namespace_012_site.sdr`:
 
 ```sedrava
 site "Namespace demonstration"
-import "namespace_012_first.sdr" as first
-import "namespace_012_second.sdr" as second
+import "namespaces/first.sdr" as first
+import "namespaces/second.sdr" as second
 page home at "/":
     title "Namespace demonstration"
     heading "Two modules, one exported name"

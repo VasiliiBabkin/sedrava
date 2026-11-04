@@ -1,5 +1,5 @@
 webapp "Scoped functions"
-import "namespace_012_math.sdr" as math
+import "namespaces/math.sdr" as math
 state count = 0
 derive value = math.double_after_increment(count)
 action increment: count = count + 1

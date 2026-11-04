@@ -38,6 +38,7 @@ py-modules = ['sedrava', 'sedrava_version', 'sedrava_android_identity', 'sedrava
 "share/sedrava/docs" = ["docs/*.md"]
 "share/sedrava/examples/assets" = ["examples/assets/*"]
 "share/sedrava/examples" = ["examples/*.sdr", "examples/README.md"]
+"share/sedrava/examples/namespaces" = ["examples/namespaces/*.sdr"]
 
 [tool.setuptools.dynamic]
 version = {attr = "sedrava_version.VERSION"}

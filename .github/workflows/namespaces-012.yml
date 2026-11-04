@@ -10,6 +10,7 @@ on:
       - "pyproject.toml"
       - "tests/test_namespaced_modules_012.py"
       - "examples/namespace_012_*.sdr"
+      - "examples/namespaces/*.sdr"
       - ".github/workflows/namespaces-012.yml"
   workflow_dispatch:
 permissions:
@@ -43,5 +44,5 @@ jobs:
           assert 'First namespaced panel' in s
           assert 'Second namespaced panel' in s
           assert Path('build/namespaced-webapp/app.js').stat().st_size > 0
-          assert 'namespace_012_math.sdr' in Path('build/namespaced-webapp/sedrava-webapp.json').read_text()
+          assert 'namespaces/math.sdr' in Path('build/namespaced-webapp/sedrava-webapp.json').read_text()
           PY
