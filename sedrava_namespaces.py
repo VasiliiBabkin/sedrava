@@ -39,6 +39,7 @@ class CompiledModule:
     visible: dict
     text: str
     dependencies: tuple
+    origins: tuple
 
 
 def _tokens(line):
@@ -115,7 +116,7 @@ def _local_decl(line, module, path, n):
     return Symbol(module, name, kind, f'M_{digest}_{name}', bool(m[1]), path, n)
 
 
-def resolve_scoped(source, source_path):
+def resolve_scoped(source, source_path, *, with_origins=False):
     """Lower aliased imports while retaining legacy unqualified import support.
 
     Returns source text and checked dependency paths for manifests. Invoked
@@ -178,12 +179,14 @@ def resolve_scoped(source, source_path):
                 if alias in symbols:
                     raise ValueError(f'{path}: ambiguous local symbol/import alias {alias}')
             result = []
+            result_origins = []
             for no, line in enumerate(lines, 1):
                 stripped = line.strip()
                 if no == entries[0][2] or (not line.startswith(' ') and _IMPORT.fullmatch(stripped)):
                     continue
                 if not line.strip() or stripped.startswith('#'):
                     result.append(line)
+                    result_origins.append((path, no))
                     continue
                 m = _DECL.match(line) if not line.startswith(' ') else None
                 if m:
@@ -198,6 +201,7 @@ def resolve_scoped(source, source_path):
                     elif sym.kind == 'record':
                         line = _rewrite(line, {}, aliases, line_no=no, filename=str(path))
                     result.append(line)
+                    result_origins.append((path, no))
                     continue
                 if not line.startswith(' '):
                     raise ValueError(f'{path}:{no}: invalid top-level module construct')
@@ -208,7 +212,8 @@ def resolve_scoped(source, source_path):
                 elif re.match(r'^\s*\w+\s*:\s*', line):
                     line = _rewrite(line, {n:s for n,s in symbols.items() if s.kind=='record'}, aliases, line_no=no, filename=str(path))
                 result.append(line)
-            built = CompiledModule(module_id, symbols, {n:s for n,s in symbols.items() if s.public}, '\n'.join(result), tuple(nested))
+                result_origins.append((path, no))
+            built = CompiledModule(module_id, symbols, {n:s for n,s in symbols.items() if s.public}, '\n'.join(result), tuple(nested), tuple(result_origins))
             cache[path] = built
             dependencies.add(path)
             return built
@@ -228,6 +233,9 @@ def resolve_scoped(source, source_path):
         path = _valid_import(entry, value, root, no)
         aliases[alias] = load(path)
     if not aliases:
+        if with_origins:
+            from sedrava_source_map import locations
+            return source, dependencies, locations(source, entry)
         return source, dependencies
     for depth, raw, no in source_lines(source):
         if any(t.type == tokenize.NAME and _RESERVED.fullmatch(t.string) for t in _tokens(raw)):
@@ -236,24 +244,31 @@ def resolve_scoped(source, source_path):
         if re.search(rf'^(?:state|derive|fn|record|action|component|style|view|service) {re.escape(alias)}(?:\s|\(|:|=)', source, re.M):
             raise ValueError(f'{entry}: local declaration collides with import alias {alias}')
     emitted = set()
-    def append_dependency(path, out):
+    def append_dependency(path, out, source_map):
         if path in emitted:
             return
         for child in cache[path].dependencies:
-            append_dependency(child, out)
+            append_dependency(child, out, source_map)
         emitted.add(path)
-        out.extend(cache[path].text.splitlines())
+        lines = cache[path].text.splitlines()
+        out.extend(lines)
+        source_map.extend(cache[path].origins)
     out = []
+    source_map = []
     for no, line in enumerate(source.splitlines(), 1):
         m = _IMPORT.fullmatch(line)
         if m:
             path = _valid_import(entry, m[1], root, no)
-            append_dependency(path, out)
+            append_dependency(path, out, source_map)
         elif line.startswith('import "') and ' as ' in line and not m:
             raise ValueError(f'{entry}:{no}: invalid namespaced import')
         else:
             out.append(_rewrite(line, aliases=aliases, filename=str(entry), line_no=no))
+            source_map.append((entry, no))
     output = '\n'.join(out) + '\n'
     if len(output) > MAX_SOURCE_CHARS:
         raise ValueError('Expanded imports exceed source limit')
+    if with_origins:
+        assert len(source_map) == len(output.splitlines())
+        return output, dependencies, tuple(source_map)
     return output, dependencies
