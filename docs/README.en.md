@@ -2,6 +2,12 @@
 
 **Published:** [GitHub release](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.10.0) and [PyPI](https://pypi.org/project/sedrava/0.10.0/), 31 October 2026. The language is experimental, not a production framework.
 
+## Release tracks
+
+The current published stable version is **0.10.0** (links below). Experimental [0.11.0rc1 is published on GitHub](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0rc1) and [PyPI](https://pypi.org/project/sedrava/0.11.0rc1/). Stable **0.11.0 is not yet published**; the source candidate is under separate review, with unchanged features and Android versionCode 11002. [Stable acceptance criteria](STABLE_RELEASE_GATES_011.md) · [English notes](RELEASE_NOTES_0_11_0.en.md).
+
+In published RC and stable candidate, `build site`, `build webapp`, typed Web components/functions and bounded HTTP clients are available. No built-in backend, SQLite/authentication, automatic migrations or 0.12 namespace/package system.
+
 ## Install
 
 Python **3.10+**:
@@ -26,7 +32,7 @@ For Windows PowerShell use `.venv\Scripts\Activate.ps1`. To develop from source,
 
 `sedrava check FILE` validates, `sedrava test FILE` runs embedded tests, `sedrava run FILE ACTION...` prints JSON state, and `sedrava build web/android FILE --output PATH` generates platform output. Android generation yields sources, **not a compiled APK**.
 
-0.10.0 includes signed int32, bool, Unicode text, typed records and bounded lists, atomic actions, invariants, persistence and navigation. No data migrations, encrypted storage, modules, automatic timers or production API compatibility guarantee. The [draft 0.11 Web UI work](https://github.com/VasiliiBabkin/sedrava/pull/22) is not in this release. The [Astro/Starlight site](https://github.com/VasiliiBabkin/sedrava-site) is independent.
+0.10.0 includes signed int32, bool, Unicode text, typed records and bounded lists, atomic actions, invariants, persistence and navigation. No data migrations, encrypted storage, modules, automatic timers or production API compatibility guarantee. Web UI is not in **stable 0.10.0**, but is in the [published experimental 0.11.0rc1](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0rc1). The [Astro/Starlight site](https://github.com/VasiliiBabkin/sedrava-site) is independent.
 
 **Evidence boundary:** [final 0.10 physical-device acceptance](PHYSICAL_DEVICE_010.md) remains unconfirmed; passing emulator tests do not prove phone compatibility.
 
