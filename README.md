@@ -1,10 +1,12 @@
-# Sedrava — published 0.10.0
+# Sedrava — stable 0.10.0, published 0.11 RC and stable 0.11 candidate
 
 **Describe the application; get the application. / Описал — получил.**
 
 **[Dedication / Посвящение](DEDICATION.md):** Геннадию Ивановичу Смирных — учителю информатики, благодаря которому автор Sedrava понял и полюбил программирование.
 
-**Current release:** [Sedrava 0.10.0](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.10.0) (31 October 2026), also [published on PyPI](https://pypi.org/project/sedrava/0.10.0/). Android generator versionCode: **10003**. The older 0.9.0a1 and 0.10.0rc2 releases are historical baselines.
+**Current stable release:** [Sedrava 0.10.0](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.10.0) (31 October 2026), also [published on PyPI](https://pypi.org/project/sedrava/0.10.0/). Android generator versionCode: **10003**. The older 0.9.0a1 and 0.10.0rc2 releases are historical baselines.
+
+**Published prerelease:** [Sedrava 0.11.0rc1](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0rc1) ([PyPI](https://pypi.org/project/sedrava/0.11.0rc1/)). The `0.11.0` stable source candidate is in `release/011-stable-preparation`; it has **not** been published. Android candidate versionCode is 11002 (published RC: 11001).
 
 Start with [Quick Start](docs/QUICKSTART.md), the [text reference](docs/LANGUAGE_0_10_TEXT.md), [text profile example](examples/text_profile.sdr), and [measured report](docs/TEXT_010_REPORT.md). The [task manager](examples/task_manager.sdr) now uses records and lists directly in `.sdr`; the [navigation example](docs/NAVIGATION_QUICKSTART.en.md) adds guarded screens and Back.
 
@@ -145,8 +147,8 @@ The integration preview adds shared composition, pure functions, bounded collect
 Реализованные возможности, сборка четырёх проектов и ограничения: [English guide](docs/011_WEB_PLATFORM.en.md), [руководство](docs/011_WEB_PLATFORM.ru.md), [actual status](docs/011_IMPLEMENTATION_STATUS.md). Existing published 0.10.0 instructions above remain applicable to their original targets.
 
 
-## 0.11.0rc1 release-candidate preparation (not published) / Подготовка RC
+## Published 0.11.0rc1; preparing stable 0.11.0
 
-A separate [0.11 release candidate branch](https://github.com/VasiliiBabkin/sedrava/tree/release/011-rc1-preparation) is being validated. The published version remains **0.10.0**. The candidate adds static `site` generation, stateful browser `webapp`, local composition, pure functions, collection queries, routes, forms, style/assets and checked public HTTP client calls. It does **not** include namespaces/packages from the separate 0.12 experimental line, nor a trusted server, database or authentication. [Candidate notes](docs/RELEASE_NOTES_0_11_0rc1.en.md) · [Заметки по кандидату](docs/RELEASE_NOTES_0_11_0rc1.ru.md) · [Release gates](docs/RELEASE_TRACK_011.md).
+The [experimental RC](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0rc1) is available from [PyPI](https://pypi.org/project/sedrava/0.11.0rc1/) after exact-source CI, distribution checks and practical 0.10 upgrade/rollback testing. It provides responsive `site` generation, interactive `webapp`, typed Web state/components/functions, forms, routes, collection queries and validated public HTTP clients.
 
-The candidate is not published on GitHub/PyPI and requires exact-commit CI, independent distribution checks, owner review and a separate tag/publication decision. No production website deployment is implied.
+The **stable 0.11.0 candidate is not yet published**. It requires fresh exact-head CI and a separate publication decision. [Stable gates](docs/STABLE_RELEASE_GATES_011.md) · [EN release notes](docs/RELEASE_NOTES_0_11_0.en.md) · [RU](docs/RELEASE_NOTES_0_11_0.ru.md). Namespaces, package lockfiles, trusted server, SQLite, authentication and automatic migration are not in 0.11. The official documentation website still uses Astro/Starlight.
