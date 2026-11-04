@@ -160,7 +160,13 @@ CSS=r'''
 '''
 JS=r'''
 const scriptURL=new URL(document.currentScript.src),siteRoot=new URL('.',scriptURL);
-for(const sidebar of document.querySelectorAll('details.s-sidebar'))if(matchMedia('(max-width: 999px)').matches)sidebar.open=false;
+for(const sidebar of document.querySelectorAll('details.s-sidebar')){
+ const viewport=matchMedia('(min-width:1000px)');let desktop=viewport.matches;
+ const sync=()=>{desktop=viewport.matches;sidebar.open=desktop;};sync();
+ viewport.addEventListener('change',sync);
+ window.addEventListener('pagehide',()=>viewport.removeEventListener('change',sync));
+ window.addEventListener('pageshow',()=>{viewport.addEventListener('change',sync);if(viewport.matches||viewport.matches!==desktop)sync();});
+}
 for(const panel of document.querySelectorAll('.doc-code')){
  const button=panel.querySelector('[data-copy]'),status=panel.querySelector('[data-copy-status]');
  button.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(panel.querySelector('code').textContent);status.textContent='Copied / Скопировано';}catch(_){status.textContent='Copy unavailable; select the code / Выделите код';}});
