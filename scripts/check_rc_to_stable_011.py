@@ -10,6 +10,9 @@ import tempfile
 from urllib.request import urlopen
 import venv
 
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
 RC = "0.11.0rc1"
 FINAL = "0.11.0"
 PUBLISHED = {
