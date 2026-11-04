@@ -1,0 +1,4 @@
+module example.first
+export component Panel:
+    card:
+        heading "First namespaced panel"

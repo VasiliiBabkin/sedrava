@@ -11,6 +11,11 @@ from sedrava_syntax import MAX_SOURCE_CHARS, MAX_BLOCK_DEPTH, source_lines
 def expand(source, source_path=None, _stack=(), _root=None, _files=None):
     source_lines(source)
     files = set() if _files is None else _files
+    if not _stack:
+        from sedrava_namespaces import _IMPORT, resolve_scoped
+        if any(_IMPORT.fullmatch(line) for depth, line, _ in source_lines(source) if depth == 0):
+            source, namespaced_files = resolve_scoped(source, source_path)
+            files.update(namespaced_files)
     root = Path(source_path).resolve().parent if _root is None and source_path else _root
     output = []
     for number, line in enumerate(source.splitlines(), 1):
