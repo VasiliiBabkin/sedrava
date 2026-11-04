@@ -8,8 +8,12 @@ import json
 import posixpath
 import re
 from pathlib import Path
-from urllib.parse import urlsplit
+from html.parser import HTMLParser
+from urllib.parse import urlsplit,unquote
 
+
+MAX_BUNDLE_BYTES=32*1024*1024
+MAX_RENDERED_DOCUMENT_BYTES=4*1024*1024
 
 def local_file(root,value,suffixes,limit=262144):
     root=Path(root).resolve();path=root/value
@@ -23,6 +27,10 @@ def local_file(root,value,suffixes,limit=262144):
     data=resolved.read_bytes()
     if len(data)>limit:raise ValueError('Documentation source exceeds byte limit')
     data.decode('utf-8');return resolved,data
+
+
+def element(tag,attrs):
+    return '<'+tag+''.join(' '+key+'="'+html.escape(str(value),quote=True)+'"' for key,value in attrs.items())+'>'
 
 
 def dependencies():
@@ -65,12 +73,16 @@ def slug(text):
 class Docs:
     def __init__(self,site,root,files,inputs):
         self.site=site;self.root=Path(root).resolve();self.files=files;self.inputs=inputs;self.entries=[];self.demos={};self.active=False;self.used_bytes=0
-        self.routes={p.path for p in site.pages};self.page_ids={}
+        self.routes={p.path for p in site.pages}
+        from sedrava_site import walk,resolved
+        self.page_ids={p.path:{'content',*(resolved(n,site)['id'] for n in walk(p.children) if 'id' in resolved(n,site))} for p in site.pages}
+    def check_budget(self):
+        if len(self.inputs)>512 or sum(len(value) for value in self.files.values())>MAX_BUNDLE_BYTES:raise ValueError('Documentation bundle budget exceeded')
     def read(self,value,suffixes):
         path,data=local_file(self.root,value,suffixes);self.inputs.add(path);self.used_bytes+=len(data)
         if self.used_bytes>4*1024*1024 or len(self.inputs)>512:raise ValueError('Documentation dependency budget exceeded')
         return path,data
-    def markdown(self,props,page,href):
+    def markdown(self,props,page,href,attrs=None):
         self.active=True;path,data=self.read(props['src'],{'.md'})
         source=data.decode();source=re.sub(r'\A---\n.*?\n---\n','',source,count=1,flags=re.S)
         MarkdownIt,_=dependencies();parser=MarkdownIt('commonmark',{'html':True,'linkify':False}).enable('table')
@@ -102,10 +114,12 @@ class Docs:
         parser.renderer.rules['fence']=fence
         parser.renderer.rules['code_block']=lambda ts,i,o,e:code_panel(ts[i].content,'text','Code / Код')
         result=parser.renderer.render(tokens,parser.options,{})
+        if len(result.encode())>MAX_RENDERED_DOCUMENT_BYTES:raise ValueError('Rendered documentation exceeds 4 MiB')
         toc='<details class="doc-toc"><summary>'+('На этой странице' if page.lang=='ru' else 'On this page')+'</summary><nav aria-label="'+('Оглавление' if page.lang=='ru' else 'Table of contents')+'"><ul>'+''.join('<li><a href="#'+ident+'">'+html.escape(text)+'</a></li>' for ident,text in headings)+'</ul></nav></details>' if headings else ''
         self.entries.append({'url':page.path,'title':page.title,'lang':page.lang,'headings':[text for _,text in headings],'text':'\n'.join(plain)})
-        return '<article class="doc-markdown" data-document-source="'+html.escape(props['src'],quote=True)+'">'+toc+result+'</article>'
-    def demo(self,props,page,rel):
+        attrs=dict(attrs or {});attrs['class']=attrs.get('class','')+' doc-markdown';attrs['data-document-source']=props['src']
+        return element('article',attrs)+toc+result+'</article>'
+    def demo(self,props,page,rel,attrs=None):
         self.active=True;route=props['at'];path,data=self.read(props['src'],{'.sdr'})
         if route in self.routes or any(p.startswith(route) or route.startswith(p) for p in self.routes if p!='/'):raise ValueError('Demo route collides with a site page')
         if route in self.demos and self.demos[route]['path']!=path:raise ValueError('Different demos cannot own the same route')
@@ -125,12 +139,15 @@ class Docs:
                 if destination in self.files:raise ValueError('Demo output collision')
                 self.files[destination]=value
             self.demos[route]={'path':path,'source_sha256':hashlib.sha256(data).hexdigest(),'source_url':source_path,'app':doc.name,'files':{key:hashlib.sha256(value).hexdigest() for key,value in sorted(generated.items())}}
+        self.check_budget()
         demo=self.demos[route];src=rel(route.lstrip('/')+'index.html');label=props['label']
         trusted='Доверенный пример автора, общий origin; это не изоляция недоверенного кода.' if page.lang=='ru' else 'Trusted author code, shared origin; this is not isolation for untrusted programs.'
-        return '<section class="doc-demo"'+(' id="'+html.escape(props['id'],quote=True)+'"' if 'id' in props else '')+' data-demo="'+html.escape(route,quote=True)+'" data-app="'+html.escape(demo['app'],quote=True)+'"><h2>'+html.escape(label)+'</h2><p class="demo-trust">'+trusted+'</p><div class="demo-toolbar"><button type="button" data-demo-reload>Reload / Перезагрузить</button><button type="button" data-demo-reset>Reset this demo / Сбросить пример</button><span role="status" data-demo-status></span></div><iframe src="'+src+'" title="'+html.escape(label,quote=True)+'" loading="lazy" referrerpolicy="no-referrer" allow="camera \'none\'; microphone \'none\'; geolocation \'none\'; payment \'none\'" class="demo-frame"></iframe>'+code_panel(data.decode(),'sedrava',props['src']+' · webapp · experimental 0.11',rel(demo['source_url']))+'</section>'
-    def search(self,props):
+        attrs=dict(attrs or {});attrs.update({'class':attrs.get('class','')+' doc-demo','data-demo':route,'data-app':demo['app']})
+        return element('section',attrs)+'<h2>'+html.escape(label)+'</h2><p class="demo-trust">'+trusted+'</p><div class="demo-toolbar"><button type="button" data-demo-reload>Reload / Перезагрузить</button><button type="button" data-demo-reset>Reset this demo / Сбросить пример</button><span role="status" data-demo-status></span></div><iframe src="'+src+'" title="'+html.escape(label,quote=True)+'" loading="lazy" referrerpolicy="no-referrer" allow="camera \'none\'; microphone \'none\'; geolocation \'none\'; payment \'none\'" class="demo-frame"></iframe>'+code_panel(data.decode(),'sedrava',props['src']+' · webapp · experimental 0.11',rel(demo['source_url']))+'</section>'
+    def search(self,props,attrs=None):
         self.active=True
-        return '<section class="doc-search" role="search"><label>'+html.escape(props['label'])+'<input type="search" data-doc-search autocomplete="off" maxlength="160"></label><p data-search-status role="status"></p><ul data-search-results></ul></section>'
+        attrs=dict(attrs or {});attrs.pop('aria-label',None);attrs.update({'class':attrs.get('class','')+' doc-search','role':'search'})
+        return element('section',attrs)+'<label>'+html.escape(props['label'])+'<input type="search" data-doc-search autocomplete="off" maxlength="160"></label><p data-search-status role="status"></p><ul data-search-results></ul></section>'
     def head(self,page):
         if not self.active:return ''
         from site_codegen import relative
@@ -151,6 +168,28 @@ class Docs:
         self.files['docs.css']=CSS.encode()
         self.files['docs-index.json']=raw.encode()
         self.files['docs-demos.json']=(json.dumps({route:{key:value for key,value in demo.items() if key!='path'} for route,demo in sorted(self.demos.items())},sort_keys=True,indent=2)+'\n').encode()
+        class Links(HTMLParser):
+            def __init__(self):super().__init__();self.ids=set();self.links=[]
+            def handle_starttag(self,tag,attrs):
+                attrs=dict(attrs)
+                if 'id' in attrs:
+                    if attrs['id'] in self.ids:raise ValueError('Duplicate documentation anchor '+attrs['id'])
+                    self.ids.add(attrs['id'])
+                if tag=='a' and 'href' in attrs:self.links.append(attrs['href'])
+        from site_codegen import page_file
+        documents={}
+        for page in self.site.pages:
+            parsed=Links();parsed.feed(self.files[page_file(page)].decode());documents[page_file(page)]=parsed
+        for name,document in documents.items():
+            for value in document.links:
+                url=urlsplit(value)
+                if url.scheme:continue
+                target=posixpath.normpath(posixpath.join(posixpath.dirname(name),unquote(url.path))) if url.path else name
+                if url.path.startswith('/'):target=url.path.lstrip('/')
+                if target=='.' or url.path.endswith('/'):target=target.rstrip('/')+'/index.html' if target!='.' else 'index.html'
+                if target not in self.files:raise ValueError('Unknown documentation target '+value)
+                if url.fragment and (target not in documents or unquote(url.fragment) not in documents[target].ids):raise ValueError('Unknown documentation anchor '+value)
+
 
 CSS=r'''
 .doc-markdown{min-width:0;line-height:1.8}.doc-markdown h2,.doc-markdown h3{line-height:1.25;margin-block:2.4rem 1rem;scroll-margin-top:6rem}.doc-markdown a,.doc-toc a,.doc-search a{color:var(--accent);text-underline-offset:.2em}.doc-markdown table{border-collapse:collapse;width:100%;display:block;overflow:auto}.doc-markdown td,.doc-markdown th{padding:10px;border:1px solid var(--border);text-align:start}.doc-markdown blockquote{border-inline-start:3px solid var(--gold);padding-inline-start:1rem;margin-inline:0}.doc-markdown :not(pre)>code{background:var(--surface);padding:.1em .3em;border-radius:4px;overflow-wrap:anywhere}

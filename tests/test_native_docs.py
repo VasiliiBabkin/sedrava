@@ -58,3 +58,17 @@ class NativeDocs(unittest.TestCase):
         rendered=code_panel(source,'python');self.assertNotIn('<script>',rendered)
         self.assertIn(hashlib.sha256(source.encode()).hexdigest(),rendered)
         self.assertIn('class="code-lines" aria-hidden="true"',rendered)
+
+    def test_common_properties_unicode_anchors_and_failed_rebuild_are_checked(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);self.fixture(root)
+            source=SOURCE.replace('markdown "guide.md"','markdown "guide.md" id guide class "reading" padding 24').replace('search label "Search"','search label "Search" id search_area class "search-panel"').replace('heading "Native docs"','heading "Native docs"\n    link "Section" to "#привет-world"')
+            (root/'site.sdr').write_text(source);build_site(source,root/'out',root/'site.sdr')
+            index=(root/'out/index.html').read_text();self.assertIn('id="guide"',index);self.assertIn('reading doc-markdown',index);self.assertIn('search-panel doc-search',index)
+            before={p.relative_to(root/'out'):p.read_bytes() for p in (root/'out').rglob('*') if p.is_file()}
+            with self.assertRaisesRegex(ValueError,'anchor'):build_site(source.replace('#привет-world','#missing'),root/'out',root/'site.sdr')
+            self.assertEqual(before,{p.relative_to(root/'out'):p.read_bytes() for p in (root/'out').rglob('*') if p.is_file()})
+            from unittest.mock import patch
+            with patch('sedrava_docs.MAX_BUNDLE_BYTES',16),self.assertRaisesRegex(ValueError,'budget'):build_site(source,root/'out',root/'site.sdr')
+            self.assertEqual(before,{p.relative_to(root/'out'):p.read_bytes() for p in (root/'out').rglob('*') if p.is_file()})
+            with self.assertRaisesRegex(ValueError,'Accessible label'):parse_site(SOURCE.replace('search label "Search"','search label ""'))

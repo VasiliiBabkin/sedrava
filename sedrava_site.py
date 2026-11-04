@@ -158,7 +158,9 @@ def safe_url(value, image=False):
         if '%' in value:raise ValueError('Local asset paths must not use percent encoding')
         return value
     if decoded.startswith('#'):
-        identifier(decoded[1:]);return value
+
+        if not re.fullmatch(r'[\w-]{1,256}',decoded[1:]):raise ValueError('Invalid anchor')
+        return value
     if not decoded.startswith('/'):raise ValueError('Use a /site/ route, #anchor or supported absolute URL')
     return value
 
@@ -331,6 +333,7 @@ def parse_site(source):
                 if key not in props:fail(t[0].span,'Missing required parameter '+key)
                 try:params[key].validate(props[key].value)
                 except ValueError as exc:fail(props[key].span,str(exc))
+            if kind in DOC_COMPONENTS and 'label' in props and not props['label'].value.strip():fail(props['label'].span,'Accessible label must not be empty')
             if kind in ('heading','link','button','code') and not props['text'].value.strip():fail(t[0].span,'Accessible text must not be empty')
             pos+=1;desc=()
             if block:
@@ -422,6 +425,7 @@ def parse_site(source):
                 if level>previous+1:fail(node.span,'Heading levels must not skip a level')
                 node.properties.setdefault('level',Property(level,node.span));previous=level;h1+=level==1
         if h1!=1:fail(page.span,'Each page requires exactly one h1')
+    markdown_paths={p.path for p in pages if any(n.kind=='markdown' for n in walk(p.children))}
     for page in pages:
         for node in walk(page.children):
             props=resolved(node,site)
@@ -430,5 +434,5 @@ def parse_site(source):
             if url.scheme:continue
             target=url.path or page.path
             if target not in ids:fail(node.span,'Unknown site route '+target)
-            if url.fragment and url.fragment not in ids[target]:fail(node.span,'Unknown anchor '+url.fragment)
+            if url.fragment and url.fragment not in ids[target] and target not in markdown_paths:fail(node.span,'Unknown anchor '+url.fragment)
     return site

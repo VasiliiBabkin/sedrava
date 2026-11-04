@@ -129,9 +129,6 @@ def generate_site(source,source_dir='.'):
         def render(node):
             nonlocal counter
             counter+=1;cls='n'+str(counter);props=resolved(node,site);definition=component_definition(node.kind)
-            if node.kind=='markdown':return docs.markdown(props,page,href)
-            if node.kind=='demo':return docs.demo(props,page,lambda value:relative(value,page))
-            if node.kind=='search':return docs.search(props)
             if node.kind=='sidebar':docs.active=True
             base={k:v for k,v in props.items() if not any(k.startswith(b+'-') for b in BREAKPOINTS)}
             media={b:{k[len(b)+1:]:v for k,v in props.items() if k.startswith(b+'-')} for b in BREAKPOINTS}
@@ -153,6 +150,9 @@ def generate_site(source,source_dir='.'):
             if 'to' in props:
                 attrs['href']=href(props['to'])
                 if urlsplit(props['to']).path==page.path:attrs['aria-current']='page'
+            if node.kind=='markdown':return docs.markdown(props,page,href,attrs)
+            if node.kind=='demo':return docs.demo(props,page,lambda value:relative(value,page),attrs)
+            if node.kind=='search':return docs.search(props,attrs)
             if 'src' in props:
                 src=assets.image(node,props['src']);attrs['src']=src if urlsplit(src).scheme else relative(src,page)
             if props.get('target')=='blank':attrs.update(target='_blank',rel='noopener noreferrer')
@@ -175,6 +175,7 @@ def generate_site(source,source_dir='.'):
 </head><body><a class="s-skip" href="#content">'''+('К содержимому' if page.lang.startswith('ru') else 'Skip to content')+'''</a>'''+navbar_html+'''<main id="content" class="s-page" tabindex="-1">'''+main_body+'''</main>'''+footer_html+'''</body></html>
 '''
         files[page_file(page)]=content.encode('utf-8')
+        if docs.active:docs.check_budget()
     # Keep the established dark rendering, but do not overlay dark-only effects on light themes.
     bg=site.theme['background'].lstrip('#')
     rgb=tuple(int(bg[i:i+2],16)/255 for i in (0,2,4))
@@ -195,6 +196,7 @@ def generate_site(source,source_dir='.'):
     files.update(assets.files)
     from sedrava_web_assets import attach
     assets.paths.update(attach(files,site.settings,source_dir,site.pages))
+    if docs.active:docs.check_budget()
     return files,assets.paths
 
 
