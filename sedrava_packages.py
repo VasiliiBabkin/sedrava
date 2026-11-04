@@ -26,7 +26,7 @@ def _toml():
         try:
             import tomli as tomllib
         except ImportError as exc:
-            raise ValueError('Python 3.10 package locking requires installed tomli') from exc
+            raise ValueError('Python 3.10 package locking requires tomli; install sedrava[packages]') from exc
     return tomllib
 
 
