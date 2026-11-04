@@ -89,7 +89,7 @@ def parse_webapp(source):
     source = components(source)
     from sedrava_web_assets import read_directives
     source, settings = read_directives(source)
-    if any(key in settings for key in ("origin","robots","social-image")):raise ValueError("Static publishing metadata requires site mode")
+    if any(key in settings for key in ("origin","robots","social-image","clean-urls")):raise ValueError("Static publishing metadata requires site mode")
     raw=source.splitlines();kept=[];presentation=[];named_themes={};pos=0
     while pos<len(raw):
         named=re.fullmatch(r'theme ([A-Za-z][A-Za-z0-9_-]*):',raw[pos])
@@ -644,6 +644,7 @@ def generate_webapp(document, source_dir=".", _inputs=None):
     if document.services:
         origins=sorted({item.origin for item in document.services.values() if item.origin})
         index=index.replace("connect-src 'none'", "connect-src 'self'"+(' '+ ' '.join(origins) if origins else ''))
+    ui_js+='\ndocument.documentElement.dataset.sedravaReady=\"true\";\n'
     files={"index.html": index.encode("utf-8"),
             "app.css": css.encode("utf-8"),
             "app.js": (domain_js + ui_js).encode("utf-8")}

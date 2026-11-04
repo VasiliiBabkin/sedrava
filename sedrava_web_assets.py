@@ -30,10 +30,10 @@ def read_directives(source):
         if match:
             if 'theme-state' in settings:raise ValueError('Duplicate theme-state')
             settings['theme-state']=match[1];lines.append('');continue
-        match=re.fullmatch(r'robots (true|false)',line)
+        match=re.fullmatch(r'(robots|clean-urls) (true|false)',line)
         if match:
-            if 'robots' in settings:raise ValueError(f'Line {number}: column 1: duplicate robots')
-            settings['robots']=match[1]=='true';lines.append('');continue
+            if match[1] in settings:raise ValueError(f'Line {number}: column 1: duplicate '+match[1])
+            settings[match[1]]=match[2]=='true';lines.append('');continue
         lines.append(line)
     if 'origin' in settings:
         from sedrava_site import safe_url
@@ -109,6 +109,7 @@ def attach(files, settings, source_dir, pages=None):
     for path,data in list(files.items()):
         if not path.endswith('.html'):continue
         page=next((p for p in pages if p.path.lstrip('/')+'index.html'==path),None) if pages else None
+        if pages is not None and page is None:continue
         def link(target):
             import posixpath
             return posixpath.relpath(target,posixpath.dirname(path) or '.')

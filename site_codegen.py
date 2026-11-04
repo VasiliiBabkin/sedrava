@@ -9,7 +9,7 @@ import re
 import tempfile
 from urllib.parse import urlsplit, urlunsplit
 import xml.etree.ElementTree as ET
-from sedrava_site import Site, COMPONENTS, BREAKPOINTS, parse_site, resolved, fail
+from sedrava_site import Site, COMPONENTS, BREAKPOINTS, parse_site, resolved, fail, component_definition
 from sedrava_version import VERSION
 
 CSS = r'''
@@ -117,15 +117,19 @@ def generate_site(source,source_dir='.'):
     site=source if isinstance(source,Site) else parse_site(source)
     assets=Assets(source_dir);files={};styles=[];counter=0
     routes={p.path:p for p in site.pages}
+    from sedrava_docs import Docs
+    docs=Docs(site,source_dir,files,assets.paths)
     for page in site.pages:
         def href(value):
             url=urlsplit(value)
             if url.scheme:return value
             path=relative(page_file(routes[url.path]),page) if url.path else ''
+            if site.settings.get('clean-urls') and path.endswith('index.html'):path=path[:-len('index.html')] or './'
             return urlunsplit(('', '',path,url.query,url.fragment))
         def render(node):
             nonlocal counter
-            counter+=1;cls='n'+str(counter);props=resolved(node,site);definition=COMPONENTS[node.kind]
+            counter+=1;cls='n'+str(counter);props=resolved(node,site);definition=component_definition(node.kind)
+            if node.kind=='sidebar':docs.active=True
             base={k:v for k,v in props.items() if not any(k.startswith(b+'-') for b in BREAKPOINTS)}
             media={b:{k[len(b)+1:]:v for k,v in props.items() if k.startswith(b+'-')} for b in BREAKPOINTS}
             if node.kind=='grid':
@@ -143,11 +147,17 @@ def generate_site(source,source_dir='.'):
             if 'label' in props:attrs['aria-label']=props['label']
             for key,attribute in definition.attributes.items():
                 if key in props:attrs[attribute]=props[key]
-            if 'to' in props:attrs['href']=href(props['to'])
+            if 'to' in props:
+                attrs['href']=href(props['to'])
+                if urlsplit(props['to']).path==page.path:attrs['aria-current']='page'
+            if node.kind=='markdown':return docs.markdown(props,page,href,attrs)
+            if node.kind=='demo':return docs.demo(props,page,lambda value:relative(value,page),attrs)
+            if node.kind=='search':return docs.search(props,attrs)
             if 'src' in props:
                 src=assets.image(node,props['src']);attrs['src']=src if urlsplit(src).scheme else relative(src,page)
             if props.get('target')=='blank':attrs.update(target='_blank',rel='noopener noreferrer')
             opening='<'+tag+''.join(' '+key+'="'+html.escape(str(value),quote=True)+'"' for key,value in attrs.items())+'>'
+            if node.kind=='sidebar':return opening+'<summary>'+html.escape(props['label'])+'</summary><nav aria-label="'+html.escape(props['label'],quote=True)+'">'+''.join(render(c) for c in node.children)+'</nav></details>'
             if definition.void:return opening
             if node.kind=='code':
                 return opening+'<code>'+html.escape(props['text'])+'</code></pre>'
@@ -158,13 +168,14 @@ def generate_site(source,source_dir='.'):
         content='''<!doctype html>
 <html lang="'''+html.escape(page.lang,quote=True)+'''">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="dark"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; img-src 'self' https:; base-uri 'none'; form-action 'none'">
+<meta name="color-scheme" content="dark"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; img-src 'self' https:; base-uri 'none'; form-action 'none';'''+(" script-src 'self'; frame-src 'self';" if docs.active else '')+'''">
 <title>'''+html.escape(page.title)+'''</title><meta name="description" content="'''+html.escape(page.description,quote=True)+'''">
 <link rel="icon" href="'''+relative('favicon.svg',page)+'''">
-<link rel="stylesheet" href="'''+relative('site.css',page)+'''">
+<link rel="stylesheet" href="'''+relative('site.css',page)+'''">'''+docs.head(page)+'''
 </head><body><a class="s-skip" href="#content">'''+('К содержимому' if page.lang.startswith('ru') else 'Skip to content')+'''</a>'''+navbar_html+'''<main id="content" class="s-page" tabindex="-1">'''+main_body+'''</main>'''+footer_html+'''</body></html>
 '''
         files[page_file(page)]=content.encode('utf-8')
+        if docs.active:docs.check_budget()
     # Keep the established dark rendering, but do not overlay dark-only effects on light themes.
     bg=site.theme['background'].lstrip('#')
     rgb=tuple(int(bg[i:i+2],16)/255 for i in (0,2,4))
@@ -176,13 +187,16 @@ def generate_site(source,source_dir='.'):
         page_css=page_css.replace('background:radial-gradient(ellipse at 12% 0%,#292039 0%,transparent 48rem),var(--background)', 'background:var(--background)')
         page_css=page_css.replace('background:linear-gradient(125deg,#302541,var(--surface))', 'background:var(--surface)')
     if light_theme:
-        files={name:data.replace(b'<meta name="color-scheme" content="dark">',b'<meta name="color-scheme" content="light">') for name,data in files.items()}
+        files.update({page_file(p):files[page_file(p)].replace(b'<meta name="color-scheme" content="dark">',b'<meta name="color-scheme" content="light">') for p in site.pages})
     theme=':root{'+''.join('--'+key+':'+value+';' for key,value in site.theme.items())+'}\n'
+    docs.files=files
+    docs.finish()
     files['favicon.svg']=('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><rect width="48" height="48" rx="12" fill="'+site.theme['background']+'"/><path d="M24 7L40 24L24 41L8 24Z" fill="'+site.theme['accent']+'"/><circle cx="24" cy="24" r="5" fill="'+site.theme['gold']+'"/></svg>\n').encode('utf-8')
     files['site.css']=(theme+page_css+'\n'+'\n'.join(styles)+'\n').encode('utf-8')
     files.update(assets.files)
     from sedrava_web_assets import attach
     assets.paths.update(attach(files,site.settings,source_dir,site.pages))
+    if docs.active:docs.check_budget()
     return files,assets.paths
 
 

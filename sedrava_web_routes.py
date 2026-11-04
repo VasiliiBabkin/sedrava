@@ -37,16 +37,20 @@ def resolve_route(document, path, state):
 
 ROUTER_JS = r'''
 let activeView='main';
+const embeddedRouting=window.self!==window.top;
+const embeddedTrail=[];
 function routePath(name, candidate=state){return viewConfig[name].path.replace(/:([A-Za-z][A-Za-z0-9_]*)/g,(_,key)=>String(candidate[key]));}
 function canView(name,candidate=state){const spec=viewConfig[name];if(!spec)return false;const old=state;state=candidate;try{return !spec.guard||valuesOfState()[spec.guard]===true;}finally{state=old;}}
 function focusView(){const node=document.querySelector('[data-view="'+activeView+'"] h1');if(node){node.tabIndex=-1;node.focus({preventScroll:true});}}
 function showView(){document.querySelectorAll('[data-view]').forEach(el=>{el.hidden=el.dataset.view!==activeView;});document.querySelectorAll('[data-view][hidden] dialog[open]').forEach(d=>d.close());const hash='#'+routePath(activeView);if(routeReady&&location.hash!==hash)history.replaceState(history.state,'',hash);window.dispatchEvent(new Event('sedrava:view'));}
 function goView(name, replace=false, candidate=state){
   if(!canView(name,candidate)){showError('View unavailable: missing data or invalid route');return false;}
-  const depth=replace?0:(history.state?.sedravaDepth||0)+1;
+  const depth=replace?0:(embeddedRouting?embeddedTrail.length:(history.state?.sedravaDepth||0))+1;
   if(depth>32){showError('Navigation stack limit reached');return false;}
+  try{history[replace||embeddedRouting?'replaceState':'pushState']({sedravaDepth:depth},'', '#'+routePath(name,candidate));}
+  catch(_){showError('Navigation unavailable: browser history rejected the transition');return false;}
+  if(embeddedRouting){if(replace)embeddedTrail.length=0;else embeddedTrail.push(routePath(activeView));}
   state=candidate;activeView=name;
-  history[replace?'replaceState':'pushState']({sedravaDepth:depth},'', '#'+routePath(name));
   render();focusView();return true;
 }
 function restoreRoute(){
@@ -61,7 +65,7 @@ function restoreRoute(){
     if(!valid||!validateState(candidate)||!canView(name,candidate))break;
     state=candidate;activeView=name;found=true;break;
   }
-  if(!found){activeView='main';history.replaceState({sedravaDepth:0},'','#/');showError('Page not found or selected record no longer exists');}
+  if(!found){if(embeddedRouting)embeddedTrail.length=0;activeView='main';history.replaceState({sedravaDepth:0},'','#/');showError('Page not found or selected record no longer exists');}
   else if(!location.hash)history.replaceState({sedravaDepth:0},'','#/');
   routeReady=true;render();focusView();
 }
@@ -75,7 +79,8 @@ document.querySelectorAll('[data-navigate]').forEach(el=>el.addEventListener('cl
   }catch(_){showError('Navigation action rejected');}
 }));
 document.querySelectorAll('[data-back]').forEach(el=>el.addEventListener('click',()=>{
-  if((history.state?.sedravaDepth||0)>0)history.back();else goView('main',true);
+  if(embeddedRouting){if(embeddedTrail.length){const path=embeddedTrail.pop();history.replaceState({sedravaDepth:embeddedTrail.length},'','#'+path);restoreRoute();}else goView('main',true);}
+  else if((history.state?.sedravaDepth||0)>0)history.back();else goView('main',true);
 }));
 restoreRoute();
 '''
