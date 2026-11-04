@@ -1,0 +1,47 @@
+name: Sedrava 0.12 namespaces experimental
+on:
+  push:
+    branches: [feature/012-namespaces-a1]
+  pull_request:
+    paths:
+      - "sedrava_namespaces.py"
+      - "sedrava_modules.py"
+      - "sedrava_frontend.py"
+      - "pyproject.toml"
+      - "tests/test_namespaced_modules_012.py"
+      - "examples/namespace_012_*.sdr"
+      - ".github/workflows/namespaces-012.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  namespaced-compile:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Namespace and legacy composition tests
+        run: |
+          python -m unittest tests.test_namespaced_modules_012 tests.test_platform_modules -v
+      - name: Compile real namespaced site and WebApp examples
+        run: |
+          python -m sedrava_cli check examples/namespace_012_site.sdr
+          python -m sedrava_cli build site examples/namespace_012_site.sdr --output build/namespaced-site
+          python -m sedrava_cli check examples/namespace_012_webapp.sdr
+          python -m sedrava_cli build webapp examples/namespace_012_webapp.sdr --output build/namespaced-webapp
+          python - <<'PY'
+          from pathlib import Path
+          s=Path('build/namespaced-site/index.html').read_text()
+          assert 'First namespaced panel' in s
+          assert 'Second namespaced panel' in s
+          assert Path('build/namespaced-webapp/app.js').stat().st_size > 0
+          assert 'namespace_012_math.sdr' in Path('build/namespaced-webapp/sedrava-webapp.json').read_text()
+          PY
