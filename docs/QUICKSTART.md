@@ -16,6 +16,19 @@ sedrava --version
 
 On Windows, create the environment with `py -3 -m venv .venv`, activate with `.venv\Scripts\Activate.ps1`, then run `python -m pip install sedrava==0.10.0`. To work from a repository checkout instead, use `python -m pip install .` after activation. If `python3 -m venv` is unavailable on Ubuntu/Debian, install the distro's `python3-venv` package.
 
+## Published experimental 0.11 RC / Опубликованный кандидат
+
+Try `site` and `webapp` using a separate Python virtual environment. For Debian/Ubuntu, install `python3-venv` first if needed (PEP 668); do not use `--break-system-packages`:
+
+```sh
+python3 -m venv .venv-011
+. .venv-011/bin/activate
+python -m pip install sedrava==0.11.0rc1
+sedrava --version
+```
+
+[GitHub 0.11.0rc1](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0rc1) · [PyPI 0.11.0rc1](https://pypi.org/project/sedrava/0.11.0rc1/) · [stable 0.11 acceptance](STABLE_RELEASE_GATES_011.md). The stable package `0.11.0` is under review, **not yet published**.
+
 ## First app / Первое приложение
 
 Create a UTF-8 file `hello.sdr`:
@@ -56,7 +69,7 @@ sedrava build android examples/task_manager_navigation.sdr --output build/tasks-
 
 `build android` generates Kotlin/Compose source, **not an APK**. Compile with JDK, Android SDK and Gradle per [BUILD.md](BUILD.md). Data migrations and encrypted persistence are not provided. Final 0.10 APK physical-device acceptance is not recorded.
 
-`sedrava build site` is experimental in [draft PR #22](https://github.com/VasiliiBabkin/sedrava/pull/22), **not** part of the released CLI. [sedrava-site](https://github.com/VasiliiBabkin/sedrava-site) is a separate Astro/Starlight website.
+`sedrava build site` is not in stable **0.10.0** but **is available** in the [published 0.11.0rc1](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0rc1). Stable 0.11.0 is not published yet. [sedrava-site](https://github.com/VasiliiBabkin/sedrava-site) is a separate Astro/Starlight website.
 
 
 ## Post-release Linux smoke test / Ручная проверка Linux
