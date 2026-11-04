@@ -41,11 +41,11 @@ def main(work):
         stop();subprocess.run(['adb','shell','-T','run-as',package,'tee',relative],input=raw.encode(),stdout=subprocess.DEVNULL,check=True)
     # Fresh disposable emulator is required; do not silently erase any app data.
     assert 'package:'+package not in run('adb','shell','pm','list','packages',package)
-    run('gradle','-p',old,'--no-daemon',':app:connectedDebugAndroidTest')
+    run('gradle','-p',old,'--no-daemon','-Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true',':app:connectedDebugAndroidTest')
     before=prefs();assert snapshot(before)['state']['tasks']=={'next_id':2,'items':[{'id':1,'title':'Upgrade kept','done':False}]}
     stop();assert 'Success' in run('adb','install','-r',apk(new));assert 'versionCode=11001' in run('adb','shell','dumpsys','package',package);start('Upgrade kept');assert snapshot(prefs())==snapshot(before)
     stop();start('Upgrade kept');assert snapshot(prefs())==snapshot(before)
-    run('gradle','-p',new,'--no-daemon',':app:connectedDebugAndroidTest')
+    run('gradle','-p',new,'--no-daemon','-Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true',':app:connectedDebugAndroidTest')
     edited=prefs();expected={'next_id':2,'items':[{'id':1,'title':'RC edited','done':True}]};assert snapshot(edited)['state']['tasks']==expected
     stop();start('RC edited');assert snapshot(prefs())==snapshot(edited)
     stop();rejected=call('adb','install','-r',apk(old),check=False)
