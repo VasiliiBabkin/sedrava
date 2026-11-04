@@ -178,7 +178,7 @@ for(const demo of document.querySelectorAll('[data-demo]')){
   const url=new URL(frame.src);if(url.origin!==location.origin){status.textContent='Reset refused: wrong origin';return;}
   try{localStorage.removeItem('sedrava:'+url.pathname+':'+demo.dataset.app);
    const prefix='sedrava-api:'+url.pathname+':'+demo.dataset.app+':';for(const key of Object.keys(localStorage))if(key.startsWith(prefix))localStorage.removeItem(key);
-   frame.src=url.href;status.textContent='Reset / Сброшено';
+   frame.contentWindow.location.replace(url.href);status.textContent='Reset / Сброшено';
   }catch(_){status.textContent='Storage reset failed / Ошибка хранилища';}
  });
 }

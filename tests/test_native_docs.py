@@ -21,7 +21,7 @@ page ru at "/ru/":
     markdown "guide.md"
     demo "counter.sdr" at "/live/counter/" label "Счётчик"
 '''
-COUNTER='webapp "Counter"\nstate n=0\npersist n\naction add: n=n+1\nview main:\n    heading "Counter"\n    value n label "Count"\n    button "Add" action add\n    navigate "Details" to details\nview details at "/details":\n    heading "Details"\n    value n label "Count"\n    back "Home"\n'
+COUNTER='webapp "Counter"\nstate n=0\npersist n\naction add: n=n+1\nview main:\n    heading "Counter"\n    value n label "Count"\n    button "Add" action add\n    navigate "Details" to details action add\nview details at "/details":\n    heading "Details"\n    value n label "Count"\n    back "Home"\n'
 import importlib.util
 @unittest.skipUnless(importlib.util.find_spec('markdown_it') and importlib.util.find_spec('pygments'),'Optional docs extra unavailable; native-docs CI installs and tests it explicitly')
 class NativeDocs(unittest.TestCase):
