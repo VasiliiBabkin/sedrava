@@ -50,7 +50,9 @@ the checkout with source import paths removed. Results:
   wheel/sdist and reinstalled same-version tools match. Android version metadata
   intentionally differs between 0.10 and RC and is not expected to be identical.
 - Actual CLI state with `Алиса 😀` survives upgrade, is changed by RC, and is read
-  after reverse installation without rewriting the snapshot during read-only run.
+  after reverse installation with identical serialized snapshot bytes. CLI `run
+  --state-file` still writes a canonical snapshot even when no action is supplied;
+  this is a data-preservation assertion, not a claim of no filesystem write.
 - **Four real Chromium cases passed** against wheel-generated output: strict
   collection/navigation full-snapshot update/edit/rollback/cold reload; scalar
   Unicode and invariant rollback; malformed/duplicate/incompatible data protection;

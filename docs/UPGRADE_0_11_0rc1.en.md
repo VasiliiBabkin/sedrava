@@ -49,6 +49,10 @@ sedrava --version
 python -m pip check
 ```
 
+`sedrava run --state-file` writes the canonical snapshot even with no action;
+do not use it as a read-only file inspection command. Rejected snapshots fail
+before replacement; back up original files before any run.
+
 Expected versions are `sedrava 0.10.0`, `sedrava 0.11.0rc1`, `sedrava 0.10.0`.
 The independent audit also checks that candidate-only modules are removed on reverse
 installation, all four common project states match, and same-version wheel/sdist
