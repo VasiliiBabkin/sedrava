@@ -1,62 +1,18 @@
 # Sedrava — Roadmap / Дорожная карта
 
-**Released / Опубликовано:** [Sedrava 0.10.0](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.10.0) and [PyPI](https://pypi.org/project/sedrava/0.10.0/), 31 October 2026.
-**Status:** an experimental public release, not a 1.0 compatibility commitment or a production certification. Final 0.10 Android physical-device acceptance is still not documented.
-**In development:** [Web UI 0.11](https://github.com/VasiliiBabkin/sedrava/pull/22) is a draft PR, not released. Its experimental `build site` command is separate from the Astro/Starlight documentation site.
+## Published releases / Опубликованные версии
 
-## Vision / Видение
+- **0.10.0**, latest stable-version identifier: [GitHub](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.10.0), [PyPI](https://pypi.org/project/sedrava/0.10.0/), published 31 October 2026. Unicode, records, bounded lists, navigation and Web/Android generation.
+- **0.11.0rc1**, published experimental *prerelease*: [GitHub](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0rc1), [PyPI](https://pypi.org/project/sedrava/0.11.0rc1/), published 4 November 2026. Responsive `site`, typed interactive `webapp`, pure functions, collections, forms, hash routes and bounded public HTTP clients.
+- **0.11.0**, *unpublished stable source candidate*: `release/011-stable-preparation`. Fresh exact-head CI, practical upgrades and owner authorization are still required; versionCode 11002. [Release gates](STABLE_RELEASE_GATES_011.md).
+- **0.12.0a1**, *unpublished experimental alpha*: namespaces/aliases [PR #39](https://github.com/VasiliiBabkin/sedrava/pull/39), original-source diagnostics [PR #40](https://github.com/VasiliiBabkin/sedrava/pull/40), offline local packages/locks [PR #41](https://github.com/VasiliiBabkin/sedrava/pull/41) and alpha preparation [PR #43](https://github.com/VasiliiBabkin/sedrava/pull/43). Must be reconciled on the eventual published stable 0.11 baseline.
 
-Describe the application; get the application. / Опиши приложение — получи приложение. State, actions, invariants, tests and UI are described without copying platform boilerplate. Python and generated Web/Android semantics are tested against bounded scenarios; no universal equivalence is claimed.
+## Direction / Направление
 
-## Milestones / Этапы
+**0.11 stable** retains the published RC functionality and previously supported app/Web/Android targets. It does not include 0.12-qualified imports/packages, a trusted server, database, authentication or automatic schema migrations. The browser HTTP client depends on an independently operated API.
 
-| Version | Scope / Направление | Status / Статус |
-| --- | --- | --- |
-| **0.9** | Checked integers, actions, rules, basic Web/Android | Historical GitHub alpha |
-| **0.10** | Unicode text, records, bounded lists, multi-screen navigation | **Released** on GitHub and PyPI |
-| **0.11** | Extended Web UI, responsive sites, experimental read-only HTTP API0 and declarative data presentation | **Draft PRs #22 and #31**, not in released CLI |
-| **0.12+** | Module imports and reuse, library SDK, versioned packages; device capabilities, editors and desktop | Proposed, not committed |
-| **1.0** | Versioned specification, compatible storage and support policy | Long-term goal |
+**0.12 and later** will develop a native typed symbol IR, package-qualified module imports, extension interfaces and developer tooling. A future server/SQLite path is a design proposal rather than an implemented feature or committed release date. No production security certification is claimed for released pre-1.0 versions.
 
-Version numbers are planning milestones, **not release dates**. / Номера — ориентиры, а не сроки.
+**Release discipline:** Python 3.10/3.12/3.13, actual browser and Android tests, clean-installed wheel/sdist, reproducibility, 0.10 and published RC upgrade/rollback, known limitations and explicit owner approval for exact source SHA and hashes. [0.11 RC upgrade audit](UPGRADE_AUDIT_011.md) · [EN guide](011_WEB_PLATFORM.en.md) · [RU guide](011_WEB_PLATFORM.ru.md) · [0.10 stability](STABILITY_AUDIT_010.md).
 
-## Planned sequence after HTTP API0 / Порядок следующих работ
-
-1. **Finish 0.11 Web HTTP API0** ([draft PR #31](https://github.com/VasiliiBabkin/sedrava/pull/31)): bind validated read-only JSON to explicitly declared UI fields and components; handle loading, empty results, errors and retry; preserve isolation from local persistent state. Keep the initial scope Web-only and GET-only.
-2. **Build a representative one-file Web demo** with a remote JSON collection, cards, status handling and no handwritten JavaScript. Document browser CORS constraints and reproducible Chromium tests.
-3. **Stabilize 0.11**: review security and resource limits, validate installed wheel/sdist, maintain regression coverage, align docs with the separately maintained `sedrava-site`. Release only after explicit approval and evidence.
-4. **Design a typed module/import system**: namespaces, deterministic dependency resolution, platform capability declarations, compatibility checks and diagnostics. A possible `use` keyword is only a proposal, not current language syntax.
-5. **Create a library extension SDK** that allows independently developed reusable components without changing the compiler for each feature; define sandbox/security and target-runtime contracts.
-6. **Add a versioned package manager** with lockfile, integrity verification and reproducible offline-capable builds, followed by official Web/Android component libraries and third-party packages. Do not assume arbitrary Python/JavaScript libraries are portable.
-7. **Benchmark real utility** against a conventional TypeScript/Web implementation and a native Android baseline where applicable: measure end-to-end time, handwritten source size, defects, and change-request turnaround. No speedup factor is claimed before reproducible measurement.
-
-These are **ordered planning goals, not implemented features or guaranteed version commitments**. Do not expand 0.11 API0 into POST, authentication or Android networking before its Web contract is validated.
-
-## Principles / Принципы
-
-- Predictable, atomic state transitions with typed values and explicit invariants.
-- Offline-first where practical; safe resource bounds.
-- Comparable semantics across target runtimes with transparent platform-specific limitations.
-- Source builds, test evidence and documentation before release.
-- Separate experiments, historical records and published features.
-
-## 0.10 release evidence / Проверки 0.10
-
-Release tag `v0.10.0` resolves to commit `688a320025a0d38235eb90c780362ec26b0708e2`. The [release workflow](https://github.com/VasiliiBabkin/sedrava/actions/runs/41237159326) published wheel/sdist on PyPI with digital attestations. Main CI, Android build and text conformance succeeded. [RC1](RC_010_REPORT.md), [RC2](RC2_010_REPORT.md) and [stability audit](STABILITY_AUDIT_010.md) reports describe historical states and are retained unchanged.
-
-**Still open:** [final 0.10 physical-device acceptance](PHYSICAL_DEVICE_010.md). Do not imply all Android devices are supported or that the source contains automatic migrations, encrypted persistence or security certification. See [limitations](KNOWN_LIMITATIONS.md) and [compatibility](COMPATIBILITY_010.md).
-
-[Documentation website repository](https://github.com/VasiliiBabkin/sedrava-site) · [issues](https://github.com/VasiliiBabkin/sedrava/issues).
-
-## Web UI 0.11 — Slice A / Срез A
-
-Implemented experimentally in the feature branch: `build site`, 13 static primitives, typed styles, responsive HTML/CSS and checked local assets. Реализовано экспериментально в ветке: генерация сайтов, 13 статических компонентов, типизированные стили, адаптивность и проверка ресурсов. This does not announce a 0.11 release or change the production site. Это не выпуск 0.11 и не замена рабочего сайта.
-
-[English reference](WEB_UI_011.en.md) · [Русская справка](WEB_UI_011.ru.md). Next: semantic navigation/footer, badges/callouts, code blocks and documentation navigation; interactive forms/tabs/dialogs require later contracts and tests. Далее: семантическая навигация/footer, badge/callout, code block; интерактивные компоненты требуют следующих контрактов и тестов.
-
-
-## Experimental 0.11 integration / Экспериментальная интеграция
-
-The integration preview adds shared composition, pure functions, bounded collection queries, forms/tables/dialogs, hash routes, local styling and typed public HTTP. It is not a published 0.11.0 or a backend/auth/database service.
-
-Реализованные возможности, сборка четырёх проектов и ограничения: [English guide](011_WEB_PLATFORM.en.md), [руководство](011_WEB_PLATFORM.ru.md), [actual status](011_IMPLEMENTATION_STATUS.md). Existing published 0.10.0 instructions above remain applicable to their original targets.
+The official [documentation website](https://sedrava.virtreal.ru/) is built separately with Astro/Starlight. A Sedrava-generated dev preview is separate. **Describe the application; get the application. / Опиши — получи.**
