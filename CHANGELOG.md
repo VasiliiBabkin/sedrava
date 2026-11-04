@@ -1,11 +1,17 @@
 # Changelog
 
-## 0.11.0rc1 — candidate in preparation, NOT published
+## 0.11.0 — stable source candidate, NOT published
 
-- Stage the tested 0.11 integration line as a separate release candidate, without changing the published 0.10.0 tag/package.
+- Prepare the same frozen Web-platform feature scope as the [published 0.11.0rc1](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0rc1); candidate Android versionCode 11002 is higher than the published RC 11001.
+- New exact-head gate from real 0.10.0 to stable and back, plus real published RC to stable and back, in disposable environments. All actual results are subject to final CI and review.
+- No stable 0.11.0 tag or PyPI package, automatic schema migrations, trusted backend, SQLite/auth or 0.12 namespace/lockfile code is introduced by this preparation.
+
+## 0.11.0rc1 — experimental prerelease published on 2026-11-04
+
+- Published the tested integration line as an experimental [GitHub prerelease](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0rc1) and [PyPI package](https://pypi.org/project/sedrava/0.11.0rc1/); 0.10.0 remains available.
 - Candidate scope: responsive multi-page sites; stateful WebApps; components, reusable functions, forms, routes, typed collection queries, local styling and bounded public HTTP client requests.
 - Preserve existing app/Web/Android targets and explicitly exclude 0.12 namespaced modules, package locks, trusted server, databases and authentication.
-- Add read-only candidate distribution/compatibility CI, bilingual notes and owner acceptance gates. No tag, index upload or live site deployment has occurred.
+- Read-only candidate distribution/compatibility CI, published 0.10 upgrade/rollback checks and RU/EN website release documentation were completed before/after the approved RC publication.
 
 
 ## Unreleased — Web UI 0.11 Slice A
