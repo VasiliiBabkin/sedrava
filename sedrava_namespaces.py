@@ -1,0 +1,259 @@
+"""Experimental lexical namespaces for checked local .sdr modules.
+
+This performs symbol-table based resolution before existing typed IR parsing.
+It never evaluates imported source. Qualified references are resolved with
+lexical tokens, not substring substitution inside strings or comments.
+"""
+from dataclasses import dataclass
+from hashlib import sha256
+from pathlib import Path
+import keyword
+import re
+import tokenize
+from io import StringIO
+
+from sedrava_syntax import MAX_SOURCE_CHARS, source_lines
+
+_IDENT = r'[A-Za-z][A-Za-z0-9_]*'
+_MODULE = re.compile(rf'module ({_IDENT}(?:\.{_IDENT})*)\Z')
+_IMPORT = re.compile(rf'import "([^"\n]+\.sdr)" as ({_IDENT})\Z')
+_DECL = re.compile(rf'(export )?(component|style|record|fn) ({_IDENT})(?=[(: \t])')
+_RESERVED = re.compile(r'M_[0-9a-f]{12}_[A-Za-z][A-Za-z0-9_]*')
+
+
+@dataclass(frozen=True)
+class Symbol:
+    module: str
+    name: str
+    kind: str
+    emitted: str
+    public: bool
+    path: Path
+    line: int
+
+
+@dataclass(frozen=True)
+class CompiledModule:
+    module: str
+    symbols: dict
+    visible: dict
+    text: str
+    dependencies: tuple
+
+
+def _tokens(line):
+    """Identifiers and dots outside quoted literals and comments."""
+    try:
+        return [t for t in tokenize.generate_tokens(StringIO(line + '\n').readline)
+                if t.type not in (tokenize.NL, tokenize.NEWLINE, tokenize.ENDMARKER, tokenize.ENCODING)]
+    except (tokenize.TokenError, IndentationError) as exc:
+        raise ValueError(f'Invalid lexical syntax: {exc}') from exc
+
+
+def _rewrite(line, local=None, aliases=None, *, line_no=1, filename='<source>', excluded=()):
+    """Resolve qualified and local identifiers using canonical Symbol objects.
+
+    Changes only lexical NAME and NAME.DOT.NAME spans; the typed domain parser
+    subsequently builds and checks the expression AST. Host code never runs.
+    """
+    local = local or {}
+    aliases = aliases or {}
+    excluded = set(excluded)
+    toks = _tokens(line)
+    ops = []
+    i = 0
+    while i < len(toks):
+        t = toks[i]
+        if t.type != tokenize.NAME:
+            i += 1
+            continue
+        alias = t.string
+        if alias in aliases and i + 2 < len(toks) and toks[i+1].string == '.' and toks[i+2].type == tokenize.NAME:
+            symbol_name = toks[i+2].string
+            sym = aliases[alias].visible.get(symbol_name)
+            if sym is None:
+                raise ValueError(f'{filename}:{line_no}: {alias}.{symbol_name} is not an exported symbol')
+            ops.append((t.start[1], toks[i+2].end[1], sym.emitted))
+            i += 3
+            continue
+        if alias in aliases:
+            pass
+        elif alias in local and alias not in excluded and (i == 0 or toks[i-1].string != '.'):
+            ops.append((t.start[1], t.end[1], local[alias].emitted))
+        i += 1
+    for start, end, value in reversed(ops):
+        line = line[:start] + value + line[end:]
+    return line
+
+
+def _valid_import(source_path, value, root, line):
+    path = Path(value)
+    if path.is_absolute() or '..' in path.parts or '\\' in value or not value.endswith('.sdr'):
+        raise ValueError(f'{source_path}:{line}: import must stay within the source directory')
+    candidate = source_path.parent / path
+    cursor = candidate
+    while cursor != root and cursor != cursor.parent:
+        if cursor.is_symlink():
+            raise ValueError(f'{source_path}:{line}: symlink modules are forbidden')
+        cursor = cursor.parent
+    path = candidate.resolve()
+    if not path.is_relative_to(root) or not path.is_file():
+        raise ValueError(f'{source_path}:{line}: missing/outside-root module {value}')
+    if path.stat().st_size > MAX_SOURCE_CHARS * 4:
+        raise ValueError(f'{source_path}:{line}: module resource limit')
+    return path
+
+
+def _local_decl(line, module, path, n):
+    m = _DECL.match(line)
+    if not m:
+        return None
+    _, kind, name = m.groups()
+    if keyword.iskeyword(name) or name.startswith('M_'):
+        raise ValueError(f'{path}:{n}: reserved declaration name {name}')
+    digest = sha256(module.encode('utf-8')).hexdigest()[:12]
+    return Symbol(module, name, kind, f'M_{digest}_{name}', bool(m[1]), path, n)
+
+
+def resolve_scoped(source, source_path):
+    """Lower aliased imports while retaining legacy unqualified import support.
+
+    Returns source text and checked dependency paths for manifests. Invoked
+    only for the new explicit import-as syntax. Ordinary files are unchanged.
+    """
+    if source_path is None:
+        raise ValueError('Aliased imports require a source file path')
+    entry = Path(source_path).resolve()
+    root = entry.parent
+    cache = {}
+    module_names = {}
+    dependencies = set()
+    loading = []
+
+    def load(path):
+        if path in cache:
+            return cache[path]
+        if path in loading or len(loading) >= 16:
+            raise ValueError(f'{path}: cyclic/excessive aliased module imports')
+        if len(cache) + len(loading) >= 32:
+            raise ValueError('Aliased module resource limit')
+        loading.append(path)
+        try:
+            text = path.read_text(encoding='utf-8')
+            entries = source_lines(text)
+            if not entries or not (head := _MODULE.fullmatch(entries[0][1])) or entries[0][0] != 0:
+                raise ValueError(f'{path}: line 1: namespaced import requires module org.name')
+            module_id = head[1]
+            if module_id in module_names and module_names[module_id] != path:
+                raise ValueError(f'{path}: duplicate module identity {module_id}')
+            module_names[module_id] = path
+            lines = text.splitlines()
+            symbols = {}
+            aliases = {}
+            nested = []
+            for depth, raw, no in entries[1:]:
+                if depth != 0:
+                    continue
+                import_match = _IMPORT.fullmatch(raw)
+                if import_match:
+                    value, alias = import_match.groups()
+                    if alias in aliases or keyword.iskeyword(alias):
+                        raise ValueError(f'{path}:{no}: duplicate/reserved import alias {alias}')
+                    dep = _valid_import(path, value, root, no)
+                    aliases[alias] = load(dep)
+                    nested.append(dep)
+                    continue
+                if raw.startswith('import '):
+                    raise ValueError(f'{path}:{no}: namespaced modules require explicit import aliases')
+                sym = _local_decl(raw, module_id, path, no)
+                if sym:
+                    if sym.name in symbols or sym.name in aliases:
+                        raise ValueError(f'{path}:{no}: duplicate declaration {sym.name}')
+                    symbols[sym.name] = sym
+                    continue
+                raise ValueError(f'{path}:{no}: namespaces allow only module/import and fn/record/component/style declarations')
+            if not symbols:
+                raise ValueError(f'{path}: module has no declarations')
+            for alias in aliases:
+                if alias in symbols:
+                    raise ValueError(f'{path}: ambiguous local symbol/import alias {alias}')
+            result = []
+            for no, line in enumerate(lines, 1):
+                stripped = line.strip()
+                if no == entries[0][2] or (not line.startswith(' ') and _IMPORT.fullmatch(stripped)):
+                    continue
+                if not line.strip() or stripped.startswith('#'):
+                    result.append(line)
+                    continue
+                m = _DECL.match(line) if not line.startswith(' ') else None
+                if m:
+                    sym = symbols[m[3]]
+                    line = line[:m.start()] + m[2] + ' ' + sym.emitted + line[m.end():]
+                    if sym.kind == 'fn':
+                        signature = re.match(r'fn \w+\(([^()]*)\)', line)
+                        bound = tuple(re.findall(rf'({_IDENT})\s*:', signature[1])) if signature else ()
+                        if any(v in symbols or v in aliases for v in bound):
+                            raise ValueError(f'{path}:{no}: function parameter conflicts with module symbol/import alias')
+                        line = _rewrite(line, symbols, aliases, line_no=no, filename=str(path), excluded=bound)
+                    elif sym.kind == 'record':
+                        line = _rewrite(line, {}, aliases, line_no=no, filename=str(path))
+                    result.append(line)
+                    continue
+                if not line.startswith(' '):
+                    raise ValueError(f'{path}:{no}: invalid top-level module construct')
+                if re.match(r'^\s*use\s+', line):
+                    line = _rewrite(line, {n:s for n,s in symbols.items() if s.kind=='component'}, aliases, line_no=no, filename=str(path))
+                elif re.search(r'\bstyle\s+(?:[A-Za-z][A-Za-z0-9_]*)(?![A-Za-z0-9_])', line):
+                    line = _rewrite(line, {n:s for n,s in symbols.items() if s.kind=='style'}, aliases, line_no=no, filename=str(path))
+                elif re.match(r'^\s*\w+\s*:\s*', line):
+                    line = _rewrite(line, {n:s for n,s in symbols.items() if s.kind=='record'}, aliases, line_no=no, filename=str(path))
+                result.append(line)
+            built = CompiledModule(module_id, symbols, {n:s for n,s in symbols.items() if s.public}, '\n'.join(result), tuple(nested))
+            cache[path] = built
+            dependencies.add(path)
+            return built
+        finally:
+            loading.pop()
+
+    aliases = {}
+    for depth, raw, no in source_lines(source):
+        if depth != 0:
+            continue
+        m = _IMPORT.fullmatch(raw)
+        if not m:
+            continue
+        value, alias = m.groups()
+        if alias in aliases or keyword.iskeyword(alias):
+            raise ValueError(f'{entry}:{no}: duplicate/reserved import alias {alias}')
+        path = _valid_import(entry, value, root, no)
+        aliases[alias] = load(path)
+    if not aliases:
+        return source, dependencies
+    for depth, raw, no in source_lines(source):
+        if any(t.type == tokenize.NAME and _RESERVED.fullmatch(t.string) for t in _tokens(raw)):
+            raise ValueError(f'{entry}:{no}: reserved generated symbol identifier')
+    for alias in aliases:
+        if re.search(rf'^(?:state|derive|fn|record|action|component|style|view|service) {re.escape(alias)}(?:\s|\(|:|=)', source, re.M):
+            raise ValueError(f'{entry}: local declaration collides with import alias {alias}')
+    emitted = set()
+    def append_dependency(path, out):
+        if path in emitted:
+            return
+        for child in cache[path].dependencies:
+            append_dependency(child, out)
+        emitted.add(path)
+        out.extend(cache[path].text.splitlines())
+    out = []
+    for no, line in enumerate(source.splitlines(), 1):
+        m = _IMPORT.fullmatch(line)
+        if m:
+            path = _valid_import(entry, m[1], root, no)
+            append_dependency(path, out)
+        elif line.startswith('import "') and ' as ' in line and not m:
+            raise ValueError(f'{entry}:{no}: invalid namespaced import')
+        else:
+            out.append(_rewrite(line, aliases=aliases, filename=str(entry), line_no=no))
+    output = '\n'.join(out) + '\n'
+    if len(output) > MAX_SOURCE_CHARS:
+        raise ValueError('Expanded imports exceed source limit')
+    return output, dependencies
