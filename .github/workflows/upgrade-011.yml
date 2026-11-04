@@ -1,4 +1,4 @@
-name: Published 0.10 to 0.11 RC upgrade and rollback
+name: Published 0.10 to 0.11 stable-candidate upgrade and rollback
 on:
   pull_request:
     branches: [main]

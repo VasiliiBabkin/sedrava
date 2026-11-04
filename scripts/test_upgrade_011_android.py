@@ -1,4 +1,4 @@
-"""Real API35 same-key published-0.10 APK -> RC -> debug-only downgrade.
+"""Real API35 same-key published-0.10 APK -> stable 0.11 candidate -> debug-only downgrade.
 
 No uninstall/pm clear between transitions. Lower-version normal installation must
 fail; -d is explicitly tested for debuggable APKs, not a production rollback claim.
@@ -24,8 +24,8 @@ def main(work):
     if props['ro.build.version.sdk']!='35' or props['ro.kernel.qemu']!='1':raise ValueError('Requires disposable API35 emulator; no installation performed')
     package=project_identity(old);assert project_identity(new)==package
     sdk=Path(os.environ['ANDROID_HOME']);apk=lambda project:project/'app/build/outputs/apk/debug/app-debug.apk'
-    old_meta=verify(apk(old),sdk,package,'0.10.0');new_meta=verify(apk(new),sdk,package,'0.11.0rc1');validate_update(old_meta,new_meta)
-    assert old_meta['version_code']==10003 and new_meta['version_code']==11001 and old_meta['debuggable'] and new_meta['debuggable']
+    old_meta=verify(apk(old),sdk,package,'0.10.0');new_meta=verify(apk(new),sdk,package,'0.11.0');validate_update(old_meta,new_meta)
+    assert old_meta['version_code']==10003 and new_meta['version_code']==11002 and old_meta['debuggable'] and new_meta['debuggable']
     relative='shared_prefs/sedrava_state.xml'
     def prefs():return run('adb','shell','run-as',package,'cat',relative)
     def start(needle):
@@ -43,7 +43,7 @@ def main(work):
     assert 'package:'+package not in run('adb','shell','pm','list','packages',package)
     run('gradle','-p',old,'--no-daemon','-Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true',':app:connectedDebugAndroidTest')
     before=prefs();assert snapshot(before)['state']['tasks']=={'next_id':2,'items':[{'id':1,'title':'Upgrade kept','done':False}]}
-    stop();assert 'Success' in run('adb','install','-r',apk(new));assert 'versionCode=11001' in run('adb','shell','dumpsys','package',package);start('Upgrade kept');assert snapshot(prefs())==snapshot(before)
+    stop();assert 'Success' in run('adb','install','-r',apk(new));assert 'versionCode=11002' in run('adb','shell','dumpsys','package',package);start('Upgrade kept');assert snapshot(prefs())==snapshot(before)
     stop();start('Upgrade kept');assert snapshot(prefs())==snapshot(before)
     run('gradle','-p',new,'--no-daemon','-Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true',':app:connectedDebugAndroidTest')
     edited=prefs();expected={'next_id':2,'items':[{'id':1,'title':'RC edited','done':True}]};assert snapshot(edited)['state']['tasks']==expected

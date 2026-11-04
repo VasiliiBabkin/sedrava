@@ -28,8 +28,8 @@ class RCPreparationTests(unittest.TestCase):
     def test_version_and_unchanged_android_identity(self):
         import sedrava
         self.assertEqual(VERSION,CLI_VERSION);self.assertEqual(VERSION,sedrava.__version__)
-        self.assertIn(VERSION, ('0.10.0','0.11.0rc1'))
-        self.assertEqual(ANDROID_VERSION_CODE, {'0.10.0':10003,'0.11.0rc1':11001}[VERSION])
+        self.assertIn(VERSION, ('0.10.0','0.11.0rc1','0.11.0'))
+        self.assertEqual(ANDROID_VERSION_CODE, {'0.10.0':10003,'0.11.0rc1':11001,'0.11.0':11002}[VERSION])
         expected={'task_manager_navigation':'org.sedrava.app.af44c2608593529f9c803c46e60a5a99d','task_manager':'org.sedrava.app.ae42ed66f07aefa1c223e4fbcec5fa57b'}
         for name,package in expected.items():
             with self.subTest(name=name),tempfile.TemporaryDirectory() as folder:

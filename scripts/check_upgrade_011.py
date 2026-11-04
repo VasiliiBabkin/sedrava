@@ -20,7 +20,7 @@ def download_baseline(folder):
         if len(data)>8*1024*1024 or hashlib.sha256(data).hexdigest()!=expected:raise ValueError('Published baseline bytes changed')
         (folder/name).write_bytes(data)
     return {'published_tag':'v0.10.0','published_source_sha':'688a320025a0d38235eb90c780362ec26b0708e2','index':'https://pypi.org/pypi/sedrava/0.10.0/json','files':{name:{'sha256':sha,'url':next(f['url'] for f in meta['urls'] if f['filename']==name)} for name,sha in PINS.items()}}
-def check(candidate_dist,work,sha,candidate="0.11.0rc1"):
+def check(candidate_dist,work,sha,candidate="0.11.0"):
     work=Path(work).resolve();candidate_dist=Path(candidate_dist).resolve()
     if work.is_relative_to(ROOT) or work.exists():raise ValueError('Use a new work directory outside the source checkout')
     if len(sha)!=40 or any(c not in '0123456789abcdef' for c in sha):raise ValueError('Exact candidate source SHA required')
@@ -86,4 +86,4 @@ def check(candidate_dist,work,sha,candidate="0.11.0rc1"):
     result={'incompatible_source_sha256':digest(incompatible_source),'status':'PASS','candidate_sha':sha,'candidate_version':candidate,'baseline':baseline,'candidate_files':{p.name:digest(p) for p in archives},'python':sys.version,'phases':events,'installed_versions':versions,'observed_states':outputs,'project_hashes':project_hashes,'cli_state_before_sha256':hashlib.sha256(saved).hexdigest(),'cli_state_after_rc_sha256':hashlib.sha256(upgraded).hexdigest(),'user_sources_unchanged':True,'same_environment_upgrade_and_rollback':True,'wheel_sdist_generated_bytes_equal':True}
     (work/'upgrade-install.json').write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n');log.close();print('PASS: four clean installs and same-venv 0.10 -> 0.11rc1 -> 0.10; exact output/state parity');return result
 if __name__=='__main__':
-    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--candidate-dist',type=Path,required=True);parser.add_argument('--work',type=Path,required=True);parser.add_argument('--candidate-sha',required=True);parser.add_argument('--candidate-version',default='0.11.0rc1');args=parser.parse_args();check(args.candidate_dist,args.work,args.candidate_sha,args.candidate_version)
+    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--candidate-dist',type=Path,required=True);parser.add_argument('--work',type=Path,required=True);parser.add_argument('--candidate-sha',required=True);parser.add_argument('--candidate-version',default='0.11.0');args=parser.parse_args();check(args.candidate_dist,args.work,args.candidate_sha,args.candidate_version)
