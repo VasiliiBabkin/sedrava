@@ -143,3 +143,8 @@ python -m http.server 8000 --directory build/site
 The integration preview adds shared composition, pure functions, bounded collection queries, forms/tables/dialogs, hash routes, local styling and typed public HTTP. It is not a published 0.11.0 or a backend/auth/database service.
 
 Реализованные возможности, сборка четырёх проектов и ограничения: [English guide](docs/011_WEB_PLATFORM.en.md), [руководство](docs/011_WEB_PLATFORM.ru.md), [actual status](docs/011_IMPLEMENTATION_STATUS.md). Existing published 0.10.0 instructions above remain applicable to their original targets.
+
+
+## Experimental 0.12.0a1 alpha source preparation (NOT published)
+
+[Alpha preparation branch](https://github.com/VasiliiBabkin/sedrava/tree/release/012-alpha1-preparation) extends the unmerged 0.11 development base with checked namespaced modules (PR #39), source-file line diagnostics (PR #40) and offline version-pinned local dependencies (PR #41). This alpha remains **unpublished**, independently reviewed and separate from the 0.11 release-candidate path; current published Sedrava stays at 0.10.0. No public package registry, fully typed namespace IR, backend, SQLite or authentication is provided. [English notes](docs/RELEASE_NOTES_0_12_0a1.en.md) · [Русский](docs/RELEASE_NOTES_0_12_0a1.ru.md) · [Alpha acceptance checklist](docs/RELEASE_TRACK_012_ALPHA.md).
