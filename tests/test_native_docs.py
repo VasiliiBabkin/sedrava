@@ -57,3 +57,4 @@ class NativeDocs(unittest.TestCase):
         source='print("<script> & 😀")\n# exact source\n'
         rendered=code_panel(source,'python');self.assertNotIn('<script>',rendered)
         self.assertIn(hashlib.sha256(source.encode()).hexdigest(),rendered)
+        self.assertIn('class="code-lines" aria-hidden="true"',rendered)
