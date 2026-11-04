@@ -1,0 +1,6 @@
+[package]
+name = "example.locked.site"
+version = "0.1.0"
+
+[dependencies]
+"example.cards" = { path = "vendor/example.cards", version = "1.0.0" }

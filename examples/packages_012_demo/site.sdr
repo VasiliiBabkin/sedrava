@@ -1,0 +1,6 @@
+site "Locked package demo"
+import "vendor/example.cards/panel.sdr" as cards
+page home at "/":
+    title "Locked package demo"
+    heading "Reproducible dependencies"
+    use cards.Panel
