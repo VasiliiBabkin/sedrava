@@ -13,6 +13,11 @@ def expand(source, source_path=None, _stack=(), _root=None, _files=None, *, with
     from sedrava_source_map import locations
     files = set() if _files is None else _files
     source_map = locations(source, source_path)
+    if not _stack and source_path is not None:
+        from sedrava_packages import verify_if_project
+        package_files = verify_if_project(source_path)
+        if package_files:
+            files.update(package_files)
     if not _stack:
         from sedrava_namespaces import _IMPORT, resolve_scoped
         if any(_IMPORT.fullmatch(line) for depth, line, _ in source_lines(source) if depth == 0):
