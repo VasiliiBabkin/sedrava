@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.12.0a1 — experimental alpha source candidate, NOT published
+
+- Prepare a separate candidate from the stacked #39–#41 namespace, source-provenance and offline-package branches.
+- Preserve explicit symbol visibility, aliases and isolated module names; map common expanded errors to original files/lines.
+- Add exact-version local vendored dependencies and canonical SHA-256 lockfiles, with no online registry or arbitrary host plugins.
+- Separate candidate packaging, checks and notes from the 0.11 release track; no tag, registry upload, merge or deployment.
+
+
 ## Unreleased — Web UI 0.11 Slice A
 
 - Add experimental `site` presentation AST and `sedrava build site`, preserving 0.10 application semantics and package identity.
