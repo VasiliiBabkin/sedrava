@@ -1,7 +1,5 @@
 name: Published 0.10 to 0.11 RC upgrade and rollback
 on:
-  push:
-    branches: [release/011-rc1-preparation]
   pull_request:
     branches: [main]
 permissions:
