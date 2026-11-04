@@ -39,3 +39,7 @@ Never move an existing published tag or replace registry files.
 
 [PR #39](https://github.com/VasiliiBabkin/sedrava/pull/39), [#40](https://github.com/VasiliiBabkin/sedrava/pull/40), [#41](https://github.com/VasiliiBabkin/sedrava/pull/41) form a stacked experimental namespace/provenance/offline-package line.
 An eventual `0.12.0a1` must rebase onto the *released* 0.11 baseline, satisfy the same security/reproducibility gates and be explicitly published as a prerelease, never confused with stable 0.11.
+
+## Independent practical upgrade gate / Практическая проверка обновления
+
+See [actual baseline hashes and audit](UPGRADE_AUDIT_011.md), [EN upgrade/rollback](UPGRADE_0_11_0rc1.en.md) and [RU instructions](UPGRADE_0_11_0rc1.ru.md). The read-only `upgrade-011.yml` uses the real published **0.10.0** wheel/sdist and the exact-head candidate artifacts. Its `sedrava-upgrade-final-report` must say GO for the same source SHA; an old 0.9/early-RC test or clean installation alone does not satisfy this gate. Android normal downgrade rejection and debug-only rollback are distinct. Final technical readiness still requires all other applicable exact-head workflows and owner publication approval.

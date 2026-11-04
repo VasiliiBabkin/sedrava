@@ -66,7 +66,7 @@ def main(work):
         bad_cases.append({'kind':kind,'sha256':hashlib.sha256(bad.encode()).hexdigest(),'original_retained_across_update_restart_debug_rollback':True});write(edited)
     start('RC edited');assert snapshot(prefs())==snapshot(edited)
     for label,raw in [('before',before),('after-rc',edited),('after-rollback',prefs())]:(out/(label+'.xml')).write_text(raw)
-    receipt={'status':'PASS','emulator':props,'baseline_apk':old_meta,'candidate_apk':new_meta,'normal_downgrade':'INSTALL_FAILED_VERSION_DOWNGRADE; data unchanged','debug_only_rollback':'adb install -r -d; data retained; not a production guarantee','preserved_full_snapshot':snapshot(edited),'rejected_data':bad_cases,'transitions_without_uninstall_or_clear':True,'physical_device':'not tested'}
+    receipt={'candidate_sha':json.loads((work/'upgrade-install.json').read_text())['candidate_sha'],'status':'PASS','emulator':props,'baseline_apk':old_meta,'candidate_apk':new_meta,'normal_downgrade':'INSTALL_FAILED_VERSION_DOWNGRADE; data unchanged','debug_only_rollback':'adb install -r -d; data retained; not a production guarantee','preserved_full_snapshot':snapshot(edited),'rejected_data':bad_cases,'transitions_without_uninstall_or_clear':True,'physical_device':'not tested'}
     (out/'android-upgrade.json').write_text(json.dumps(receipt,indent=2)+'\n');print('PASS: real published 0.10 -> RC update, rejected normal downgrade and actual debug rollback with data retained')
 if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('--work',type=Path,required=True);main(p.parse_args().work)

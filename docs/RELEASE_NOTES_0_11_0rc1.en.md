@@ -22,3 +22,6 @@
 
 Only use a reviewed checkout of the preparation branch for candidate testing. Do not claim `pip install sedrava==0.11.0rc1` or a `v0.11.0rc1` GitHub release is available until those destinations have been checked after publication.
 See [Russian notes](RELEASE_NOTES_0_11_0rc1.ru.md), [full guide](011_WEB_PLATFORM.en.md) and [release gates](RELEASE_TRACK_011.md).
+
+
+[Verified installation and rollback procedure](UPGRADE_0_11_0rc1.en.md); [independent audit and evidence contract](UPGRADE_AUDIT_011.md).

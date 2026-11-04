@@ -59,4 +59,9 @@ class UpgradeBrowser(unittest.TestCase):
         self.goto('clean-rc-wheel','platform_crm');expect(p.get_by_role('heading',level=1)).to_be_visible();p.get_by_role('button',name='Companies',exact=True).click();p.get_by_label('Company name',exact=True).fill('Installed Co');p.get_by_label('Industry',exact=True).fill('Testing');p.get_by_label('Industry',exact=True).press('Enter');expect(p.get_by_role('button',name='Select Installed Co',exact=True)).to_be_visible()
         Quiet.mode='normal';Quiet.rows=[{'id':1,'title':'A public product','available':True}];self.goto('clean-rc-wheel','platform_catalog');expect(p.get_by_text('A public product',exact=True)).to_be_visible();Quiet.mode='error';p.get_by_role('button',name='Refresh catalog',exact=True).click();expect(p.get_by_role('region',name='Product catalog').get_by_role('status').first).to_have_text('error: HTTP 500')
 if __name__=='__main__':
-    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--work',type=Path,required=True);args,extra=parser.parse_known_args();WORK=args.work.resolve();unittest.main(argv=[sys.argv[0],*extra],verbosity=2)
+    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--work',type=Path,required=True);args,extra=parser.parse_known_args();WORK=args.work.resolve();program=unittest.main(argv=[sys.argv[0],*extra],verbosity=2,exit=False)
+    report=WORK/('browser-'+os.environ.get('SEDRAVA_BROWSER','chromium'))/'web-upgrade.json'
+    data=json.loads(report.read_text()) if report.exists() else {}
+    data.update({'status':'PASS' if program.result.wasSuccessful() else 'FAIL','tests':program.result.testsRun,'failures':len(program.result.failures),'errors':len(program.result.errors),'candidate_sha':json.loads((WORK/'upgrade-install.json').read_text())['candidate_sha']})
+    report.parent.mkdir(exist_ok=True);report.write_text(json.dumps(data,ensure_ascii=False,indent=2)+'\n')
+    raise SystemExit(0 if program.result.wasSuccessful() else 1)
