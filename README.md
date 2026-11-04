@@ -143,3 +143,10 @@ python -m http.server 8000 --directory build/site
 The integration preview adds shared composition, pure functions, bounded collection queries, forms/tables/dialogs, hash routes, local styling and typed public HTTP. It is not a published 0.11.0 or a backend/auth/database service.
 
 Реализованные возможности, сборка четырёх проектов и ограничения: [English guide](docs/011_WEB_PLATFORM.en.md), [руководство](docs/011_WEB_PLATFORM.ru.md), [actual status](docs/011_IMPLEMENTATION_STATUS.md). Existing published 0.10.0 instructions above remain applicable to their original targets.
+
+
+## 0.11.0rc1 release-candidate preparation (not published) / Подготовка RC
+
+A separate [0.11 release candidate branch](https://github.com/VasiliiBabkin/sedrava/tree/release/011-rc1-preparation) is being validated. The published version remains **0.10.0**. The candidate adds static `site` generation, stateful browser `webapp`, local composition, pure functions, collection queries, routes, forms, style/assets and checked public HTTP client calls. It does **not** include namespaces/packages from the separate 0.12 experimental line, nor a trusted server, database or authentication. [Candidate notes](docs/RELEASE_NOTES_0_11_0rc1.en.md) · [Заметки по кандидату](docs/RELEASE_NOTES_0_11_0rc1.ru.md) · [Release gates](docs/RELEASE_TRACK_011.md).
+
+The candidate is not published on GitHub/PyPI and requires exact-commit CI, independent distribution checks, owner review and a separate tag/publication decision. No production website deployment is implied.

@@ -31,8 +31,8 @@ NO_STALE = [
 
 class PublishedDocumentationTests(unittest.TestCase):
     def test_version_and_published_links(self):
-        self.assertEqual(VERSION, "0.10.0")
-        self.assertEqual(ANDROID_VERSION_CODE, 10003)
+        self.assertIn(VERSION, ("0.10.0", "0.11.0rc1"))
+        self.assertEqual(ANDROID_VERSION_CODE, {"0.10.0": 10003, "0.11.0rc1": 11001}[VERSION])
         for name in CANONICAL:
             with self.subTest(path=name):
                 doc = (ROOT / name).read_text(encoding="utf-8")

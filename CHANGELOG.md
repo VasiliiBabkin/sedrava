@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.11.0rc1 — candidate in preparation, NOT published
+
+- Stage the tested 0.11 integration line as a separate release candidate, without changing the published 0.10.0 tag/package.
+- Candidate scope: responsive multi-page sites; stateful WebApps; components, reusable functions, forms, routes, typed collection queries, local styling and bounded public HTTP client requests.
+- Preserve existing app/Web/Android targets and explicitly exclude 0.12 namespaced modules, package locks, trusted server, databases and authentication.
+- Add read-only candidate distribution/compatibility CI, bilingual notes and owner acceptance gates. No tag, index upload or live site deployment has occurred.
+
+
 ## Unreleased — Web UI 0.11 Slice A
 
 - Add experimental `site` presentation AST and `sedrava build site`, preserving 0.10 application semantics and package identity.

@@ -1,6 +1,6 @@
 # Sedrava 0.11 Web platform integration guide
 
-**Experimental integration preview, not a released 0.11.0.** The package version remains the published 0.10.0 while this branch is reviewed. See [actual status](011_IMPLEMENTATION_STATUS.md). Do not install the published 0.10 wheel expecting these additions. The integration does not operate a production server, authentication service or database.
+**Experimental 0.11.0rc1 release-candidate preparation; no candidate has been published.** This branch builds candidate version 0.11.0rc1, while the published package remains 0.10.0. See [actual status](011_IMPLEMENTATION_STATUS.md). Do not install the published 0.10 wheel expecting these additions. The integration does not operate a production server, authentication service or database.
 
 ## Build and preview
 
