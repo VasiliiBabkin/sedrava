@@ -69,6 +69,9 @@ remain byte-for-byte intact after attempted edits and reload/rollback. Defaults
 shown after rejection are **not a successful migration**. Restore a backed-up
 compatible snapshot only after preserving the rejected original.
 
+A real recompilation with list capacity 100 → 99 is also tested: saved data is
+rejected even if it fits the new capacity, and the original remains recoverable.
+
 The tests cover unchanged 0.10 scalar and records/navigation schemas, not arbitrary
 schema changes or migration from `app` storage to new `webapp` storage. See
 [the exact compatibility contract](COMPATIBILITY_010.md). No concurrent-writer,

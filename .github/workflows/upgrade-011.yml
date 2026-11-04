@@ -30,7 +30,7 @@ jobs:
         run: |
           mkdir -p build/upgrade-inputs
           cp -r dist build/upgrade-inputs/
-          for item in published projects generated commands.log upgrade-install.json; do
+          for item in published projects generated incompatible-capacity.sdr commands.log upgrade-install.json; do
             if test -e "$RUNNER_TEMP/upgrade/$item"; then cp -r "$RUNNER_TEMP/upgrade/$item" build/upgrade-inputs/; fi
           done
           python - <<'PY'

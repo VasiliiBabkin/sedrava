@@ -46,13 +46,17 @@ class UpgradeBrowser(unittest.TestCase):
         self.goto('in-place-rollback','text_profile');expect(p.locator('[data-state=visits]')).to_have_text('2');self.assertEqual(self.stored('scalar-old-rollback'),after)
     def test_corruption_and_incompatible_schema_preserve_original(self):
         p=self.page;valid=self.seed();key=next(iter(valid));snapshot=json.loads(valid[key])
-        for label,raw in [('malformed','{broken'),('incompatible',json.dumps({**snapshot,'fingerprint':'incompatible'})),('duplicate','{"schema":1,"schema":2}')]:
+        for label,raw in [('malformed','{broken'),('unknown-field',json.dumps({**snapshot,'fingerprint':'extra'})),('incompatible-signature',json.dumps({**snapshot,'signature':'incompatible'})),('duplicate','{"schema":1,"schema":2}')]:
             p.evaluate('([key,value])=>localStorage.setItem(key,value)',[key,raw]);self.goto('clean-rc-wheel','task_manager_navigation');expect(p.locator('#sedrava-error')).to_contain_text('Saved data could not be restored')
             p.get_by_label('New task',exact=True).fill('Must not overwrite');p.get_by_role('button',name='Add task',exact=True).click();self.assertEqual(self.stored(label+'-rc-locked')[key],raw)
             p.reload();expect(p.locator('#sedrava-error')).to_contain_text('Saved data could not be restored');self.assertEqual(self.stored(label+'-rc-restarted')[key],raw)
             self.goto('in-place-rollback','task_manager_navigation');expect(p.locator('#sedrava-error')).to_contain_text('Saved data could not be restored');self.assertEqual(self.stored(label+'-old-rollback')[key],raw)
         # Restore the actual backed-up bytes, never silently reset incompatible data.
         p.evaluate('([key,value])=>localStorage.setItem(key,value)',[key,valid[key]]);p.reload();expect(p.get_by_role('button',name='Open Сохранено 😀 é',exact=True)).to_be_visible();self.assertEqual(self.stored('backed-up-original-recovered'),valid)
+        # A real recompiled source schema, not just a handcrafted invalid envelope.
+        self.goto('incompatible-schema','task_manager_navigation');expect(p.locator('#sedrava-error')).to_contain_text('Saved data could not be restored')
+        p.get_by_label('New task',exact=True).fill('Blocked schema write');p.get_by_role('button',name='Add task',exact=True).click();self.assertEqual(self.stored('capacity-100-to-99-rejected'),valid)
+        self.goto('in-place-rollback','task_manager_navigation');expect(p.get_by_role('button',name='Open Сохранено 😀 é',exact=True)).to_be_visible();self.assertEqual(self.stored('capacity-rollback-recovered'),valid)
     def test_installed_candidate_new_web_examples(self):
         p=self.page;self.goto('clean-rc-wheel','platform_site');expect(p.get_by_role('heading',level=1)).to_be_visible()
         self.goto('clean-rc-wheel','platform_tasks');p.get_by_label('New task',exact=True).fill('Installed RC task');p.get_by_role('button',name='Add task',exact=True).click();expect(p.get_by_role('button',name='Select Installed RC task',exact=True)).to_be_visible();p.reload();expect(p.get_by_role('button',name='Select Installed RC task',exact=True)).to_be_visible()

@@ -55,6 +55,10 @@ the checkout with source import paths removed. Results:
   collection/navigation full-snapshot update/edit/rollback/cold reload; scalar
   Unicode and invariant rollback; malformed/duplicate/incompatible data protection;
   four installed new Web projects including real loopback HTTP success/HTTP 500.
+  The schema case additionally recompiles the same app with list capacity **100 → 99**,
+  retaining origin/path/title: even saved data within the new bound must be rejected
+  because its schema signature differs; reverting compatible HTML recovers the old bytes.
+  Unknown envelope fields and altered `signature` are separate negative cases.
 - Full local existing Python regression: **268 passed**. Release security policy
   accepts the added read-only, fully SHA-pinned workflow; publisher is unchanged.
 
