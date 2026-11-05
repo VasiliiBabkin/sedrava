@@ -21,9 +21,16 @@ The original `expand(source, path)` return contract remains `(source, dependenci
 - 7 focused regression tests exercise nested namespace imports, legacy imports, component templates, main caller locations, build and check diagnostics, and no guessed locations.
 - 11 existing namespace/legacy module tests also passed locally.
 - Before publication to the PR, the reference namespaced site/WebApp generated **identical file hashes** with and without this change (four files each).
-- Source metadata exists only during compilation. No runtime JS, extra permissions, or backend capabilities are added.
+- Source metadata exists only during compilation. The generated applications do not embed developer paths or require extra permissions. Python runtime expressions retain their checked original origins.
 - The compiler still checks all import path/symlink/cycle/private-export boundaries.
 
-**Remaining limitations:** This is reliable original **line** provenance for supported transformations, not complete column-level mappings for rewritten identifiers, every synthetic compiler pass, or a native typed-IR symbol table. Compiler errors without a checked line remain unchanged; mapping never guesses. Lexical symbol lowering remains experimental. No package manager, SQLite, server, or authentication is present.
-
-Next steps: complete column/span mapping and canonical typed-IR symbol identity; then design and implement local versioned packages/lockfiles in a separate PR. This draft does not authorize merges, releases, or deployment.
+**Current integration:** lexical replacements and component substitutions now carry
+character maps. App/site/WebApp compile diagnostics and Python runtime errors use
+original paths, lines and scalar columns. Nested imported-call and template-column
+regressions execute the actual compiler. This remains lexical lowering, not a
+native multi-file typed-IR debug symbol table; some whole-program errors have only
+a declaration/file location. Local package locks are implemented separately and
+included in the integration; no remote registry, SQL, server or authentication.
+See [EN](CORE_NAMESPACES_012.md) / [RU](CORE_NAMESPACES_012.ru.md).
+Historical slice counts above are not final integration evidence. No merge,
+publication or deployment is authorized by this document.

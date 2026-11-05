@@ -1,4 +1,7 @@
 """Reproducible offline vendored packages, tested with the actual Sedrava CLI."""
+import contextlib
+import os
+from unittest.mock import patch
 import json
 import tempfile
 import unittest
@@ -113,6 +116,62 @@ version="2.0.0"
         lock(self.root)
         (self.root/'sedrava.lock').write_text('{"schema":1,"schema":1}')
         with self.assertRaisesRegex(ValueError,'Invalid sedrava.lock JSON'):verify(self.root)
+
+    def test_enumeration_is_bounded_before_materialization_and_lock_replacement(self):
+        lock(self.root)
+        before = (self.root/'sedrava.lock').read_bytes()
+        folder = self.root/'vendor/example.cards'
+        for index in range(10):
+            (folder/('empty'+str(index))).mkdir()
+        original = os.scandir
+        visited = []
+        @contextlib.contextmanager
+        def counted(path):
+            with original(path) as entries:
+                def track():
+                    for entry in entries:
+                        visited.append(entry.name)
+                        yield entry
+                yield track()
+        with patch('sedrava_packages.MAX_ENTRIES', 3), patch('sedrava_packages.os.scandir', counted), patch.object(Path, 'rglob', side_effect=AssertionError('Unbounded tree enumeration')):
+            with self.assertRaisesRegex(ValueError, 'directory entry resource limit'):
+                lock(self.root)
+        self.assertEqual(len(visited), 4)
+        self.assertEqual((self.root/'sedrava.lock').read_bytes(), before)
+
+    def test_empty_directory_depth_and_path_limits(self):
+        folder = self.root/'vendor/example.cards'
+        for limit, value, path in [('MAX_DEPTH', 2, 'a/b/c'), ('MAX_PATH_CHARS', 20, 'x'*21)]:
+            with self.subTest(limit=limit):
+                directory = folder/path
+                directory.mkdir(parents=True)
+                with patch('sedrava_packages.'+limit, value):
+                    with self.assertRaisesRegex(ValueError, 'path resource limit'):
+                        snapshot(self.root)
+                while directory != folder:
+                    parent = directory.parent
+                    directory.rmdir()
+                    directory = parent
+
+    def test_existing_lock_ignores_bounded_empty_directories(self):
+        lock(self.root)
+        before = (self.root/'sedrava.lock').read_bytes()
+        (self.root/'vendor/example.cards/empty/nested').mkdir(parents=True)
+        verify(self.root)
+        lock(self.root)
+        self.assertEqual((self.root/'sedrava.lock').read_bytes(), before)
+
+    def test_hidden_empty_directory_rejected(self):
+        (self.root/'vendor/example.cards/.hidden').mkdir()
+        with self.assertRaisesRegex(ValueError, 'Hidden entries'):
+            snapshot(self.root)
+
+    def test_file_limit_boundary_is_preserved(self):
+        with patch('sedrava_packages.MAX_FILES', 2):
+            snapshot(self.root)
+            self.write('vendor/example.cards/extra.sdr', '# extra source\n')
+            with self.assertRaisesRegex(ValueError, 'Too many files'):
+                snapshot(self.root)
 
 
 if __name__ == '__main__':

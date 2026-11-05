@@ -4,17 +4,35 @@ import ast
 import html
 import json
 from pathlib import Path
-from sedrava_records import plain
+from sedrava_records import plain,structured
+from sedrava_sequences import ValueListType,JS_RUNTIME as VECTOR_RUNTIME
 from sedrava_records_codegen import js_runtime
-from sedrava_core import Assign, If, Require, Let, parse, run
+from sedrava_core import Assign, If, Require, Let, Repeat, ForEach, parse, run
 
 def json_script(value, **kwargs):
     # HTML parses script end tags before JavaScript parses quoted strings.
     return json.dumps(value, **kwargs).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
 
 def js_expr(node, names):
+    if isinstance(node,ast.List) and hasattr(node,'literal_kind'):return '['+','.join(js_expr(item,names) for item in node.elts)+']'
+    if isinstance(node, ast.Subscript):
+        base=js_expr(node.value,names)
+        kind=node.subscript_kind
+        if isinstance(node.slice,ast.Slice):
+            start=js_expr(node.slice.lower,names)
+            end=js_expr(node.slice.upper,names)
+            if kind is str:
+                return 'sdrTextSlice('+','.join((base,start,end))+')'
+            return ('vectorOp' if isinstance(kind,ValueListType) else 'collectionOp')+'("list_slice",'+str(kind.capacity)+','+','.join((base,start,end))+')'
+        index=js_expr(node.slice,names)
+        if kind is str:
+            return 'sdrTextAt('+','.join((base,index))+')'
+        return ('vectorOp' if isinstance(kind,ValueListType) else 'collectionOp')+'("list_at",'+str(kind.capacity)+','+','.join((base,index))+')'
     if isinstance(node, ast.Attribute): return '(' + js_expr(node.value, names) + ')[' + json_script(node.attr) + ']'
     if isinstance(node, ast.Call):
+        if hasattr(node,"result_operation"):
+            from sedrava_results import js as result_emit
+            return result_emit(node,[js_expr(arg,names) for arg in node.args])
         if hasattr(node,"collection_query"):
             from sedrava_queries import js_query
             return js_query(node,js_expr,names)
@@ -29,7 +47,7 @@ def js_expr(node, names):
         if hasattr(node, 'record_type'):
             fields = {k.arg: k.value for k in node.keywords}
             return '({' + ','.join('[' + json_script(k) + ']:' + js_expr(fields[k], names) for k, _ in node.record_type.fields) + '})'
-        return 'collectionOp(' + json_script(node.func.id) + ',' + str(node.collection_type.capacity) + ',' + ','.join(js_expr(a, names) for a in node.args) + ')'
+        return ('vectorOp(' if isinstance(node.collection_type,ValueListType) else 'collectionOp(') + json_script(node.func.id) + ',' + str(node.collection_type.capacity) + ',' + ','.join(js_expr(a, names) for a in node.args) + ')'
     if isinstance(node,ast.IfExp):return "("+js_expr(node.test,names)+" ? "+js_expr(node.body,names)+" : "+js_expr(node.orelse,names)+")"
     if isinstance(node, ast.Constant):
         return json_script(node.value)
@@ -50,11 +68,13 @@ def js_expr(node, names):
         return f"({js_expr(node.left, names)} {op} {js_expr(node.comparators[0], names)})"
     raise ValueError("Unsupported expression")
 
-def statements(body, names, depth=4):
+def statements(body, names, depth=4, derived=None):
     names=dict(names)
     result = []
     pad = " " * depth
     for stmt in body:
+        from sedrava_cost import statement_work
+        result.append(pad+"_sdr_spend("+str(statement_work(stmt,derived))+");")
         if isinstance(stmt, Let):
             local="_sdr_local_"+stmt.name
             result.append(pad+"const "+local+" = "+js_expr(stmt.expr,names)+";")
@@ -64,12 +84,32 @@ def statements(body, names, depth=4):
         elif isinstance(stmt, Assign):
             result.append(f"{pad}{names[stmt.name]} = {js_expr(stmt.expr, names)};")
             result.append(f"{pad}checkDerivedState(nextState);")
+        elif isinstance(stmt,ForEach):
+            source=js_expr(stmt.collection,names)
+            snapshot='Array.from('+source+')' if stmt.kind is str else '('+source+').slice()' if isinstance(stmt.kind,ValueListType) else '('+source+').items.slice()'
+            result.extend([pad+'{',pad+'  const _sdr_eachValues='+snapshot+';',pad+'  for(let _sdr_eachIndex=0;_sdr_eachIndex<_sdr_eachValues.length;_sdr_eachIndex++){'])
+            item='_sdr_eachValues[_sdr_eachIndex]'
+            if stmt.kind is not str and not isinstance(stmt.kind,ValueListType):item='(({id,...record})=>record)('+item+')'
+            result.append(pad+'    const _sdr_eachValue='+item+';')
+            scope={**names,stmt.name:'_sdr_eachValue'}
+            if stmt.index:scope[stmt.index]='_sdr_eachIndex'
+            result.extend(statements(stmt.body,scope,depth+4,derived));result.extend([pad+'  }',pad+'}'])
+        elif isinstance(stmt, Repeat):
+            local="_sdr_repeat_"+stmt.name
+            if stmt.start==0 and stmt.step==1:
+                result.append(f"{pad}for (let {local}=0; {local}<{stmt.count}; {local}++) {{")
+            else:
+                ordinal=local+"_ordinal"
+                result.append(f"{pad}for (let {ordinal}=0; {ordinal}<{stmt.count}; {ordinal}++) {{")
+                result.append(f"{pad}  const {local}=checkedInt({stmt.start}+{ordinal}*({stmt.step}));")
+            result.extend(statements(stmt.body,{**names,stmt.name:local},depth+2,derived))
+            result.append(f"{pad}}}")
         elif isinstance(stmt, If):
             result.append(f"{pad}if ({js_expr(stmt.condition, names)}) {{")
-            result.extend(statements(stmt.yes, names, depth + 2))
+            result.extend(statements(stmt.yes, names, depth + 2,derived))
             if stmt.no:
                 result.append(f"{pad}}} else {{")
-                result.extend(statements(stmt.no, names, depth + 2))
+                result.extend(statements(stmt.no, names, depth + 2,derived))
             result.append(f"{pad}}}")
         else:
             raise ValueError("Unsupported statement")
@@ -84,19 +124,27 @@ def generate(source, _program=None, _domain_only=False):
     if not program.widgets:
         raise ValueError("Missing screen main")
     from sedrava_stdlib import JS_RUNTIME
+    from sedrava_results import JS_RUNTIME as RESULT_RUNTIME
+    JS_RUNTIME+=RESULT_RUNTIME
+    from sedrava_unicode import required as unicode_required,runtime as unicode_runtime
+    if unicode_required(program):JS_RUNTIME+=unicode_runtime('js')
     from sedrava_queries import JS_RUNTIME as QUERY_RUNTIME
     initial = json_script({k: plain(v) for k, v in program.states.items()}, ensure_ascii=False)
     names = {key: "nextState[" + json_script(key) + "]" for key in program.states}
     for key, expr in (program.derived or {}).items():
         names[key] = js_expr(expr, names)
     rules = " && ".join(js_expr(rule, names) for rule in program.rules) or "true"
+    from sedrava_cost import MAX_ACTION_WORK,base_work
     actions = []
     for name, body in program.actions.items():
         actions.extend([
             f"  [{json_script(name)}]: (state) => {{",
+            "    if (!validateState(state)) return state;",
             "    const nextState = { ...state };",
-            *statements(body, names),
-            f"    return validateState(nextState) && ({rules}) ? nextState : state;",
+            f"    let _sdr_workLeft={MAX_ACTION_WORK-base_work(program.derived,program.rules)};",
+            "    const _sdr_spend=n=>{_sdr_workLeft-=n;if(_sdr_workLeft<0)throw Error('Action exceeds execution work limit');};",
+            *statements(body, names,derived=program.derived),
+            "    return validateState(nextState) ? nextState : state;",
             "  },",
         ])
     render_names = {key: "derivedState[" + json_script(key) + "]" for key in program.states}
@@ -116,17 +164,20 @@ def generate(source, _program=None, _domain_only=False):
             title_seen = True
         elif widget[0] == "value":
             key = html.escape(widget[1], quote=True)
-            widgets.append(f'<p>{key}: <output data-state="{key}"></output></p>')
+            label=html.escape((program.display_names or {}).get(widget[1],widget[1]))
+            widgets.append(f'<p>{label}: <output data-state="{key}"></output></p>')
         elif widget[0] == "input_text":
             key = html.escape(widget[1], quote=True)
             error_id = "error-" + key + ("-" + str(widget_index) if key in input_seen else "")
             input_seen.add(key)
-            widgets.append(f'<label>{key}: <textarea data-input="{key}" aria-describedby="{error_id}" aria-invalid="false"></textarea></label><small id="{error_id}" role="alert" hidden>Text must contain at most 1024 Unicode scalar values and satisfy the declared rules</small>')
+            label=html.escape((program.display_names or {}).get(widget[1],widget[1]))
+            widgets.append(f'<label>{label}: <textarea data-input="{key}" aria-describedby="{error_id}" aria-invalid="false"></textarea></label><small id="{error_id}" role="alert" hidden>Text must contain at most 1024 Unicode scalar values and satisfy the declared rules</small>')
         elif widget[0] == "input_int":
             key = html.escape(widget[1], quote=True)
             error_id = "error-" + key + ("-" + str(widget_index) if key in input_seen else "")
             input_seen.add(key)
-            widgets.append(f'<label>{key}: <input type="number" step="1" min="-2147483648" max="2147483647" data-input="{key}" aria-describedby="{error_id}"></label><small id="{error_id}" role="alert" hidden>Value does not satisfy the declared rules</small>')
+            label=html.escape((program.display_names or {}).get(widget[1],widget[1]))
+            widgets.append(f'<label>{label}: <input type="number" step="1" min="-2147483648" max="2147483647" data-input="{key}" aria-describedby="{error_id}"></label><small id="{error_id}" role="alert" hidden>Value does not satisfy the declared rules</small>')
         elif widget[0] == "show_text":
             key = html.escape(widget[1], quote=True)
             widgets.append(f'<p data-show="{key}" hidden>{html.escape(widget[2])}</p>')
@@ -147,17 +198,17 @@ def generate(source, _program=None, _domain_only=False):
         f"const initialState = JSON.parse({json_script(initial)});",
         "const storageKey = 'sedrava:' + (typeof location !== 'undefined' ? location.pathname : '/') + ':' + " + json_script(program.name) + ";",
         "const persistentKeys = " + json_script(list(program.persistent)) + ";",
-        JS_RUNTIME, QUERY_RUNTIME,
-        js_runtime(program, json_script) if (program.records or program.has_navigation) else "const collectionTypes = {}; function legacySnapshotValid(saved) { return saved !== null && typeof saved === 'object' && !Array.isArray(saved) && Object.keys(saved).every(k => persistentKeys.includes(k) && validValue(saved[k],initialState[k])) && validateState({...initialState,...saved}); } function saveSnapshot() { if(restoreError) throw Error('Rejected saved data retained'); const previous=localStorage.getItem(storageKey); if(previous!==null && !legacySnapshotValid(JSON.parse(previous))) throw Error('Rejected saved data retained'); localStorage.setItem(storageKey,JSON.stringify(Object.fromEntries(persistentKeys.map(k=>[k,state[k]])))); }",
+        JS_RUNTIME, QUERY_RUNTIME, VECTOR_RUNTIME,
+        js_runtime(program, json_script) if (structured(program)) else "const collectionTypes = {}; function legacySnapshotValid(saved) { return saved !== null && typeof saved === 'object' && !Array.isArray(saved) && Object.keys(saved).every(k => persistentKeys.includes(k) && validValue(saved[k],initialState[k])) && validateState({...initialState,...saved}); } function saveSnapshot() { if(restoreError) throw Error('Rejected saved data retained'); const previous=localStorage.getItem(storageKey); if(previous!==null && !legacySnapshotValid(JSON.parse(previous))) throw Error('Rejected saved data retained'); localStorage.setItem(storageKey,JSON.stringify(Object.fromEntries(persistentKeys.map(k=>[k,state[k]])))); }",
         "let restoreError = false;",
         "let state = { ...initialState };",
-        ("try { const raw = localStorage.getItem(storageKey); if (raw !== null) state = restoreSnapshot(raw); } catch (_) { restoreError = true; }" if (program.records or program.has_navigation) else "try { const raw=typeof localStorage !== 'undefined' ? localStorage.getItem(storageKey) : null; if(raw!==null){ const saved=JSON.parse(raw); state=restoreState(saved); restoreError=!legacySnapshotValid(saved); } } catch (_) { restoreError=true; }"),
+        ("try { const raw = localStorage.getItem(storageKey); if (raw !== null) state = restoreSnapshot(raw); } catch (_) { restoreError = true; }" if (structured(program)) else "try { const raw=typeof localStorage !== 'undefined' ? localStorage.getItem(storageKey) : null; if(raw!==null){ const saved=JSON.parse(raw); state=restoreState(saved); restoreError=!legacySnapshotValid(saved); } } catch (_) { restoreError=true; }"),
         "function checkedInt(n) { if (!Number.isInteger(n) || n < -2147483648 || n > 2147483647) throw new RangeError('Sedrava integer overflow'); return n; }",
         "function validText(value) { if (typeof value !== 'string') return false; let count = 0; for (const char of value) { const cp = char.codePointAt(0); if ((cp >= 0xD800 && cp <= 0xDFFF) || ++count > 1024) return false; } return true; }",
         "function validValue(value, initial) { return typeof value === typeof initial && (typeof value === 'string' ? validText(value) : typeof value === 'number' ? Number.isInteger(value) && value >= -2147483648 && value <= 2147483647 : typeof value === 'boolean'); }",
-        "function checkResources(nextState) { if (JSON.stringify({schema:1,signature,state:nextState}).length > 200000) throw Error('State exceeds resource limit'); }" if (program.records or program.has_navigation) else "function checkResources(_) {}",
+        "function checkResources(nextState) { if (JSON.stringify({schema:1,signature,state:nextState}).length > 200000) throw Error('State exceeds resource limit'); }" if (structured(program)) else "function checkResources(_) {}",
         "function checkStateValues(nextState) { if (Object.keys(nextState).length !== Object.keys(initialState).length) throw Error('Invalid keys'); for (const key of Object.keys(initialState)) { if (!Object.hasOwn(nextState, key) || !(Object.hasOwn(collectionTypes, key) ? validCollection(nextState[key], collectionTypes[key]) : validValue(nextState[key], initialState[key]))) throw new RangeError('Invalid Sedrava value'); } }",
-        "function restoreState(saved) { try { return restoreSnapshot(saved); } catch (_) { return { ...initialState }; } }" if (program.records or program.has_navigation) else "function restoreState(saved) { const restored = { ...initialState }; if (saved && typeof saved === 'object' && !Array.isArray(saved)) { for (const key of persistentKeys) { if (Object.hasOwn(saved, key) && validValue(saved[key], initialState[key])) restored[key] = saved[key]; } } return validateState(restored) ? restored : { ...initialState }; }",
+        "function restoreState(saved) { try { return restoreSnapshot(saved); } catch (_) { return { ...initialState }; } }" if (structured(program)) else "function restoreState(saved) { const restored = { ...initialState }; if (saved && typeof saved === 'object' && !Array.isArray(saved)) { for (const key of persistentKeys) { if (Object.hasOwn(saved, key) && validValue(saved[key], initialState[key])) restored[key] = saved[key]; } } return validateState(restored) ? restored : { ...initialState }; }",
         "function editState(current, key, value) { if (!Object.hasOwn(initialState, key)) return current; const next = { ...current, [key]: value }; return validateState(next) ? next : current; }",
         "const actions = {",
         *actions,
@@ -178,14 +229,14 @@ def generate(source, _program=None, _domain_only=False):
         '  document.querySelectorAll("[data-state]").forEach(el => { el.textContent = String(derivedState[el.dataset.state]); });',
         '  document.querySelectorAll("[data-show]").forEach(el => { el.hidden = !derivedState[el.dataset.show]; });',
         '  document.querySelectorAll("[data-input]").forEach(el => { if (resetInputs || document.activeElement !== el) el.value = String(state[el.dataset.input]); });',
-        "  renderCollections();" if (program.records or program.has_navigation) else "",
+        "  renderCollections();" if (structured(program)) else "",
         "}",
         'document.querySelectorAll("[data-action]").forEach(el => {',
         "  el.addEventListener('click', () => {",
         "    const action = actions[el.dataset.action];",
         "    if (!action) throw new Error('Unknown action');",
         "    try { const next = action(state); showError(next === state ? 'Action rejected by declared rules' : ''); state = next; }",
-        "    catch (error) { showError('Action rejected: ' + error.message); return; }" if (program.records or program.has_navigation) else "    catch (_) { showError('Action rejected: integer overflow or invalid value'); return; }",
+        "    catch (error) { showError('Action rejected: ' + error.message); return; }" if (structured(program)) else "    catch (_) { showError('Action rejected: integer overflow or invalid value'); return; }",
         "    try { saveSnapshot(); } catch (_) { showError('Could not save state; previous data retained'); }",
         "    render(true);",
         "  });",

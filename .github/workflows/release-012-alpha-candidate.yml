@@ -4,7 +4,7 @@ on:
   push:
     branches: [release/012-alpha1-preparation]
   pull_request:
-    branches: [main]
+    branches: [main, integration/012-alpha1-stable-base]
 
 permissions:
   contents: read

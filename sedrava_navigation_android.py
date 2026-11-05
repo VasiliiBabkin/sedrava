@@ -1,6 +1,6 @@
 """Kotlin/Compose navigation adapter sharing the existing emitted domain model."""
 from dataclasses import replace
-from android_codegen_v03 import generate, kt, quoted as q
+from android_codegen_v03 import generate, kt, quoted as q, platform_persistence
 
 
 def navigation_functions(program):
@@ -49,7 +49,7 @@ def navigation_functions(program):
 
 def generate_navigation(source, output, program, application_id=None):
     target=generate(source,output,_program=replace(program,widgets=(("text",program.name),)),_domain_only=True, application_id=application_id)
-    base=target.read_text(encoding='utf-8')
+    base=target.read_text(encoding='utf-8')+'\n'.join(platform_persistence(program))+'\n'
     imports='''import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.foundation.background
@@ -114,7 +114,7 @@ import androidx.compose.ui.semantics.contentDescription
                 if w not in texts[:2]: ui.append(pad+'Text('+q(args[0])+')')
                 continue
             if w.kind.startswith('input'):
-                key=args[0]; label=args[1] if len(args)>1 else key
+                key=args[0]; label=args[1] if len(args)>1 else (program.display_names or {}).get(key,key)
                 ident=screen.name+':'+str(index)
                 ui += [pad+'NavigationInput('+q(key)+','+q(label)+','+names[key]+'.toString(),'+str(w.kind=='input_text').lower()+',onInvalid={ bad -> invalidFields=if(bad) invalidFields+'+q(ident)+' else invalidFields-'+q(ident)+' }) { value -> commit(editSession(session,'+q(key)+',value)) }']
             elif w.kind=='button':
@@ -122,7 +122,7 @@ import androidx.compose.ui.semantics.contentDescription
                 ui += [pad+'Button(enabled='+('true' if allow_invalid else 'invalidFields.isEmpty()')+',onClick={ commit(dispatchSession(session,'+q(args[1])+')) },modifier=Modifier.fillMaxWidth().heightIn(min=48.dp),shape=RoundedCornerShape(14.dp)) { Text('+q(args[0])+') }']
             elif w.kind=='display':
                 ui += [pad+'Text(try { '+kt(args[0],names)+'.toString() } catch (_: IllegalArgumentException) { "Unavailable" } catch (_: ArithmeticException) { "Unavailable" },style=MaterialTheme.typography.headlineSmall,fontFamily=FontFamily.Serif)']
-            elif w.kind=='value': ui += [pad+'Text('+q(args[0]+': ')+'+'+names[args[0]]+'.toString())']
+            elif w.kind=='value': ui += [pad+'Text('+q((program.display_names or {}).get(args[0],args[0])+': ')+'+'+names[args[0]]+'.toString())']
             elif w.kind=='show_text': ui += [pad+'if('+names[args[0]]+') Text('+q(args[1])+',color=Color(0xFF526459))']
             elif w.kind in ('list','list_open'):
                 collection,selected=args[:2];command=args[2] if w.kind=='list_open' else None;title_field=args[3] if w.kind=='list_open' else None;status_field=args[4] if w.kind=='list_open' else None

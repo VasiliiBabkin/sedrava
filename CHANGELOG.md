@@ -128,3 +128,10 @@ This is Sedrava's first candidate; historical Intent 0.7 and abandoned Sedrava 0
 - Add public bounded typed HTTP mutations/cancel/cache, local CSS/fonts/themes and static SEO assets.
 - Add four source-driven clients and real Chromium/axe/common-IR differential checks. Server/auth/database adapters remain unsupported; release status is NO-GO pending remaining gates.
 - Руководства RU/EN описывают фактическую поддержку и ограничения; production-сайт и опубликованные артефакты не изменялись.
+
+### Unpublished 0.12 integration experiment
+
+- Integrate bounded A1/A2 types, loops, Unicode 15 and Result with namespaces.
+- Add isolated module-owned state/actions, shared budgets and original columns.
+- Harden lock schemas/vendor imports and protect imported sources from outputs.
+- RU/EN contract: docs/CORE_NAMESPACES_012.md / CORE_NAMESPACES_012.ru.md.

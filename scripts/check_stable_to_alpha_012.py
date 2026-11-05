@@ -51,9 +51,11 @@ def run(cwd: Path, *command: object) -> str:
     env["PYTHONNOUSERSITE"] = "1"
     completed = subprocess.run(
         list(map(str, command)), cwd=cwd, env=env,
-        check=True, text=True, stdout=subprocess.PIPE,
+        check=False, text=True, stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
     )
+    if completed.returncode:
+        raise RuntimeError(f"Command failed ({completed.returncode}): {command!r}\n{completed.stdout}")
     return completed.stdout
 
 def check(dist: Path) -> None:
@@ -72,6 +74,8 @@ def check(dist: Path) -> None:
         cli = bin_path / ("sedrava.exe" if os.name == "nt" else "sedrava")
         projects = work / "original-projects"
         projects.mkdir()
+        macro = projects / "legacy-macro.sdr"
+        macro.write_bytes((Path(__file__).resolve().parents[1] / "tests/fixtures/namespace_legacy_macro.sdr").read_bytes())
         state = work / "user-state.json"
         original_hashes = {}
         preserved_hash = None
@@ -107,6 +111,9 @@ def check(dist: Path) -> None:
                         "--output", work / (phase + "-web") / "index.html")
                     run(work, cli, "build", "android", source,
                         "--output", work / (phase + "-android"))
+            run(work, cli, "check", macro)
+            run(work, cli, "build", "webapp", macro,
+                "--output", work / (phase + "-legacy-macro"))
             profile = projects / "text_profile.sdr"
             if phase == "published-011":
                 output = json.loads(run(work, cli, "run", profile, "rename", "--state-file", state))

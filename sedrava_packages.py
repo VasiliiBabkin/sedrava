@@ -17,6 +17,9 @@ _VERSION = re.compile(r'(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\
 MAX_PACKAGES = 32
 MAX_FILES = 256
 MAX_BYTES = 8 * 1024 * 1024
+MAX_ENTRIES = 1024
+MAX_DEPTH = 16
+MAX_PATH_CHARS = 1024
 
 
 def _toml():
@@ -49,12 +52,15 @@ def _checked_path(root, relative):
     return candidate
 
 
-def _read_manifest(path):
+def _read_manifest(path,with_bytes=False):
     if path.is_symlink() or not path.is_file() or path.stat().st_size > 32768:
         raise ValueError('Package manifest missing, linked or too large')
+    parser=_toml()
     try:
-        data = _toml().loads(path.read_text(encoding='utf-8'))
-    except (UnicodeError, ValueError) as exc:
+        with path.open('rb') as stream:raw=stream.read(32769)
+        if len(raw)>32768:raise ValueError('Manifest resource limit')
+        data = parser.loads(raw.decode('utf-8'))
+    except (UnicodeError, ValueError, RecursionError) as exc:
         raise ValueError(f'Invalid TOML manifest: {path}') from exc
     if set(data) != {'package'} and set(data) != {'package', 'dependencies'}:
         raise ValueError('Unknown manifest sections')
@@ -76,28 +82,54 @@ def _read_manifest(path):
             raise ValueError('Dependency must declare exact path and version')
         if not isinstance(spec['version'], str) or not _VERSION.fullmatch(spec['version']):
             raise ValueError('Dependency version must be exact')
-    return name, version, deps
+    return (name,version,deps,raw) if with_bytes else (name,version,deps)
+
+
+def _package_files(folder):
+    """Bound enumeration before sorting or descending, including empty directories."""
+    pending = [(folder, 0)]
+    entries_seen = 0
+    files = []
+    while pending:
+        directory, depth = pending.pop()
+        if directory.is_symlink():
+            raise ValueError('Symlinks inside packages are forbidden')
+        children = []
+        with os.scandir(directory) as entries:
+            for entry in entries:
+                entries_seen += 1
+                if entries_seen > MAX_ENTRIES:
+                    raise ValueError('Local package directory entry resource limit')
+                path = Path(entry.path)
+                relative = path.relative_to(folder)
+                if depth + 1 > MAX_DEPTH or len(relative.as_posix()) > MAX_PATH_CHARS:
+                    raise ValueError('Local package path resource limit')
+                if entry.is_symlink():
+                    raise ValueError('Symlinks inside packages are forbidden')
+                if entry.name.startswith('.'):
+                    raise ValueError('Hidden entries inside local package are forbidden')
+                if entry.is_dir(follow_symlinks=False):
+                    children.append((path, depth + 1))
+                elif entry.is_file(follow_symlinks=False):
+                    if len(files) >= MAX_FILES:
+                        raise ValueError('Too many files in local package')
+                    files.append(path)
+                else:
+                    raise ValueError('Unsupported package file type')
+        pending.extend(sorted(children, reverse=True))
+    return sorted(files)
 
 
 def _files(folder):
     out, total = {}, 0
-    for p in sorted(folder.rglob('*')):
-        if p.is_symlink():
-            raise ValueError('Symlinks inside packages are forbidden')
-        if p.is_dir():
-            continue
-        if not p.is_file():
-            raise ValueError('Unsupported package file type')
+    for p in _package_files(folder):
         rel = p.relative_to(folder).as_posix()
-        if any(part.startswith('.') for part in p.relative_to(folder).parts):
-            raise ValueError('Hidden files inside local package are forbidden')
-        if len(out) >= MAX_FILES:
-            raise ValueError('Too many files in local package')
-        size = p.stat().st_size
-        total += size
-        if total > MAX_BYTES:
-            raise ValueError('Local package exceeds resource budget')
-        out[rel] = sha256(p.read_bytes()).hexdigest()
+        remaining=MAX_BYTES-total
+        if p.stat().st_size>remaining:raise ValueError('Local package exceeds resource budget')
+        with p.open('rb') as stream:raw=stream.read(remaining+1)
+        if len(raw)>remaining:raise ValueError('Local package exceeds resource budget')
+        total+=len(raw)
+        out[rel]=sha256(raw).hexdigest()
     return out
 
 
@@ -107,7 +139,7 @@ def snapshot(project):
     if not root.is_dir():
         raise ValueError('Project directory does not exist')
     manifest = root / _MANIFEST
-    name, version, dependencies = _read_manifest(manifest)
+    name, version, dependencies,manifest_raw = _read_manifest(manifest,True)
     visited, active = {}, set()
     def load(dep, spec):
         path = _checked_path(root, spec['path'])
@@ -120,11 +152,12 @@ def snapshot(project):
             return
         if len(visited) >= MAX_PACKAGES:
             raise ValueError('Too many local dependencies')
-        found, found_version, children = _read_manifest(path / _MANIFEST)
+        found, found_version, children,child_raw = _read_manifest(path / _MANIFEST,True)
         if found != dep or found_version != spec['version']:
             raise ValueError('Package identity/version mismatch for '+dep)
         active.add(dep)
         files = _files(path)
+        if files.get(_MANIFEST)!=sha256(child_raw).hexdigest():raise ValueError('Package manifest changed during verification')
         if _MANIFEST not in files:
             raise ValueError('Package source is missing its manifest')
         visited[dep] = dict(name=dep, version=found_version, path=relative,
@@ -138,7 +171,7 @@ def snapshot(project):
         raise ValueError('Root package identity conflicts with dependency')
     return dict(schema=1,
                 root=dict(name=name, version=version,
-                          manifest_sha256=sha256(manifest.read_bytes()).hexdigest(),
+                          manifest_sha256=sha256(manifest_raw).hexdigest(),
                           dependencies=sorted(dependencies)),
                 packages=[visited[dep] for dep in sorted(visited)])
 
@@ -151,7 +184,12 @@ def _strict_json(data):
                 raise ValueError('Duplicate key in lockfile')
             result[key] = value
         return result
-    return json.loads(data, object_pairs_hook=decode_pairs)
+    def integer(token):
+        if len(token)>11:raise ValueError('Lock integer resource limit')
+        value=int(token)
+        if not -2147483648<=value<=2147483647:raise ValueError('Lock integer overflow')
+        return value
+    return json.loads(data, object_pairs_hook=decode_pairs,parse_int=integer,parse_float=lambda _: (_ for _ in ()).throw(ValueError('Integer lock schema required')),parse_constant=lambda _: (_ for _ in ()).throw(ValueError('Invalid JSON constant')))
 
 
 def _encode(value):
@@ -169,7 +207,9 @@ def lock(project):
     try:
         with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', prefix='.sedrava-lock-', dir=root, delete=False) as fh:
             tmp = Path(fh.name)
-            fh.write(_encode(model))
+            encoded=_encode(model)
+            if len(encoded.encode('utf-8'))>128000:raise ValueError('Lockfile resource limit')
+            fh.write(encoded)
             fh.flush()
             os.fsync(fh.fileno())
         os.replace(tmp, target)
@@ -186,11 +226,13 @@ def verify(project):
     if target.is_symlink() or not target.is_file() or target.stat().st_size > 128000:
         raise ValueError('Missing/invalid sedrava.lock; run sedrava lock first')
     try:
-        current = _strict_json(target.read_text(encoding='utf-8'))
-    except (ValueError, UnicodeError) as exc:
+        with target.open('rb') as stream:raw=stream.read(128001)
+        if len(raw)>128000:raise ValueError('Lockfile resource limit')
+        current = _strict_json(raw.decode('utf-8'))
+    except (ValueError, UnicodeError, RecursionError) as exc:
         raise ValueError('Invalid sedrava.lock JSON') from exc
     expected = snapshot(root)
-    if type(current) is not dict or current != expected:
+    if type(current) is not dict or not _exact(current,expected):
         raise ValueError('Local dependency lock mismatch: run sedrava lock after reviewing changes')
     return expected
 
@@ -199,7 +241,38 @@ def verify_if_project(source_path):
     if source_path is None:
         return None
     root = Path(source_path).resolve().parent
-    if (root / _MANIFEST).exists() or (root / _LOCK).exists():
+    if any(p.exists() or p.is_symlink() for p in (root/_MANIFEST,root/_LOCK)):
         verify(root)
         return (root / _MANIFEST, root / _LOCK)
     return None
+
+
+def verified_inputs(source_path):
+    root=Path(source_path).resolve().parent if source_path is not None else None
+    if root is None or not any(p.exists() or p.is_symlink() for p in (root/_MANIFEST,root/_LOCK)):return None
+    model=verify(root)
+    return {root/pkg['path']/name:digest for pkg in model['packages'] for name,digest in pkg['files'].items()}
+
+def read_module(path,root,verified):
+    """Compile only bytes covered by the checked lock, not a later replacement."""
+    from sedrava_syntax import MAX_SOURCE_CHARS
+    path=Path(path);root=Path(root)
+    with path.open('rb') as stream:raw=stream.read(MAX_SOURCE_CHARS*4+1)
+    if len(raw)>MAX_SOURCE_CHARS*4:raise ValueError('Module resource limit')
+    relative=path.relative_to(root)
+    if relative.parts and relative.parts[0]=='vendor':
+        if verified is None or path not in verified:raise ValueError('Vendored import is not covered by the reviewed lockfile')
+        if sha256(raw).hexdigest()!=verified[path]:raise ValueError('Vendored module changed after lock verification')
+    try:return raw.decode('utf-8')
+    except UnicodeDecodeError as exc:
+        from sedrava_source_map import LocatedError
+        prefix=raw[:exc.start].decode('utf-8');line=prefix.count('\n')+1;column=len(prefix.rsplit('\n',1)[-1])+1
+        raise LocatedError('Source is not valid UTF-8',path,line,column) from exc
+
+
+def _exact(value,expected):
+    """Compare the bounded trusted schema without bool/int coercion or deep dumping."""
+    if type(value) is not type(expected):return False
+    if type(expected) is dict:return value.keys()==expected.keys() and all(_exact(value[k],v) for k,v in expected.items())
+    if type(expected) is list:return len(value)==len(expected) and all(_exact(a,b) for a,b in zip(value,expected))
+    return value==expected

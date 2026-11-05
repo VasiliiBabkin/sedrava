@@ -1,6 +1,6 @@
 # Sedrava 0.12 B1 — offline local package locks
 
-**Experimental draft only. No registry, download/install manager, remote packages or released 0.12.0.** This slice stacks on [namespace PR #39](https://github.com/VasiliiBabkin/sedrava/pull/39) and [provenance PR #40](https://github.com/VasiliiBabkin/sedrava/pull/40). Published 0.10 remains unchanged.
+**Experimental draft only. No registry, download/install manager, remote packages or released 0.12.0.** This slice stacks on [namespace PR #39](https://github.com/VasiliiBabkin/sedrava/pull/39) and [provenance PR #40](https://github.com/VasiliiBabkin/sedrava/pull/40). Published stable 0.11 remains unchanged. Current integration with A1/A2 is described in [EN](CORE_NAMESPACES_012.md) / [RU](CORE_NAMESPACES_012.ru.md).
 
 ## A real working vendored example
 
@@ -37,3 +37,7 @@ Security constraints: root-confined `vendor/` paths, no symlinks, hidden files o
 No online registry, semver-range solver, downloadable dependency resolution, arbitrary host plugins, ABI compatibility guarantee, package-qualified import or shared server/auth/database. Builds with no `sedrava.toml` still use existing behavior. The project manifest must be next to the `.sdr` entry file in this first slice. On Python 3.10 package-locking users must explicitly install `sedrava[packages]` to obtain `tomli`; on 3.11+ it uses built-in `tomllib`. No dependency is added to the default Sedrava installation, preserving offline install/rollback compatibility for existing users.
 
 The lockfile is a **content-integrity pin**, not a signature or an assertion that third-party source is safe. Review vendored source before locking. Later stages must add actual package namespaces/import resolution, source origin mapping for packages, API/ABI checks, and a trusted server target. Do not merge or release without CI and owner review.
+
+Enumeration is bounded before materialization: 1,024 entries (including empty
+directories), depth 16, 1,024 relative-path characters per package, plus 256 files
+and 8 MiB. Hidden entries/symlinks reject. See the current integration contracts.

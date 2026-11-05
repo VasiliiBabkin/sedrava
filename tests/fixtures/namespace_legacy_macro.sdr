@@ -1,0 +1,13 @@
+webapp "Legacy component expansion"
+component Increment:
+    n = n + 1
+record Row:
+    title: text
+state rows: list<Row>(max=2) = []
+state n = 0
+action increment:
+    use Increment
+view main:
+    heading "Legacy component expansion"
+    value n
+    button "Increment" action increment

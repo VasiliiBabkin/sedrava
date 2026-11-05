@@ -5,15 +5,26 @@ No Python/JavaScript execution or network loading. Included files are author cod
 import json
 from pathlib import Path
 import re
-from sedrava_syntax import MAX_SOURCE_CHARS, MAX_BLOCK_DEPTH, source_lines
+from sedrava_syntax import MAX_SOURCE_CHARS, MAX_BLOCK_DEPTH, source_lines, physical_lines
 
 
-def expand(source, source_path=None, _stack=(), _root=None, _files=None, *, with_origins=False):
+def _expand(source, source_path=None, _stack=(), _root=None, _files=None, *, with_origins=False, _verified=None, _scoped=False):
     source_lines(source)
-    from sedrava_source_map import locations
+    from sedrava_source_map import locations, ExpandedSource, MappedLine, origin_for, mapped_lines, replace_span
+    scoped=_scoped or getattr(source,"scoped",False)
     files = set() if _files is None else _files
-    source_map = locations(source, source_path)
+    source_map = getattr(source,"origins",None) or locations(source, source_path)
+    if _stack and scoped:
+        from sedrava_namespaces import _tokens,_RESERVED
+        import tokenize
+        from sedrava_source_map import LocatedError
+        for no,line in enumerate(physical_lines(source),1):
+            try:tokens=_tokens(line)
+            except ValueError as exc:raise LocatedError(str(exc),source_path,no,1) from exc
+            if any(t.type==tokenize.NAME and _RESERVED.fullmatch(t.string) for t in tokens):raise LocatedError("Reserved generated symbol in scoped legacy import",source_path,no,1)
     if not _stack and source_path is not None:
+        from sedrava_packages import verified_inputs
+        _verified=verified_inputs(source_path)
         from sedrava_packages import verify_if_project
         package_files = verify_if_project(source_path)
         if package_files:
@@ -21,60 +32,85 @@ def expand(source, source_path=None, _stack=(), _root=None, _files=None, *, with
     if not _stack:
         from sedrava_namespaces import _IMPORT, resolve_scoped
         if any(_IMPORT.fullmatch(line) for depth, line, _ in source_lines(source) if depth == 0):
-            source, namespaced_files, source_map = resolve_scoped(source, source_path, with_origins=True)
+            scoped=True
+            source, namespaced_files, source_map = resolve_scoped(source, source_path, with_origins=True, verified=_verified)
             files.update(namespaced_files)
     root = Path(source_path).resolve().parent if _root is None and source_path else _root
     output, origins = [], []
-    for number, line in enumerate(source.splitlines(), 1):
-        match = re.fullmatch(r'import "([^"\n]+\.sdr)"', line)
-        if not match:
-            output.append(line)
-            origins.append(source_map[number - 1])
-            continue
-        if source_path is None:
-            raise ValueError(f'Line {number}: column 1: imports require a source file path')
-        value = match[1]
-        if Path(value).is_absolute() or '..' in Path(value).parts or '\\' in value:
-            raise ValueError(f'Line {number}: column 1: import must stay within the source directory')
-        path = Path(source_path).resolve().parent / value
-        current = path
-        while current != root and current != current.parent:
-            if current.is_symlink():
-                raise ValueError(f'Line {number}: column 1: symlink modules are forbidden')
-            current = current.parent
-        path = path.resolve()
-        if not path.is_relative_to(root) or not path.is_file():
-            raise ValueError(f'Line {number}: column 1: missing or outside-root module {value}')
-        if path in _stack or len(_stack) >= 16:
-            raise ValueError(f'Line {number}: column 1: cyclic or excessive imports')
-        if path.stat().st_size > MAX_SOURCE_CHARS * 4 or len(files) >= 32:
-            raise ValueError(f'Line {number}: column 1: module resource limit')
-        files.add(path)
-        text = path.read_text(encoding='utf-8')
-        for depth, declaration, n in source_lines(text):
-            if depth == 0 and not declaration.startswith(('component ', 'style ', 'import ', 'fn ', 'record ')):
-                raise ValueError(f'Line {number}: column 1: module {value}:{n} may only export components/styles/records/functions/imports')
-        expanded, _, child_origins = expand(text, path, (*_stack, path), root, files, with_origins=True)
-        output.extend(expanded.splitlines())
-        origins.extend(child_origins)
+    try:
+        for number, line in enumerate(physical_lines(source), 1):
+            match = re.fullmatch(r'import "([^"\n]+\.sdr)"', line)
+            if not match:
+                output.append(line)
+                origins.append(source_map[number - 1])
+                continue
+            if source_path is None:
+                raise ValueError(f'Line {number}: column 1: imports require a source file path')
+            value = match[1]
+            if Path(value).is_absolute() or '..' in Path(value).parts or '\\' in value:
+                raise ValueError(f'Line {number}: column 1: import must stay within the source directory')
+            path = Path(source_path).resolve().parent / value
+            current = path
+            while current != root and current != current.parent:
+                if current.is_symlink():
+                    raise ValueError(f'Line {number}: column 1: symlink modules are forbidden')
+                current = current.parent
+            path = path.resolve()
+            if not path.is_relative_to(root) or not path.is_file():
+                raise ValueError(f'Line {number}: column 1: missing or outside-root module {value}')
+            if path in _stack or len(_stack) >= 16:
+                raise ValueError(f'Line {number}: column 1: cyclic or excessive imports')
+            if path.stat().st_size > MAX_SOURCE_CHARS * 4 or len(files) >= 32:
+                raise ValueError(f'Line {number}: column 1: module resource limit')
+            files.add(path)
+            from sedrava_packages import read_module
+            text=read_module(path,root,_verified)
+            for depth, declaration, n in source_lines(text):
+                if depth == 0 and not declaration.startswith(('component ', 'style ', 'import ', 'fn ', 'record ')):
+                    raise ValueError(f'Line {number}: column 1: module {value}:{n} may only export components/styles/records/functions/imports')
+            expanded, _, child_origins = expand(text, path, (*_stack, path), root, files, with_origins=True,_verified=_verified,_scoped=scoped)
+            output.extend(physical_lines(expanded))
+            origins.extend(child_origins)
+    except ValueError as exc:
+        from sedrava_source_map import source_error
+        mapped=source_error(exc,source_map)
+        if mapped is exc:raise
+        raise mapped from exc
     joined = '\n'.join(output)
     if len(joined) > MAX_SOURCE_CHARS:
         raise ValueError('Expanded imports exceed source limit')
     if not _stack:
-        joined, origins = components(joined, origins)
+        try:joined, origins = components(joined, origins,scoped=scoped)
+        except ValueError as exc:
+            from sedrava_source_map import source_error
+            mapped=source_error(exc,origins)
+            if mapped is exc:raise
+            raise mapped from exc
+    joined=ExpandedSource(joined,origins,source);joined.scoped=scoped;joined.entry=Path(source_path).resolve() if source_path else None
     return (joined, files, tuple(origins)) if with_origins else (joined, files)
 
 
-def components(source, origins=None):
+def expand(source,source_path=None,*args,**kwargs):
+    from sedrava_source_map import source_error,locations
+    try:return _expand(source,source_path,*args,**kwargs)
+    except ValueError as exc:
+        mapped=source_error(exc,locations(source,source_path))
+        if mapped is exc:raise
+        raise mapped from exc
+
+
+def components(source, origins=None,*,scoped=None):
+    if scoped is None:scoped=getattr(source,"scoped",False)
     source_lines(source)
     traced = origins is not None
     if origins is None:
-        origins = [(None, i) for i in range(1, len(source.splitlines()) + 1)]
-    if len(origins) != len(source.splitlines()):
+        origins = [(None, i) for i in range(1, len(physical_lines(source)) + 1)]
+    if len(origins) != len(physical_lines(source)):
         raise ValueError('Source map does not match source lines')
     # Resolve definitions after imports. They are templates, never executable source.
     definitions = {}
-    lines = source.splitlines()
+    from sedrava_source_map import mapped_lines,origin_for,replace_spans,ExpandedSource
+    lines = mapped_lines(source,origins)
     kept = []
     kept_origins = []
     pos = 0
@@ -99,41 +135,62 @@ def components(source, origins=None):
             raise ValueError('Component requires four-space-indented content')
         definitions[name] = (params, [line[4:] if line.startswith('    ') else line for line in body], body_origins)
     from sedrava_site import tokens
+    from sedrava_source_map import LocatedError,Origin,source_error
+    def fail_component(message,origin,col):
+        path,line,column=origin.point(col) if isinstance(origin,Origin) else (*origin,col)
+        if path is None:raise ValueError(f"Line {line}: column {column}: {message}")
+        raise LocatedError(message,path,line,column)
+    def validate_ui_line(line,origin):
+        first=line.lstrip().split(maxsplit=1)
+        if not first:return
+        word=first[0].rstrip(':')
+        if word in {"app","site","webapp","module","import","export","state","derive","action","record","fn","persist","rule","test","screen","view","navigation","require","for","repeat","if","else","while","return","let"} or re.match(r"\s*[A-Za-z_][A-Za-z_0-9]*\s*=(?!=)",line):
+            fail_component("UI components cannot emit domain declarations or action statements",origin,len(line)-len(line.lstrip())+1)
 
     def instantiate(lines, line_origins, stack=()):
         result, result_origins = [], []
+        size=0
+        owner=None
         i = 0
         while i < len(lines):
-            line = lines[i]; origin = line_origins[i]; i += 1
+            line = lines[i]; origin = origin_for(line,line_origins[i]); i += 1
+            if line.strip() and not line.startswith(' ') and not line.startswith('#'):
+                owner=line.split(maxsplit=1)[0].rstrip(':')
             call = re.fullmatch(r'( *)use ([A-Za-z][A-Za-z0-9_]*)(.*)', line)
             if not call:
+                if stack and scoped:validate_ui_line(line,origin)
+                size+=len(line)+1
+                if size>MAX_SOURCE_CHARS:fail_component('Expanded components exceed source limit',origin,1)
                 result.append(line); result_origins.append(origin); continue
             prefix, name, rest = call.groups()
             if name not in definitions or name in stack or len(stack) >= MAX_BLOCK_DEPTH:
-                raise ValueError(f'Line {i}: column {len(prefix)+1}: unknown/recursive component {name}')
+                fail_component(f"unknown/recursive component {name}",origin,len(prefix)+1)
             block = rest.rstrip().endswith(':')
-            args = tokens(rest.rstrip()[:-1] if block else rest, i, len(prefix))
+            try:args = tokens(rest.rstrip()[:-1] if block else rest,1,call.start(3))
+            except ValueError as exc:raise source_error(exc,(origin,)) from exc
             params, template, template_origins = definitions[name]
             if len(args) % 2:
-                raise ValueError(f'Line {i}: column 1: component parameters require name/value pairs')
+                fail_component('component parameters require name/value pairs',origin,call.start(3)+1)
             values = {}
+            value_origins={}
             for key, value in zip(args[::2], args[1::2]):
                 if key.value in values or key.value not in params:
-                    raise ValueError(f'Line {i}: column 1: invalid typed component parameter {key.value}')
+                    fail_component(f'invalid typed component parameter {key.value}',origin,value.span.column)
                 expected=params[key.value]
                 reference=expected=='reference'
                 if (reference and (value.quoted or type(value.value) is not str or not re.fullmatch('[A-Za-z][A-Za-z0-9_]*',value.value))) or (not reference and type(value.value) is not expected):
-                    raise ValueError(f'Line {i}: column 1: invalid typed component parameter {key.value}')
+                    fail_component(f'invalid typed component parameter {key.value}',origin,value.span.column)
                 values[key.value] = value.value if reference else json.dumps(value.value, ensure_ascii=False)
+                value_origins[key.value]=origin.point(value.span.column) if isinstance(origin,Origin) else (*origin,value.span.column)
             if set(values) != set(params):
-                raise ValueError(f'Line {i}: column 1: component requires exact parameters')
+                fail_component('component requires exact parameters',origin,call.start(3)+1)
             children, children_origins = [], []
             if block:
                 while i < len(lines) and (not lines[i].strip() or len(lines[i])-len(lines[i].lstrip(' ')) > len(prefix)):
                     children.append(lines[i][len(prefix)+4:]); children_origins.append(line_origins[i]); i += 1
             slots = sum(line.strip() == 'slot' for line in template)
             if slots > 1 or bool(children) != bool(slots):
-                raise ValueError(f'Line {i}: column 1: component slot requires matching content')
+                fail_component('component slot requires matching content',origin,len(prefix)+1)
             expanded, expanded_origins = [], []
             for text, template_origin in zip(template, template_origins):
                 if text.strip() == 'slot':
@@ -142,22 +199,29 @@ def components(source, origins=None):
                     expanded_origins.extend(children_origins)
                 else:
                     # Parameters use $name outside literals; expansion yields typed literal tokens.
-                    parts = re.split(r'("(?:[^"\\]|\\.)*")', text)
-                    for j in range(0, len(parts), 2):
-                        def replace(m):
-                            if m[1] not in values: raise ValueError('Unknown component parameter '+m[1])
-                            return values[m[1]]
-                        parts[j] = re.sub(r'\$([A-Za-z][A-Za-z0-9_]*)', replace, parts[j])
-                    expanded.append(prefix+''.join(parts))
+                    edits=[];offset=0
+                    for j,part in enumerate(re.split(r'("(?:[^"\\]|\\.)*")',text)):
+                        if j%2==0:
+                            for match in re.finditer(r'\$([A-Za-z][A-Za-z0-9_]*)',part):
+                                if match[1] not in values:raise ValueError('Unknown component parameter '+match[1])
+                                edits.append((offset+match.start(),offset+match.end(),values[match[1]],value_origins[match[1]]))
+                        offset+=len(part)
+                    length=len(prefix)+len(text)+sum(len(value)-(end-start) for start,end,value,_ in edits)
+                    if length+1>MAX_SOURCE_CHARS:fail_component('Expanded components exceed source limit',origin,len(prefix)+1)
+                    text=replace_spans(text,edits)
+                    expanded.append(prefix+text)
                     expanded_origins.append(template_origin)
             child_lines, child_locations = instantiate(expanded, expanded_origins, (*stack, name))
+            if scoped and owner in {'fn','state','derive','record','action','persist','rule','test','navigation','service','api','theme','style'}:
+                fail_component('UI components cannot be instantiated in domain declarations',origin,len(prefix)+1)
+            size+=sum(len(child)+1 for child in child_lines)
+            if size>MAX_SOURCE_CHARS:fail_component('Expanded components exceed source limit',origin,len(prefix)+1)
             result.extend(child_lines)
             result_origins.extend(child_locations)
-            if sum(map(len, result)) > MAX_SOURCE_CHARS:
-                raise ValueError('Expanded components exceed source limit')
         return result, result_origins
     result_lines, result_origins = instantiate(kept, kept_origins)
-    result = '\n'.join(result_lines)+'\n'
+    result_origins=[origin_for(line,origin) for line,origin in zip(result_lines,result_origins)]
+    result = ExpandedSource('\n'.join(result_lines)+'\n',result_origins)
     if len(result) > MAX_SOURCE_CHARS:
         raise ValueError('Expanded components exceed source limit')
     return (result, result_origins) if traced else result

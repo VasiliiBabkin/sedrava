@@ -2,6 +2,7 @@
 
 CSS can change presentation; it cannot grant script/network/server capabilities.
 """
+from sedrava_syntax import physical_lines
 import hashlib
 import html
 import re
@@ -12,7 +13,7 @@ from sedrava_core import read_literal
 
 def read_directives(source):
     settings={'stylesheets':[],'licenses':[]};lines=[]
-    for number,line in enumerate(source.splitlines(),1):
+    for number,line in enumerate(physical_lines(source),1):
         match=re.fullmatch(r'(stylesheet|license|origin|social-image|favicon) (".*")',line)
         if match:
             value,end=read_literal(match[2])

@@ -1,5 +1,6 @@
 """WebApp HTTP capabilities layered on API0 schemas; never compiler-side network I/O."""
 from dataclasses import dataclass
+from sedrava_syntax import physical_lines
 import re
 from sedrava_http import ApiService, JsonResponse
 from sedrava_http_parser import parse_service
@@ -20,7 +21,7 @@ class WebService:
 
 
 def extract_services(source):
-    lines=source.splitlines();kept=[];blocks={};i=0
+    lines=physical_lines(source);kept=[];blocks={};i=0
     while i<len(lines):
         m=re.fullmatch(r'service ([A-Za-z][A-Za-z0-9_]*):',lines[i])
         if not m:kept.append(lines[i]);i+=1;continue
@@ -36,7 +37,7 @@ def validate_services(blocks, program, types):
     services={}
     for name,source in blocks.items():
         props={};base=[]
-        for n,line in enumerate(source.splitlines(),1):
+        for n,line in enumerate(physical_lines(source),1):
             match=re.fullmatch(r'    (method|body|auto|cache|max-items) (.+)',line)
             if match:
                 if match[1] in props:raise ValueError(f'Line {n}: column 5: duplicate HTTP property')

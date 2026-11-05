@@ -23,7 +23,7 @@ def check(archive, folder):
     run(cli,'--version')
     result=subprocess.run([str(cli),'--version'],cwd=folder,env=env,capture_output=True,text=True,check=True)
     assert result.stdout.strip()=='sedrava '+VERSION
-    for name in ('reference_09','text_profile','task_manager','task_manager_navigation'):
+    for name in ('reference_09','text_profile','task_manager','task_manager_navigation','bounded_core_012','bounded_values_012'):
         source=folder/'share/sedrava/examples'/f'{name}.sdr'
         run(cli,'check',source);run(cli,'test',source);run(cli,'run',source)
         web=folder/'generated with spaces'/name/'index.html'
@@ -50,6 +50,16 @@ def check(archive, folder):
         first={p.relative_to(output):p.read_bytes() for p in output.rglob('*') if p.is_file()}
         run(cli,'build',mode,source,'--output',output)
         assert first=={p.relative_to(output):p.read_bytes() for p in output.rglob('*') if p.is_file()}
+    source=folder/'share/sedrava/examples/modules_core_012/main.sdr'
+    run(cli,'check',source);run(cli,'test',source);run(cli,'run',source,'model.scan')
+    run(cli,'build','web',source,'--output',folder/'modular app/index.html')
+    run(cli,'build','android',source,'--output',folder/'modular android')
+    run(cli,'build','webapp',source.with_name('site.sdr'),'--output',folder/'modular webapp')
+    # Base install was exercised above; package locking on 3.10 uses its declared extra.
+    run(python,'-m','pip','install',str(archive)+'[packages]')
+    locked=folder/'share/sedrava/examples/packages_012_demo'
+    run(cli,'verify',locked);run(cli,'check',locked/'site.sdr')
+    run(cli,'build','site',locked/'site.sdr','--output',folder/'locked site')
     print(f'PASS: clean {archive.name}, bundled docs/examples/license, check/test/run/Web/Android and deterministic Web',flush=True)
 
 if __name__=='__main__':

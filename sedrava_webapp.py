@@ -14,8 +14,8 @@ import re
 import tempfile
 
 from sedrava_core import parse as parse_app, run, type_of
-from sedrava_records import ListType, value_type
-from sedrava_syntax import source_lines, MAX_BLOCK_DEPTH
+from sedrava_records import ListType, value_type,structured
+from sedrava_syntax import source_lines, MAX_BLOCK_DEPTH, physical_lines
 from sedrava_site import (BREAKPOINTS, COMMON, COMPONENTS, THEME, Component,
                           Definition, Parameter, Property, Span, choice, fail,
                           identifier, properties, text, tokens, walk)
@@ -85,12 +85,14 @@ UI_DYNAMIC['table']=replace(UI_DYNAMIC['list'],tag='div',parameters={**UI_DYNAMI
 
 
 def parse_webapp(source):
+    source_original=source
     from sedrava_modules import components
-    source = components(source)
+    source = components(source,getattr(source,'origins',None))
+    if isinstance(source,tuple):source=__import__('sedrava_source_map').ExpandedSource(source[0],source[1])
     from sedrava_web_assets import read_directives
     source, settings = read_directives(source)
     if any(key in settings for key in ("origin","robots","social-image")):raise ValueError("Static publishing metadata requires site mode")
-    raw=source.splitlines();kept=[];presentation=[];named_themes={};pos=0
+    raw=physical_lines(source);kept=[];presentation=[];named_themes={};pos=0
     while pos<len(raw):
         named=re.fullmatch(r'theme ([A-Za-z][A-Za-z0-9_-]*):',raw[pos])
         if named:
@@ -133,10 +135,12 @@ def parse_webapp(source):
         fail(Span(view_lineno, 1), "Empty view main")
     if not any(d > 0 for d, _, _ in lines[ix + 1:]):
         fail(Span(view_lineno, 1), "Empty view main")
-    raw = source.splitlines()
+    raw = physical_lines(source)
     head_no = lines[0][2] - 1
     raw[head_no] = re.sub(r"^(\s*)webapp\b", r"\1app", raw[head_no], count=1)
     domain = "\n".join(raw[:view_lineno - 1]) + '\nscreen main:\n    text "WebApp placeholder"\n'
+    from sedrava_source_map import ExpandedSource
+    domain=ExpandedSource(domain,getattr(source_original,'origins',()),source_original) if getattr(source_original,'origins',None) else domain
     program = parse_app(domain)
     run(program)
     if program.has_navigation:
@@ -446,7 +450,7 @@ def generate_webapp(document, source_dir=".", _inputs=None):
             return common[:-1]+attr('type','submit')+'>'+html.escape(props['text'])+'</button>'
         if kind == "value":
             key = html.escape(props["state"], quote=True)
-            label = html.escape(props.get("label", props["state"]))
+            label = html.escape(props.get("label", (program.display_names or {}).get(props["state"],props["state"])))
             return common + "<span>" + label + ': </span><output data-state="' + key + '" aria-live="polite"></output></div>'
         if kind in ("navigate", "back"):
             attrs=attr('type','button')+(' data-back="true"' if kind=='back' else attr('data-navigate',props['to']))
@@ -630,7 +634,7 @@ def generate_webapp(document, source_dir=".", _inputs=None):
     if document.services:
         from sedrava_web_services import generate_services
         from sedrava_records_codegen import STRICT_JSON
-        ui_js='let remoteReady=false;\n'+('' if program.records or program.has_navigation else STRICT_JSON)+ui_js+generate_services(document.services, program)
+        ui_js='let remoteReady=false;\n'+('' if structured(program) else STRICT_JSON)+ui_js+generate_services(document.services, program)
     title = html.escape(document.name)
     index = ('<!doctype html>\n<html lang="en"><head><meta charset="utf-8">'
              '<meta name="viewport" content="width=device-width,initial-scale=1">'

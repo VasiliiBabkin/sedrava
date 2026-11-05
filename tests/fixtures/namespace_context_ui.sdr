@@ -1,0 +1,6 @@
+site "Contextual UI"
+import "namespace_context_ui_module.sdr" as ui
+page home at "/":
+    title "Contextual UI"
+    heading "Scoped components"
+    use ui.Panel

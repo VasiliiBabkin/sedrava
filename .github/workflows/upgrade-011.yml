@@ -62,6 +62,7 @@ jobs:
           path: build/upgrade-inputs
       - run: |
           python -m pip install playwright==1.62.0
+          sudo --preserve-env=GITHUB_ACTIONS python3 scripts/configure_ci_apt.py
           python -m playwright install --with-deps ${{ matrix.engine }}
       - name: Real installed-output Web update, rollback and rejected-storage protection
         env:
