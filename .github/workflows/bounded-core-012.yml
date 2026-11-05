@@ -28,6 +28,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Install declared test dependencies (tomli on Python 3.10)
+        run: python -m pip install '.[test]'
       - name: Full Python regression and generated Node/JVM differential checks
         run: python -m unittest discover -s tests -v
       - name: Check pinned Unicode table regeneration

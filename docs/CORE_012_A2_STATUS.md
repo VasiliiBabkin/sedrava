@@ -119,3 +119,10 @@ the navigation adapter reused the pure domain emitter, which now correctly omits
 Android I/O. Fixed the boundary by factoring platform_persistence and attaching it
 explicitly to both actual Compose adapters; the pure JVM adapter stays independent
 of Android classes. Navigation compilation/JVM/Lint/device regressions are rerun.
+
+The first dedicated CI matrix also exposed a harness dependency omission on Python
+3.10: the existing rebrand tests require the declared `test` extra (tomli when
+stdlib tomllib is unavailable). The matrix now installs `.[test]` before discovery;
+no test skip or parser workaround was introduced. On checkpoint 581cb79, Python
+3.12/3.13 and all three new browser jobs passed; these are intermediate results,
+not evidence for a later SHA. Final matrix results are linked in the PR.
