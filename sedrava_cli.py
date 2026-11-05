@@ -86,9 +86,8 @@ def main(argv=None):
             raise ValueError("Source exceeds size limit")
         with args.source.open(encoding="utf-8") as handle:
             source = handle.read(MAX_SOURCE_CHARS + 1)
-        from sedrava_syntax import document_kind
-        if any(line.startswith("host ") for indent, line, number in
-               __import__("sedrava_syntax").source_lines(source) if indent == 0):
+        from sedrava_syntax import document_kind, source_lines
+        if any(line.startswith("host ") for indent, line, number in source_lines(source) if indent == 0):
             raise ValueError("Host documents are never Web/Android apps; use sedrava host check/run")
         if document_kind(source) in ("site", "webapp"):
             document = parse_document(source, args.source)
