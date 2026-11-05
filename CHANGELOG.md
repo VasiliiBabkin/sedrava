@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.12.0a1 — experimental alpha integration (NOT published)
+
+- Preserve stable published 0.11.0 baseline and add checked namespaced module exports and alias visibility, source-provenance diagnostics and deterministic offline package locks from the original #39–#43 experiments.
+- Exact-version local vendored dependencies, SHA-256 lock integrity and bounded resolver checks; no hosted registry, unrestricted foreign libraries or backend/database/auth.
+- Experimental branch only: no alpha tag, PyPI publication or production website claims. New CI on the post-0.11 source SHA is required.
+
 ## 0.11.0 — stable released on GitHub and PyPI (2026-11-05)
 
 - [GitHub release](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0) and [PyPI](https://pypi.org/project/sedrava/0.11.0/) published from exact audited source `c9cde75e3d2e2c7eafeeaec10c73fec627816e68`. Web-platform scope matches [0.11.0rc1](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0rc1); Android versionCode 11002 exceeds RC 11001.
