@@ -163,3 +163,13 @@ trust/read/write grants. Host effects are never built into Web or Android apps.
 See [Russian](docs/HOST_013_A1.ru.md) and [English](docs/HOST_013_A1.en.md)
 contracts and the [example](examples/host_report_013.sdr). This is not an OS
 sandbox and is not intended for untrusted source or multi-user execution.
+
+
+### Experimental trusted host A2 — directory scopes and strict JSON
+
+A separate [stacked host A2 experiment](docs/HOST_013_A2.en.md) adds bounded JSON
+read/write, typed JSON field extraction, safe sorted directory listings, creating
+or removing one empty directory and independent read/write/list capability scopes.
+No host capability is registered in Web/Android. [RU contract](docs/HOST_013_A2.ru.md)
+· [example](examples/host_inventory_013.sdr). This is **not** an OS sandbox, a
+production server or a published 0.11 capability. No merges/releases are implied.
