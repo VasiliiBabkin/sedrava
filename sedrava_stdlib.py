@@ -9,6 +9,7 @@ SIGNATURES={
     'text_at':((str,int),str), 'text_slice':((str,int,int),str),
     'text_index':((str,str),int), 'unicode_ord':((str,),int),
     'unicode_chr':((int,),str),
+    **{name:((str,),str) for name in ('unicode_nfc','unicode_nfd','unicode_nfkc','unicode_nfkd','text_casefold')},
 }
 
 
@@ -19,6 +20,12 @@ def civil_date(value):
 
 
 def apply(name,args):
+    if name.startswith('unicode_nf'):
+        from sedrava_unicode import normalize,NORMALIZERS
+        return normalize(args[0],NORMALIZERS[name])
+    if name=='text_casefold':
+        from sedrava_unicode import casefold
+        return casefold(args[0])
     if name=='text_length':return len(args[0])
     if name=='trim':return args[0].strip(' \t\r\n')
     if name=='lower_ascii':return args[0].translate(str.maketrans('ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'))
@@ -83,6 +90,9 @@ internal fun sdrDateAdd(value:String,n:Int):String = try {val result=sdrDate(val
 
 
 def js_call(name,args):
+    from sedrava_unicode import NORMALIZERS
+    if name in NORMALIZERS:return 'sdrNormalize('+args[0]+',"'+NORMALIZERS[name]+'")'
+    if name=='text_casefold':return 'sdrCasefold('+args[0]+')'
     a=args[0]
     return {
       'text_length':lambda:'Array.from('+a+').length',
@@ -101,6 +111,9 @@ def js_call(name,args):
 
 
 def kt_call(name,args):
+    from sedrava_unicode import NORMALIZERS
+    if name in NORMALIZERS:return 'sdrNormalize('+args[0]+',"'+NORMALIZERS[name]+'")'
+    if name=='text_casefold':return 'sdrCasefold('+args[0]+')'
     a=args[0]
     return {
       'text_length':lambda:'sdrTextLength('+a+')',

@@ -16,7 +16,9 @@ def javascript(source,sequence,program=None):
     from web_codegen import generate
     js=generate(source,_program=program or parse(source),_domain_only=True)
     code='const vm=require("node:vm"),c=vm.createContext({});vm.runInContext('+json.dumps(js)+',c);process.stdout.write(JSON.stringify(vm.runInContext('+json.dumps('(()=>{let s={...initialState};return '+json.dumps(sequence)+'.map(a=>{const before=s;try{s=actions[a](s)}catch(_){}return {accepted:s!==before,state:s};});})()')+',c)));'
-    return json.loads(subprocess.check_output(['node','-e',code],text=True,timeout=30))
+    with tempfile.TemporaryDirectory() as tmp:
+        path=Path(tmp)/'trace.js';path.write_text(code)
+        return json.loads(subprocess.check_output(['node',str(path)],text=True,timeout=30))
 
 def kotlin(source,sequence,program=None):
     from android_codegen_v03 import generate,quoted

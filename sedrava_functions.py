@@ -20,6 +20,12 @@ def signature_type(source, records):
     import re
     from sedrava_records import ListType
     from sedrava_sequences import ValueListType
+    from sedrava_results import ResultType
+    result=re.fullmatch(r'Result<(.+),\s*Error>',source)
+    if result:
+        inner=signature_type(result[1].strip(),records)
+        if isinstance(inner,ResultType):raise ValueError('Nested Result is unsupported')
+        return ResultType(inner)
     kinds={'int':int,'text':str,'bool':bool,**records}
     if source in kinds:return kinds[source]
     match=re.fullmatch(r'list<([A-Za-z][A-Za-z0-9_]*)>\(max=([0-9]{1,3})\)',source)
@@ -32,6 +38,21 @@ def signature_type(source, records):
 def kotlin_type(kind):
     from sedrava_records import ListType
     from sedrava_sequences import ValueListType
+    from sedrava_results import ResultType
+    if isinstance(kind,ResultType):return 'SdrResult<'+kotlin_type(kind.value)+'>'
     if isinstance(kind,ValueListType):return 'SdrVector<'+kotlin_type(kind.element)+'>'
     if isinstance(kind,ListType):return 'SdrList<'+kotlin_type(kind.record)+'>'
     return {int:'Int',str:'String',bool:'Boolean'}.get(kind,'SdrRecord_'+getattr(kind,'name',''))
+
+
+def split_parameters(source):
+    parts=[];start=0;depth=0
+    for i,ch in enumerate(source):
+        if ch in '<(':depth+=1
+        elif ch in '>)':
+            depth-=1
+            if depth<0:raise ValueError('Unbalanced function parameter type')
+        elif ch==',' and depth==0:parts.append(source[start:i]);start=i+1
+    if depth:raise ValueError('Unbalanced function parameter type')
+    if source.strip():parts.append(source[start:])
+    return parts

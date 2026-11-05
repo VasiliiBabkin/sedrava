@@ -24,6 +24,9 @@ def kt(node, names):
         return ('sdrTextAt' if kind is str else 'sdrVector_list_at' if isinstance(kind,ValueListType) else 'sdr_list_at')+'('+','.join((base,index))+')'
     if isinstance(node, ast.Attribute): return '(' + kt(node.value, names) + ').sdr_' + node.attr
     if isinstance(node, ast.Call):
+        if hasattr(node,"result_operation"):
+            from sedrava_results import kt as result_emit
+            return result_emit(node,[kt(arg,names) for arg in node.args])
         if hasattr(node,"collection_query"):
             from sedrava_queries import kt_query
             return kt_query(node,kt,names)
@@ -89,6 +92,11 @@ def generate(source, output, _program=None, _domain_only=False, application_id=N
     scaffold('app "Scaffold"\nstate ready = false\naction start: ready = true\nscreen main:\n    text "Scaffold"\n    button "Start" -> start\n', output, application_id=package)
     prepare_identity(output, package, program.name)
     write_title(output, program.name)
+    from sedrava_unicode import required as needs_unicode
+    if needs_unicode(program) and not _domain_only:
+        from sedrava_unicode_data import LICENSE_TEXT
+        notice=output/'app/src/main/res/raw/sedrava_unicode_license.txt'
+        notice.parent.mkdir(parents=True,exist_ok=True);notice.write_text(LICENSE_TEXT,encoding='utf-8')
     target = kotlin_path(output)
     # One pure state adapter supplies both Compose callbacks and JVM conformance.
     kinds = {int: "Int", bool: "Boolean", str: "String"}
@@ -104,6 +112,10 @@ def generate(source, output, _program=None, _domain_only=False, application_id=N
         return ", ".join(prefix + "." + user[key] for key in keys)
     guard = " && ".join(kt(rule, next_names) for rule in program.rules) or "true"
     from sedrava_stdlib import KT_RUNTIME
+    from sedrava_results import KT_RUNTIME as RESULT_RUNTIME
+    KT_RUNTIME+=RESULT_RUNTIME
+    from sedrava_unicode import required as unicode_required,runtime as unicode_runtime
+    if unicode_required(program):KT_RUNTIME+=unicode_runtime('kt')
     lines = [
         "package " + package,
         "import android.os.Bundle",

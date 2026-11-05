@@ -7,6 +7,7 @@ from sedrava_sequences import ValueList,ValueListType,NAMES as VALUE_LIST_OPS
 from dataclasses import dataclass
 from sedrava_functions import FunctionType, expression_cost, signature_type
 from sedrava_stdlib import SIGNATURES
+from sedrava_results import NAMES as RESULT_NAMES
 from sedrava_queries import NAMES as QUERY_NAMES, type_query
 from sedrava_navigation import Span, Widget, Screen, Navigation, MAX_SCREENS, MAX_NAV_COMMANDS
 
@@ -187,7 +188,7 @@ def parse_expr(source, types, expected=None):
         if expression_cost(node)>MAX_DERIVED_NODES:raise ValueError("Expression/function exceeds complexity limit")
     except ValueError as exc:
         unknown = next((item.id for item in ast.walk(node)
-                        if isinstance(item, ast.Name) and item.id not in types and item.id not in SIGNATURES and item.id not in QUERY_NAMES and item.id not in ('append','update','remove','get','has','count','next_id','list_at','list_slice','list_clear','list_remove_at','list_replace_at','list_index','list_identity','list_capacity','list_sort','list_sum')), None)
+                        if isinstance(item, ast.Name) and item.id not in types and item.id not in SIGNATURES and item.id not in QUERY_NAMES and item.id not in RESULT_NAMES and item.id not in ('append','update','remove','get','has','count','next_id','list_at','list_slice','list_clear','list_remove_at','list_replace_at','list_index','list_identity','list_capacity','list_sort','list_sum')), None)
         if unknown is not None:
             raise ValueError(f"Unknown identifier: {unknown}") from exc
         raise
@@ -231,6 +232,8 @@ def type_of(node, types):
             if any(type_of(k.value, types) != dict(kind.fields)[k.arg] for k in node.keywords): raise ValueError("Record field type mismatch")
             node.record_type = kind
             return kind
+        from sedrava_results import NAMES as RESULT_NAMES,type_result
+        if name in RESULT_NAMES:return type_result(node,types,type_of)
         if name in QUERY_NAMES:return type_query(node,types,type_of)
         if name in SIGNATURES:
             parameters,result=SIGNATURES[name]
@@ -306,6 +309,9 @@ def _evaluate(node, state):
         record = evaluate(node.value, state)
         return record.values[[k for k, _ in record.kind.fields].index(node.attr)]
     if isinstance(node, ast.Call):
+        if hasattr(node,"result_operation"):
+            from sedrava_results import evaluate as result_evaluate
+            return result_evaluate(node,[evaluate(arg,state) for arg in node.args])
         if hasattr(node,"collection_query"):
             from sedrava_queries import evaluate_query
             return evaluate_query(node,state,evaluate,checked_int)
@@ -472,9 +478,10 @@ def parse(source):
             if name is not None: raise ValueError(f"Line {number}: duplicate app")
             name = label(m[1], number, 5)
         elif m := re.fullmatch(r"fn ([A-Za-z][A-Za-z0-9_]*)\((.*?)\) -> (.+?) = (.+)",line):
-            if states or actions or m[1] in types or keyword.iskeyword(m[1]) or len(functions)>=32 or m[1] in SIGNATURES or m[1] in QUERY_NAMES or m[1] in ('true','false','append','update','remove','get','has','count','next_id','list_at','list_slice','list_clear','list_remove_at','list_replace_at','list_index','list_identity','list_capacity','list_sort','list_sum'):raise ValueError(f'Line {number}: invalid pure function declaration')
+            if states or actions or m[1] in types or keyword.iskeyword(m[1]) or len(functions)>=32 or m[1] in SIGNATURES or m[1] in QUERY_NAMES or m[1] in RESULT_NAMES or m[1] in ('true','false','append','update','remove','get','has','count','next_id','list_at','list_slice','list_clear','list_remove_at','list_replace_at','list_index','list_identity','list_capacity','list_sort','list_sum'):raise ValueError(f'Line {number}: invalid pure function declaration')
             params=[]
-            for param in m[2].split(',') if m[2].strip() else ():
+            from sedrava_functions import split_parameters
+            for param in split_parameters(m[2]):
                 spec=re.fullmatch(r'\s*([A-Za-z][A-Za-z0-9_]*)\s*:\s*(.+?)\s*',param)
                 if not spec or spec[1] in types or spec[1] in ('true','false') or spec[1] in dict(params) or keyword.iskeyword(spec[1]):raise ValueError(f'Line {number}: invalid function parameter')
                 try:params.append((spec[1],signature_type(spec[2],records)))
@@ -516,7 +523,7 @@ def parse(source):
                 raise ValueError(f"Line {number}: reserved identifier {m[1]}")
             node = expression(m[2], {}, number, m.start(2) + 1)
             try:
-                states[m[1]] = evaluate(node, {})
+                states[m[1]] = checked_value(evaluate(node, {}))
             except ValueError as exc:
                 raise ValueError(f"Line {number}: column {m.start(2) + 1}: {exc}") from exc
             types[m[1]] = type(states[m[1]])
@@ -663,6 +670,8 @@ def parse(source):
         if sizes[key] > MAX_DERIVED_NODES:
             raise ValueError("Derived expression exceeds expansion limit")
     from sedrava_cost import action_work,MAX_ACTION_WORK
+    from sedrava_cost import base_work
+    if base_work(derived,rules)>MAX_ACTION_WORK:raise ValueError("Derived/invariant evaluation exceeds work limit")
     for action,body in actions.items():
         if action_work(body,derived,rules)>MAX_ACTION_WORK:raise ValueError(f"Line {action_lines[action]}: action exceeds weighted work limit")
     values = resolve(states, derived)

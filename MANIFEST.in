@@ -5,3 +5,6 @@ recursive-include examples *.sdr *.md *.svg *.png *.jpg *.webp *.css *.woff *.wo
 recursive-include scripts *.py *.sh
 recursive-include tests *.py *.sdr
 recursive-include .github/workflows *.yml
+
+recursive-include unicode_data *.gz *.json
+recursive-include licenses *.txt

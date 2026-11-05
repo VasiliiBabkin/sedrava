@@ -30,11 +30,15 @@ class ListValue:
 
 
 def value_type(value):
+    from sedrava_results import ResultValue
+    if isinstance(value,ResultValue):return value.kind
     return value.kind if isinstance(value, (ListValue, RecordValue, ValueList)) else type(value)
 
 
 def validate(value, expected=None):
     from sedrava_core import checked_value
+    from sedrava_results import ResultValue,validate as validate_result
+    if isinstance(value,ResultValue):return validate_result(value,expected)
     kind = value_type(value)
     if expected is not None and kind != expected:
         raise ValueError('Value type mismatch')

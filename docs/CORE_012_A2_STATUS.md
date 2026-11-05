@@ -52,3 +52,28 @@ implied by passing the old flat-module tests. No server-platform integration.
 Русский: это рабочий журнал, не объявление готовности. Реализованные части выше
 отделены от следующих этапов. Итоговые SHA/CI и ограничения будут зафиксированы
 после фактических проверок; никакого релиза или merge этот документ не разрешает.
+
+## Second checkpoint
+
+Implemented the pinned Unicode 15.0.0 data generator and shared normalization/full
+case-fold algorithms; original data SHA-256 and license are vendored. Python,
+actual generated JS and JVM adapters run official conformance vectors. New
+`Result<T, Error>` is ephemeral and first-order: try_add/try_chr/try_at,
+result_ok/result_code/result_or; no persisted Result or arbitrary error variants.
+The compiler rejects Result state and implicit unwrap. Expected errors never catch
+argument, invariant, engine or fuel faults. See CORE_012_A2.md and CORE_012_A2_RU.md.
+
+First actual Chromium run passed 14 UI transitions, complete-state comparison,
+keyboard access, persistence/reload and rejected-storage preservation. Initial clean
+wheel/sdist installs passed outside the checkout, including both experimental
+examples, old 0.9/0.10 apps and site/webapp generation. These preliminary checks
+precede the final SHA; final runs are recorded separately below.
+
+Added dedicated Python 3.10/3.12/3.13, three-browser and Android API35 workflow jobs
+for the dependent base branch. Existing tests were retained. Added JVM and Compose
+harnesses beside generated code (not manual fixes to application sources).
+
+Namespace dry-run against a1c7200888da9aad103dd79210b2e3b70c3e6a4c found an
+actual packaging module-list conflict; CLI/source mapping and WebApp expansion also
+need reconciliation. This is NOT proof of a working namespace integration. Keep
+#47 independent until an explicitly reviewed integration branch passes both suites.

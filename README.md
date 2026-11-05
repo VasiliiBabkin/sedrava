@@ -152,3 +152,8 @@ The released 0.11 integration adds shared composition, pure functions, bounded c
 The [experimental RC](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0rc1) is available from [PyPI](https://pypi.org/project/sedrava/0.11.0rc1/) after exact-source CI, distribution checks and practical 0.10 upgrade/rollback testing. It provides responsive `site` generation, interactive `webapp`, typed Web state/components/functions, forms, routes, collection queries and validated public HTTP clients.
 
 The [stable 0.11.0](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0) is now **published** on [PyPI](https://pypi.org/project/sedrava/0.11.0/) following exact-source CI, practical upgrade/rollback verification and a successful one-time Trusted Publishing workflow. [Stable gates](docs/STABLE_RELEASE_GATES_011.md) · [EN release notes](docs/RELEASE_NOTES_0_11_0.en.md) · [RU](docs/RELEASE_NOTES_0_11_0.ru.md). Namespaces, package lockfiles, trusted server, SQLite, authentication and automatic migration are not in 0.11. The official documentation website still uses Astro/Starlight.
+
+Experimental bounded-core continuation (not in the published stable package):
+[English syntax and limits](docs/CORE_012_A2.md),
+[Русский справочник](docs/CORE_012_A2_RU.md),
+[actual verification status](docs/CORE_012_A2_STATUS.md).

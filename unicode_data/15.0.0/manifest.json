@@ -1,0 +1,23 @@
+{
+  "version": "15.0.0",
+  "upstream_commit": "ad1deaee8697c99107bafeceaebdfb22a51706ed",
+  "license": "licenses/Unicode-Data-LICENSE.txt",
+  "files": {
+    "UnicodeData.txt": {
+      "sha256": "806e9aed65037197f1ec85e12be6e8cd870fc5608b4de0fffd990f689f376a73",
+      "url": "https://raw.githubusercontent.com/unicode-org/unicodetools/ad1deaee8697c99107bafeceaebdfb22a51706ed/unicodetools/data/ucd/15.0.0/UnicodeData.txt"
+    },
+    "DerivedNormalizationProps.txt": {
+      "sha256": "d5687a48c95c7d6e1ec59cb29c0f2e8b052018eb069a4371b7368d0561e12a29",
+      "url": "https://raw.githubusercontent.com/unicode-org/unicodetools/ad1deaee8697c99107bafeceaebdfb22a51706ed/unicodetools/data/ucd/15.0.0/DerivedNormalizationProps.txt"
+    },
+    "CaseFolding.txt": {
+      "sha256": "cdd49e55eae3bbf1f0a3f6580c974a0263cb86a6a08daa10fbf705b4808a56f7",
+      "url": "https://raw.githubusercontent.com/unicode-org/unicodetools/ad1deaee8697c99107bafeceaebdfb22a51706ed/unicodetools/data/ucd/15.0.0/CaseFolding.txt"
+    },
+    "NormalizationTest.txt": {
+      "sha256": "fb9ac8cc154a80cad6caac9897af55a4e75176af6f4e2bb6edc2bf8b1d57f326",
+      "url": "https://raw.githubusercontent.com/unicode-org/unicodetools/ad1deaee8697c99107bafeceaebdfb22a51706ed/unicodetools/data/ucd/15.0.0/NormalizationTest.txt"
+    }
+  }
+}

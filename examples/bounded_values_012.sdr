@@ -10,11 +10,15 @@ state rows: list<Row>(max=3) = []
 state total = 0
 state found = -1
 state text = ""
+state code = ""
 persist values
 persist words
 persist flags
 persist rows
 persist total
+persist text
+persist code
+persist found
 action scan:
     total = 0
     for index, value in values:
@@ -52,8 +56,27 @@ action clear:
 test values: scan -> total == 6 and values[0] == 6
 test search: order -> found == 3
 test records: seed_rows, delete_rows -> count(rows) == 0 and next_id(rows) == 3
+action normalize:
+    text = unicode_nfc("é Straße 😀")
+action fold:
+    text = text_casefold(text)
+action expected_error:
+    let outcome = try_at(values, 99)
+    code = result_code(outcome)
+    total = result_or(outcome, 42)
 screen main:
     value total
     value found
     value text
-    button "Scan" -> scan
+    button "scan" -> scan
+    button "order" -> order
+    button "remove" -> remove
+    button "add" -> add
+    button "fail_bounds" -> fail_bounds
+    button "fail_sum" -> fail_sum
+    button "seed_rows" -> seed_rows
+    button "delete_rows" -> delete_rows
+    button "clear" -> clear
+    button "normalize" -> normalize
+    button "fold" -> fold
+    button "expected_error" -> expected_error

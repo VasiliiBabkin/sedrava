@@ -30,6 +30,9 @@ def js_expr(node, names):
         return ('vectorOp' if isinstance(kind,ValueListType) else 'collectionOp')+'("list_at",'+str(kind.capacity)+','+','.join((base,index))+')'
     if isinstance(node, ast.Attribute): return '(' + js_expr(node.value, names) + ')[' + json_script(node.attr) + ']'
     if isinstance(node, ast.Call):
+        if hasattr(node,"result_operation"):
+            from sedrava_results import js as result_emit
+            return result_emit(node,[js_expr(arg,names) for arg in node.args])
         if hasattr(node,"collection_query"):
             from sedrava_queries import js_query
             return js_query(node,js_expr,names)
@@ -121,6 +124,10 @@ def generate(source, _program=None, _domain_only=False):
     if not program.widgets:
         raise ValueError("Missing screen main")
     from sedrava_stdlib import JS_RUNTIME
+    from sedrava_results import JS_RUNTIME as RESULT_RUNTIME
+    JS_RUNTIME+=RESULT_RUNTIME
+    from sedrava_unicode import required as unicode_required,runtime as unicode_runtime
+    if unicode_required(program):JS_RUNTIME+=unicode_runtime('js')
     from sedrava_queries import JS_RUNTIME as QUERY_RUNTIME
     initial = json_script({k: plain(v) for k, v in program.states.items()}, ensure_ascii=False)
     names = {key: "nextState[" + json_script(key) + "]" for key in program.states}
