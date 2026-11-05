@@ -113,7 +113,10 @@ def parse_host(source):
             if not _valid_binding(m[1], types):
                 raise ValueError(f"Line {number}: reserved or duplicate host binding")
             node = expression(m[2])
-            types[m[1]] = type_of(node, types)
+            kind = type_of(node, types)
+            if kind not in (str, int, bool):
+                raise ValueError(f"Line {number}: use explicit JSON statements for document values")
+            types[m[1]] = kind
             steps.append(HostStep("let", m[1], node))
         elif m := re.fullmatch(r"(read_json|list_dir) ([A-Za-z][A-Za-z0-9_]*) from (.+)", line):
             reads += 1
