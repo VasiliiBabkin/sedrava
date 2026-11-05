@@ -34,6 +34,8 @@ def atomic_write_text(path, raw):
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="sedrava", description="Sedrava experimental compiler")
     parser.add_argument("--version", action="version", version=f"sedrava {VERSION}")
+    parser.add_argument("--diagnostics", choices=("text","json"), default="text",
+                        help="Error output format; JSON is a structured diagnostic on stderr")
     commands = parser.add_subparsers(dest="command", required=True)
     check = commands.add_parser("check", help="Parse and type-check an Sedrava program")
     check.add_argument("source", type=Path)
@@ -188,12 +190,14 @@ def main(argv=None):
             print(generate(source, output, application_id=args.application_id))
         return 0
     except (OSError, ValueError, AssertionError, RecursionError) as exc:
-        message = str(exc)
-        match = re.match(r"Line (\d+): (?:column (\d+): )?(.*)", message)
-        if match:
-            print(f"{args.source}:{match.group(1)}:{match.group(2) or 1}: error: {match.group(3)}", file=sys.stderr)
+        from sedrava_diagnostics import from_exception
+        diagnostic = from_exception(exc, args.source, args.command)
+        if args.diagnostics == "json":
+            print(json.dumps(diagnostic.as_dict(), ensure_ascii=False, sort_keys=True), file=sys.stderr)
+        elif diagnostic.line is not None:
+            print(f"{args.source}:{diagnostic.line}:{diagnostic.column or 1}: error: {diagnostic.message}", file=sys.stderr)
         else:
-            print(f"sedrava: {args.source}: {message}", file=sys.stderr)
+            print(f"sedrava: {args.source}: {diagnostic.message}", file=sys.stderr)
         return 1
 
 if __name__ == "__main__":

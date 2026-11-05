@@ -42,6 +42,15 @@ function validCollection(value, type) {
 function collectionOp(name, capacity, list, arg, record) {
   if (name === 'count') return list.items.length;
   if (name === 'next_id') return list.next_id;
+  if (name === 'list_at') {
+    if (!Number.isInteger(arg) || arg < 0 || arg >= list.items.length) throw Error('Collection positional index out of bounds');
+    const {id,...fields}=list.items[arg];return fields;
+  }
+  if (name === 'list_slice') {
+    if (!Number.isInteger(arg) || !Number.isInteger(record) || arg < 0 || arg > record || record > list.items.length) throw Error('Collection slice bounds invalid');
+    return {next_id:list.next_id,items:list.items.slice(arg,record)};
+  }
+  if (name === 'list_clear') return {next_id:list.next_id,items:[]};
   if (name === 'append') {
     if (list.items.length >= capacity) throw Error('Collection capacity exceeded');
     if (list.next_id === 2147483647) throw Error('Identity exhausted');
@@ -98,6 +107,9 @@ def kt_support(program, quoted):
         'internal fun <T: SdrRecord> sdr_next_id(list: SdrList<T>) = list.next_id',
         'internal fun <T: SdrRecord> sdr_has(list: SdrList<T>, id: Int) = list.items.any { it.id == id }',
         'internal fun <T: SdrRecord> sdr_get(list: SdrList<T>, id: Int): T = list.items.find { it.id == id }?.record ?: throw IllegalArgumentException("Missing record identity")',
+        'internal fun <T: SdrRecord> sdr_list_at(list: SdrList<T>, index: Int): T { require(index>=0 && index<list.items.size){"Collection positional index out of bounds"};return list.items[index].record }',
+        'internal fun <T: SdrRecord> sdr_list_slice(list: SdrList<T>, start: Int, end: Int): SdrList<T> { require(start>=0 && start<=end && end<=list.items.size){"Collection slice bounds invalid"};return list.copy(items=list.items.subList(start,end)).also{it.check()} }',
+        'internal fun <T: SdrRecord> sdr_list_clear(list: SdrList<T>): SdrList<T> = list.copy(items=emptyList())',
         'internal fun <T: SdrRecord> sdr_append(list: SdrList<T>, record: T): SdrList<T> { require(list.items.size < list.capacity && list.next_id < Int.MAX_VALUE); record.check(); return list.copy(items=list.items + SdrItem(list.next_id,record), next_id=list.next_id+1) }',
         'internal fun <T: SdrRecord> sdr_update(list: SdrList<T>, id: Int, record: T): SdrList<T> { sdr_get(list,id); record.check(); return list.copy(items=list.items.map { if(it.id==id) SdrItem(id,record) else it }) }',
         'internal fun <T: SdrRecord> sdr_remove(list: SdrList<T>, id: Int): SdrList<T> { sdr_get(list,id); return list.copy(items=list.items.filter { it.id!=id }) }',
