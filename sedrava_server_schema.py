@@ -74,8 +74,14 @@ def parse_server(source):
     migrations = []
     tables = {}
     index = 2
+    routes = []
     while index < len(raw):
         line_no, text = raw[index]
+        if text.startswith("endpoint "):
+            from sedrava_server_api import parse_routes
+            routes = parse_routes(raw[index:], tables)
+            index = len(raw)
+            break
         match = MIGRATION_RE.fullmatch(text)
         if not match or int(match.group(1)) != len(migrations) + 1 or len(migrations) >= 128:
             _fail(line_no, "migrations must be contiguous from version 1 (maximum 128)")
@@ -128,7 +134,7 @@ def parse_server(source):
     if not migrations:
         raise ValueError("At least one migration is required")
     return {"format": 1, "server": title.group(1), "db_env": db.group(1),
-            "migrations": migrations, "tables": tables}
+            "migrations": migrations, "tables": tables, "routes": routes}
 
 
 def load_manifest(directory):
@@ -176,11 +182,17 @@ if __name__ == "__main__":
 else:
     app = make_app(ROOT)
 '''
-    readme = '''# Generated Sedrava server — experimental slice A
+    readme = '''# Generated Sedrava server — experimental slice A2
 
-This source declares SQLite schema and ordered additive migrations.
-There are **no data endpoints**, authentication or multi-user authorization.
-The ASGI server exposes only GET /health; do not deploy as a public data API.
+This source declares SQLite schema and forward-only migrations.
+GET /health is available. Declared typed data endpoints are DISABLED by default.
+For isolated loopback development tests only, set:
+SEDRAVA_API_EXPERIMENTAL_ENABLE=1
+SEDRAVA_API_EXPERIMENTAL_TOKEN=<random secret of at least 32 ASCII characters>
+Call only from 127.0.0.1 with Authorization: Bearer <token>.
+This single token is NOT multi-user authentication or per-record authorization.
+Never put the token in browser JavaScript, URLs, source or public logs.
+DO NOT expose the development data API through Nginx or the public Internet.
 
 The separately installed Sedrava runtime is required (from the matching
 experimental branch; stable 0.11.0 does not support this target).
