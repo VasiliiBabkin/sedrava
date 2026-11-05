@@ -23,6 +23,8 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: Exercise real SQLite, migration refusal and backup
         run: python -m unittest discover -s tests -p test_server_013.py -v
+      - name: Install experimental runtime in the test environment
+        run: python -m pip install .
       - name: Build restricted server and test its database/CLI
         run: |
           python sedrava_cli.py check examples/server_013_tasks.sdr
