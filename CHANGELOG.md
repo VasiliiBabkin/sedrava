@@ -1,10 +1,10 @@
 # Changelog
 
-## 0.11.0 — stable source candidate, NOT published
+## 0.11.0 — stable released on GitHub and PyPI (2026-11-05)
 
-- Prepare the same frozen Web-platform feature scope as the [published 0.11.0rc1](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0rc1); candidate Android versionCode 11002 is higher than the published RC 11001.
-- New exact-head gate from real 0.10.0 to stable and back, plus real published RC to stable and back, in disposable environments. All actual results are subject to final CI and review.
-- No stable 0.11.0 tag or PyPI package, automatic schema migrations, trusted backend, SQLite/auth or 0.12 namespace/lockfile code is introduced by this preparation.
+- [GitHub release](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0) and [PyPI](https://pypi.org/project/sedrava/0.11.0/) published from exact audited source `c9cde75e3d2e2c7eafeeaec10c73fec627816e68`. Web-platform scope matches [0.11.0rc1](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0rc1); Android versionCode 11002 exceeds RC 11001.
+- Exact-head release CI succeeded (36/36); main merge CI succeeded (11/11), as did real PyPI 0.10 → 0.11 → 0.10 and RC → 0.11 → RC installation checks, Chromium/Firefox/WebKit and Android API35.
+- Published verified wheel/sdist via PyPI Trusted Publishing (workflow 41951910157). No automatic schema migrations, trusted backend, SQLite/auth or experimental 0.12 namespace/lockfile code is included.
 
 ## 0.11.0rc1 — experimental prerelease published on 2026-11-04
 
