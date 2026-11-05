@@ -55,6 +55,8 @@ def check(archive, folder):
     run(cli,'build','web',source,'--output',folder/'modular app/index.html')
     run(cli,'build','android',source,'--output',folder/'modular android')
     run(cli,'build','webapp',source.with_name('site.sdr'),'--output',folder/'modular webapp')
+    # Base install was exercised above; package locking on 3.10 uses its declared extra.
+    run(python,'-m','pip','install',str(archive)+'[packages]')
     locked=folder/'share/sedrava/examples/packages_012_demo'
     run(cli,'verify',locked);run(cli,'check',locked/'site.sdr')
     run(cli,'build','site',locked/'site.sdr','--output',folder/'locked site')

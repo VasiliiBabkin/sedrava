@@ -86,6 +86,10 @@ normalizing to a private ASCII symbol; Unicode text literals are unaffected.
 
 ## Locked local packages
 
+On Python 3.10 install the declared package extra: `python -m pip install '.[packages]'`
+in this checkout, or install the local wheel with `[packages]`. Python 3.12/3.13
+use stdlib tomllib. Base installs still support ordinary app/module commands.
+
 No remote registry or code execution by import. Only reviewed local packages in
 vendor/ with exact versions and SHA-256 locks are supported. Verification precedes
 compilation. A vendor import must be covered by the verified lock, and the actual
