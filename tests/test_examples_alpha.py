@@ -18,6 +18,17 @@ class ExamplesAlpha(unittest.TestCase):
             with self.subTest(example=path.name):
                 source = path.read_text(encoding='utf-8')
                 program = parse_document(source,path)
+                if isinstance(program, dict) and program.get("format") == 1 and "migrations" in program:
+                    from sedrava_server_schema import parse_server, build_server
+                    self.assertEqual(program, parse_server(source))
+                    with tempfile.TemporaryDirectory() as a, tempfile.TemporaryDirectory() as b:
+                        build_server(source, Path(a), path)
+                        build_server(source, Path(b), path)
+                        first = {p.relative_to(a): p.read_bytes() for p in Path(a).rglob('*') if p.is_file()}
+                        second = {p.relative_to(b): p.read_bytes() for p in Path(b).rglob('*') if p.is_file()}
+                        self.assertEqual(first, second)
+                        self.assertIn(Path('schema.json'), first)
+                    continue
                 if isinstance(program,WebApp):
                     first=generate_webapp(program)
                     second=generate_webapp(parse_document(source,path))
