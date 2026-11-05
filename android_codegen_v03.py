@@ -78,6 +78,22 @@ def literal(value):
     return quoted(value) if type(value) is str else str(value).lower()
 
 
+def platform_persistence(program):
+    lines=[]
+    user={key:"sdr_"+key for key in program.states}
+    if program.persistent:
+        condition = '(prefs.all.isEmpty() || snapshotValid(prefs.all["snapshot"]))' if (structured(program)) else 'savedStateValid(prefs.all)'
+        lines += ['internal fun persistState(prefs: android.content.SharedPreferences, state: SedravaState): Boolean = try {',
+                  '  if (!'+condition+') false else prefs.edit().apply {']
+        if structured(program):
+            lines.append('    putString("snapshot", snapshotState(state))')
+        else:
+            for key in program.persistent:
+                method={int:'putInt',bool:'putBoolean',str:'putString'}[type(program.states[key])]
+                lines.append('    '+method+'('+quoted(key)+', state.'+user[key]+')')
+        lines += ['  }.commit()', '} catch (_: Exception) { false }']
+    return lines
+
 def generate(source, output, _program=None, _domain_only=False, application_id=None):
     program = _program or parse(source)
     if program.has_navigation and _program is None:
@@ -93,7 +109,7 @@ def generate(source, output, _program=None, _domain_only=False, application_id=N
     prepare_identity(output, package, program.name)
     write_title(output, program.name)
     from sedrava_unicode import required as needs_unicode
-    if needs_unicode(program) and not _domain_only:
+    if needs_unicode(program):
         from sedrava_unicode_data import LICENSE_TEXT
         notice=output/'app/src/main/res/raw/sedrava_unicode_license.txt'
         notice.parent.mkdir(parents=True,exist_ok=True);notice.write_text(LICENSE_TEXT,encoding='utf-8')
@@ -239,17 +255,7 @@ def generate(source, output, _program=None, _domain_only=False, application_id=N
                 val=program.states[key]
                 lines.append('    '+quoted(key)+' -> value is '+kind(val)+' && value == restored.'+user[key])
             lines += ['    else -> false', '  } }', '}']
-    if program.persistent and not _domain_only:
-        condition = '(prefs.all.isEmpty() || snapshotValid(prefs.all["snapshot"]))' if (structured(program)) else 'savedStateValid(prefs.all)'
-        lines += ['internal fun persistState(prefs: android.content.SharedPreferences, state: SedravaState): Boolean = try {',
-                  '  if (!'+condition+') false else prefs.edit().apply {']
-        if structured(program):
-            lines.append('    putString("snapshot", snapshotState(state))')
-        else:
-            for key in program.persistent:
-                method={int:'putInt',bool:'putBoolean',str:'putString'}[type(program.states[key])]
-                lines.append('    '+method+'('+quoted(key)+', state.'+user[key]+')')
-        lines += ['  }.commit()', '} catch (_: Exception) { false }']
+    if not _domain_only:lines += platform_persistence(program)
     if _domain_only:
         target.write_text("\n".join(lines)+"\n",encoding="utf-8")
         return target

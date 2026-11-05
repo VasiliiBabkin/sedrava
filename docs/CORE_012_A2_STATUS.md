@@ -111,3 +111,11 @@ features; NO-GO for a release or automatic namespace integration. Remaining scop
 Map/Set, nested value lists, persisted/custom-error Results, grapheme/locale text
 operations, Unicode versions beyond 15.0.0 and namespace reconciliation. No tests
 on physical Android hardware. No stable release/tag/package/site changes.
+
+### Regression found by Android CI
+
+Navigation compilation on checkpoint 581cb79 exposed a missing persistState:
+the navigation adapter reused the pure domain emitter, which now correctly omits
+Android I/O. Fixed the boundary by factoring platform_persistence and attaching it
+explicitly to both actual Compose adapters; the pure JVM adapter stays independent
+of Android classes. Navigation compilation/JVM/Lint/device regressions are rerun.
