@@ -1,66 +1,165 @@
-name: Publish Sedrava 0.10.0
+name: Publish Sedrava 0.11.0 stable — exact audited release
 
 on:
   push:
-    tags: ['v0.10.0']
-  workflow_dispatch:
-    inputs:
-      target:
-        description: 'Manual publication is TestPyPI only'
-        required: true
-        type: choice
-        default: testpypi
-        options: [testpypi]
+    branches: ['release/011-stable-approved-publication']
 
 permissions:
   contents: read
 
+concurrency:
+  group: sedrava-011-stable-approved
+  cancel-in-progress: false
+
 jobs:
-  build:
+  preflight:
+    if: github.repository == 'VasiliiBabkin/sedrava' && github.ref == 'refs/heads/release/011-stable-approved-publication'
     runs-on: ubuntu-24.04
     permissions:
       contents: read
+      actions: read
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          ref: c9cde75e3d2e2c7eafeeaec10c73fec627816e68
           persist-credentials: false
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.13'
-      - name: Verify package version
+      - name: Verify exact stable source and Android version
         run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "c9cde75e3d2e2c7eafeeaec10c73fec627816e68"
           python - <<'PY'
-          import os
           from sedrava_version import VERSION, ANDROID_VERSION_CODE
-          assert VERSION == "0.10.0", VERSION
-          assert ANDROID_VERSION_CODE == 10003, ANDROID_VERSION_CODE
-          if os.environ.get("GITHUB_EVENT_NAME") == "push":
-              assert os.environ.get("GITHUB_REF") == "refs/tags/v0.10.0"
+          assert (VERSION, ANDROID_VERSION_CODE) == ('0.11.0', 11002)
           PY
-      - name: Test and build
-        run: |
-          python -m unittest discover -s tests -v
-          python -m pip install build twine
-          python -m build
-          python -m twine check dist/*
-          python scripts/audit_dist.py
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: sedrava-0.10.0-dist
-          path: dist/*
-          if-no-files-found: error
-
-  publish:
-    needs: build
-    runs-on: ubuntu-24.04
-    environment: ${{ github.event_name == 'push' && 'pypi' || 'testpypi' }}
-    permissions:
-      id-token: write
-    steps:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: sedrava-0.10.0-dist
+          artifact-ids: 13362468759
+          run-id: 41912177005
+          repository: VasiliiBabkin/sedrava
+          github-token: ${{ github.token }}
+          merge-multiple: true
           path: dist
-      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+      - name: Validate immutable wheel and sdist
+        run: |
+          set -euo pipefail
+          printf '%s  %s\n' \
+            5780c3cb14f33b95689c518809254e269a3396bb02720e88f9407b9abbd24626 dist/sedrava-0.11.0-py3-none-any.whl \
+            453096116a9da834c4db9023069962cc0d5bf18acb88e403994ad61a339ef70b dist/sedrava-0.11.0.tar.gz | sha256sum --check
+          test "$(find dist -maxdepth 1 -type f | wc -l)" -eq 2
+          python scripts/audit_dist.py
+      - name: Require unused version on PyPI
+        run: |
+          python - <<'PY'
+          import urllib.error, urllib.request
+          try:
+              with urllib.request.urlopen('https://pypi.org/pypi/sedrava/0.11.0/json',timeout=30):
+                  raise SystemExit('STOP: 0.11.0 already exists on PyPI')
+          except urllib.error.HTTPError as exc:
+              if exc.code != 404: raise
+          print('PyPI version unclaimed at preflight.')
+          PY
+
+  publish:
+    needs: preflight
+    runs-on: ubuntu-24.04
+    environment:
+      name: pypi
+      url: https://pypi.org/project/sedrava/0.11.0/
+    permissions:
+      contents: write
+      actions: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          repository-url: ${{ github.event_name == 'push' && 'https://upload.pypi.org/legacy/' || 'https://test.pypi.org/legacy/' }}
+          ref: c9cde75e3d2e2c7eafeeaec10c73fec627816e68
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.13'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          artifact-ids: 13362468759
+          run-id: 41912177005
+          repository: VasiliiBabkin/sedrava
+          github-token: ${{ github.token }}
+          merge-multiple: true
+          path: dist
+      - name: Recheck approved exact release artifacts
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "c9cde75e3d2e2c7eafeeaec10c73fec627816e68"
+          printf '%s  %s\n' \
+            5780c3cb14f33b95689c518809254e269a3396bb02720e88f9407b9abbd24626 dist/sedrava-0.11.0-py3-none-any.whl \
+            453096116a9da834c4db9023069962cc0d5bf18acb88e403994ad61a339ef70b dist/sedrava-0.11.0.tar.gz | sha256sum --check
+          python scripts/audit_dist.py
+      - name: Create exact-source stable GitHub Release and tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: VasiliiBabkin/sedrava
+          SOURCE_SHA: c9cde75e3d2e2c7eafeeaec10c73fec627816e68
+        run: |
+          set -euo pipefail
+          TAG=v0.11.0
+          if gh api "repos/$GH_REPO/git/ref/tags/$TAG" > "$RUNNER_TEMP/existing-tag.json" 2>/dev/null; then
+            python - "$RUNNER_TEMP/existing-tag.json" "$SOURCE_SHA" <<'PY'
+          import json,sys
+          value=json.load(open(sys.argv[1]))
+          assert value['object']['type']=='commit' and value['object']['sha']==sys.argv[2], 'Tag SHA mismatch'
+          PY
+          else
+            gh api --method POST "repos/$GH_REPO/git/refs" -f "ref=refs/tags/$TAG" -f "sha=$SOURCE_SHA" > /dev/null
+          fi
+          if gh release view "$TAG" --repo "$GH_REPO" >/dev/null 2>&1; then
+            echo 'STOP: release already exists; inspect exact assets before retry.' >&2
+            exit 1
+          fi
+          cat > "$RUNNER_TEMP/release-notes.md" <<'NOTES'
+          # Sedrava 0.11.0 — stable Web platform release / Стабильный выпуск
+
+          Exact audited source: c9cde75e3d2e2c7eafeeaec10c73fec627816e68.
+          The tested source tree was merged into main in PR #44.
+
+          Python 3.10+ installation inside a virtual environment:
+              python -m pip install sedrava==0.11.0
+              sedrava --version
+
+          Main features:
+          - Responsive multi-page websites from Sedrava source.
+          - Typed interactive browser WebApps, functions, state/actions,
+            components, collections, forms, tables, dialogs and routes.
+          - Validated bounded HTTP GET/POST/PUT/PATCH/DELETE clients.
+          - Four reference apps: site, tasks, catalog and CRM.
+          - Existing 0.10 app/Web/Android targets remain available;
+            Android versionCode is 11002.
+
+          Verification: 36 exact-source CI checks and 11 post-merge checks,
+          real published 0.10 to stable to 0.10 and published RC to stable
+          to RC CLI upgrade/rollback; Chromium, Firefox, WebKit; Android API35.
+          The exact wheel and sdist were previously independently checked;
+          no replacement artifacts are built at publication time.
+          Full audit: https://github.com/VasiliiBabkin/sedrava/pull/44
+
+          Limitations: the language remains experimental. No generated trusted
+          backend, SQLite/PostgreSQL, authentication, multiuser permissions
+          or automatic storage migrations. Physical Android and production
+          APK downgrade are not certified. Namespace/packages remain in 0.12.
+
+          Wheel SHA-256:
+          5780c3cb14f33b95689c518809254e269a3396bb02720e88f9407b9abbd24626
+          sdist SHA-256:
+          453096116a9da834c4db9023069962cc0d5bf18acb88e403994ad61a339ef70b
+          NOTES
+          gh release create "$TAG" \
+            dist/sedrava-0.11.0-py3-none-any.whl \
+            dist/sedrava-0.11.0.tar.gz \
+            --repo "$GH_REPO" --verify-tag \
+            --title 'Sedrava 0.11.0 — stable Web platform release' \
+            --notes-file "$RUNNER_TEMP/release-notes.md"
+      - name: Publish identical audited distributions to PyPI (OIDC)
+        uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+        with:
+          repository-url: https://upload.pypi.org/legacy/
