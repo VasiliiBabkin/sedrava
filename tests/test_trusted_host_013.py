@@ -43,6 +43,18 @@ class HostParsing(unittest.TestCase):
                 run_host(typed, root=root, trusted=True,
                          supplied=["n=5", "enabled=false", "extra=1"])
 
+    def test_reserved_bindings_and_unbounded_cli_inputs_rejected(self):
+        for name in ("concat", "count", "false", "for", "class", "assert",
+                     "text_length", "has", "_hidden"):
+            with self.subTest(name=name), self.assertRaises(ValueError):
+                parse_host('host "Reserved"\narg ' + name + ': text\nemit "done"\n')
+        typed = parse_host('host "Typed"\narg n: int\nemit n\n')
+        with tempfile.TemporaryDirectory() as root:
+            for args in (["n=" + "9" * 1000], ["n=2147483648"],
+                         ["n=-2147483649"], ["n=3"] * 17):
+                with self.subTest(args=args[:2]), self.assertRaises(ValueError):
+                    run_host(typed, root=root, trusted=True, supplied=args)
+
     def test_forbidden_host_syntax_and_effects(self):
         for body in (
             'import os',
@@ -87,6 +99,16 @@ class HostIO(unittest.TestCase):
                 with self.subTest(changes=changes), self.assertRaises(ValueError):
                     run_host(parse_host(COPY), **opts, **changes)
             self.assertFalse((Path(root) / "out.txt").exists())
+
+    def test_host_disallows_control_character_paths(self):
+        with tempfile.TemporaryDirectory() as root:
+            program = parse_host('host "Control"\narg target: text\n'
+                                 'write target = "safe"\nemit "ok"\n')
+            for bad in ("tab\tfile.txt", "line\nfile.txt", "del\x7ffile.txt"):
+                with self.subTest(bad=repr(bad)), self.assertRaises(ValueError):
+                    run_host(program, root=root, trusted=True, allow_write=True,
+                             supplied=["target=" + bad])
+            self.assertFalse(list(Path(root).iterdir()))
 
     def test_path_traversal_absolute_and_symlink_rejected(self):
         with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as other:
