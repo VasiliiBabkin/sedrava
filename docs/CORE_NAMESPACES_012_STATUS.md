@@ -115,3 +115,17 @@ The new CI-only checkpoint requires fresh exact-SHA workflows. One intermediate
 navigation run failed downloading an Android system-image ZIP before emulator
 startup; it did not execute/fail an application assertion. Final runs remain the
 authoritative evidence and their links/counts are maintained in draft PR #52.
+
+## Bounded package traversal correction
+
+Final independent inspection found that sorted(rglob(...)) materialized an
+unbounded tree before checking file/byte counts; empty directories escaped both
+limits. Replaced it with iterative scandir traversal that counts all entries before
+sorting/descending, bounds depth/path length, and retains canonical file ordering
+and existing in-bounds lock bytes. Five regressions check early enumeration stop,
+atomic lock preservation, depth/path caps, empty-directory compatibility, hidden
+entries and the old file boundary. The 12 package tests pass. This is a real
+resource-limit correction; final SHA/CI must advance and rerun. Previous exact-head
+CI had 21/23 successful runs; two WebKit installers were still fetching slow Ubuntu
+packages, not failing application assertions. Their success is not evidence for
+the subsequent source change. Current evidence remains in draft PR #52.

@@ -17,6 +17,9 @@ _VERSION = re.compile(r'(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\
 MAX_PACKAGES = 32
 MAX_FILES = 256
 MAX_BYTES = 8 * 1024 * 1024
+MAX_ENTRIES = 1024
+MAX_DEPTH = 16
+MAX_PATH_CHARS = 1024
 
 
 def _toml():
@@ -82,20 +85,45 @@ def _read_manifest(path,with_bytes=False):
     return (name,version,deps,raw) if with_bytes else (name,version,deps)
 
 
+def _package_files(folder):
+    """Bound enumeration before sorting or descending, including empty directories."""
+    pending = [(folder, 0)]
+    entries_seen = 0
+    files = []
+    while pending:
+        directory, depth = pending.pop()
+        if directory.is_symlink():
+            raise ValueError('Symlinks inside packages are forbidden')
+        children = []
+        with os.scandir(directory) as entries:
+            for entry in entries:
+                entries_seen += 1
+                if entries_seen > MAX_ENTRIES:
+                    raise ValueError('Local package directory entry resource limit')
+                path = Path(entry.path)
+                relative = path.relative_to(folder)
+                if depth + 1 > MAX_DEPTH or len(relative.as_posix()) > MAX_PATH_CHARS:
+                    raise ValueError('Local package path resource limit')
+                if entry.is_symlink():
+                    raise ValueError('Symlinks inside packages are forbidden')
+                if entry.name.startswith('.'):
+                    raise ValueError('Hidden entries inside local package are forbidden')
+                if entry.is_dir(follow_symlinks=False):
+                    children.append((path, depth + 1))
+                elif entry.is_file(follow_symlinks=False):
+                    if len(files) >= MAX_FILES:
+                        raise ValueError('Too many files in local package')
+                    files.append(path)
+                else:
+                    raise ValueError('Unsupported package file type')
+        pending.extend(sorted(children, reverse=True))
+    return sorted(files)
+
+
 def _files(folder):
     out, total = {}, 0
-    for p in sorted(folder.rglob('*')):
-        if p.is_symlink():
-            raise ValueError('Symlinks inside packages are forbidden')
-        if p.is_dir():
-            continue
-        if not p.is_file():
-            raise ValueError('Unsupported package file type')
+    for p in _package_files(folder):
         rel = p.relative_to(folder).as_posix()
-        if any(part.startswith('.') for part in p.relative_to(folder).parts):
-            raise ValueError('Hidden files inside local package are forbidden')
-        if len(out) >= MAX_FILES:
-            raise ValueError('Too many files in local package')
         remaining=MAX_BYTES-total
         if p.stat().st_size>remaining:raise ValueError('Local package exceeds resource budget')
         with p.open('rb') as stream:raw=stream.read(remaining+1)

@@ -119,3 +119,9 @@ Scoped components and slots are UI-only and cannot inject domain statements.
 Unscoped legacy component expansion retains its 0.11 behaviour; the upgrade and
 rollback audit compiles the same action-macro fixture with the published stable
 package and candidate. This compatibility path does not weaken scoped isolation.
+
+Package enumeration is iterative and bounded **before** sorting: per dependency,
+at most 1,024 entries including empty directories, depth 16 and 1,024 relative-path
+characters, alongside the existing 256-file/8-MiB limits. Hidden entries and
+symlinks reject. Ordinary empty directories below these limits do not change locks.
+Oversized trees fail without replacing an existing lock.
