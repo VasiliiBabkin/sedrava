@@ -3,6 +3,7 @@
 Experimental v1: bounded pure scalar expressions plus capability-gated UTF-8
 file reads and one atomic write. This is NOT an OS sandbox for hostile code.
 """
+import ast
 import os
 import re
 import secrets
@@ -93,6 +94,8 @@ def parse_host(source):
             if reads > MAX_READS or m[1] in types:
                 raise ValueError(f"Line {number}: duplicate binding or read limit exceeded")
             node = expression(m[2], str)
+            if isinstance(node, ast.Constant):
+                _segments(node.value)
             types[m[1]] = str
             steps.append(HostStep("read", m[1], node))
         elif m := re.fullmatch(r"write (.+?) = (.+)", line):
@@ -101,6 +104,8 @@ def parse_host(source):
                 raise ValueError(f"Line {number}: host A1 permits one output file")
             path_node = expression(m[1], str)
             content_node = expression(m[2], str)
+            if isinstance(path_node, ast.Constant):
+                _segments(path_node.value)
             steps.append(HostStep("write", None, path_node, content_node))
         elif m := re.fullmatch(r"emit (.+)", line):
             node = expression(m[1])
