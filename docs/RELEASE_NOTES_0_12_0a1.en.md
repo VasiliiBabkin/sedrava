@@ -1,6 +1,6 @@
 # Sedrava 0.12.0a1 — proposed experimental alpha notes
 
-**Unpublished source candidate.** Latest verified published version remains [0.10.0](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.10.0). The 0.11.0rc1 source candidate is under separate review in [PR #42](https://github.com/VasiliiBabkin/sedrava/pull/42). This document does not assert any `v0.12.0a1` tag, PyPI artifact or GitHub Release exists.
+**Unpublished experimental 0.12.0a1 source.** The current stable release is [0.11.0](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0) ([PyPI](https://pypi.org/project/sedrava/0.11.0/)), with historical [0.10.0](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.10.0) and [0.11.0rc1](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0rc1) still available. Experimental alpha source is reconciled on a stable 0.11 baseline in `integration/012-alpha1-stable-base`; no `v0.12.0a1` tag, PyPI artifact or GitHub Release is claimed. Fresh CI on the integration SHA is still required.
 
 ## Implemented in the candidate's source
 
@@ -17,6 +17,6 @@ No online package registry, automatic dependency download, semver range resoluti
 
 ## Release boundary
 
-This 0.12 source alpha currently builds on the **unmerged experimental 0.11** integration line and must be reconciled with a reviewed/released 0.11 baseline before any public alpha publication. Preserve the stable 0.10 history, run full exact-SHA CI and obtain owner approval for immutable bytes/destination.
+The original alpha stack [#39–43](https://github.com/VasiliiBabkin/sedrava/pull/43) was based on an old experimental Web branch. The new alpha integration is based on **published stable 0.11.0**, without changing that stable release; it must pass new Python/Web/Android and package/security tests on its exact final SHA. Keep 0.10 and RC history, verify candidate file digests and obtain separate owner authorization before any alpha tag, release or PyPI upload.
 
 [Russian notes](RELEASE_NOTES_0_12_0a1.ru.md) · [Alpha gates](RELEASE_TRACK_012_ALPHA.md) · [Namespace reference](NAMESPACES_012_EXPERIMENTAL.md) · [Offline packages](PACKAGES_012_EXPERIMENTAL.md).
