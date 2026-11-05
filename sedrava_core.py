@@ -423,7 +423,7 @@ def parse(source):
             m = re.fullmatch(r"([A-Za-z_][A-Za-z_0-9]*)\s*=\s*(.+)", line)
             if not m or m[1] not in states: raise ValueError(f"Line {number}: invalid assignment")
             node = expression(m[2], known, number, depth + m.start(2) + 1)
-            if type_of(node, known) != types[m[1]]: raise ValueError(f"Line {number}: type mismatch")
+            if type_of(node, known) != types[m[1]]: raise ValueError(f"Line {number}: column {depth+m.start(2)+1}: type mismatch")
             result.append(Assign(m[1], node))
             pos += 1
         return tuple(result), pos
