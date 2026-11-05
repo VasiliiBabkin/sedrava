@@ -1,6 +1,6 @@
-# Quick Start / Быстрый старт — Sedrava 0.10.0
+# Quick Start / Быстрый старт — Sedrava 0.11.0
 
-**Published release:** [GitHub v0.10.0](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.10.0) · [PyPI](https://pypi.org/project/sedrava/0.10.0/). Sedrava remains experimental, not a production-support guarantee.
+**Published stable release:** [GitHub v0.11.0](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0) · [PyPI](https://pypi.org/project/sedrava/0.11.0/). Previous stable [0.10.0](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.10.0) ([PyPI](https://pypi.org/project/sedrava/0.10.0/)) remains available. The language remains experimental.
 
 ## Install / Установка
 
@@ -10,11 +10,11 @@ Requires Python **3.10+**. Use a virtual environment:
 # Linux: use python3, since some distributions have no 'python' alias.
 python3 -m venv .venv
 . .venv/bin/activate
-python -m pip install sedrava==0.10.0
+python -m pip install sedrava==0.11.0
 sedrava --version
 ```
 
-On Windows, create the environment with `py -3 -m venv .venv`, activate with `.venv\Scripts\Activate.ps1`, then run `python -m pip install sedrava==0.10.0`. To work from a repository checkout instead, use `python -m pip install .` after activation. If `python3 -m venv` is unavailable on Ubuntu/Debian, install the distro's `python3-venv` package.
+On Windows, create the environment with `py -3 -m venv .venv`, activate with `.venv\Scripts\Activate.ps1`, then run `python -m pip install sedrava==0.11.0`. To work from a repository checkout instead, use `python -m pip install .` after activation. If `python3 -m venv` is unavailable on Ubuntu/Debian, install the distro's `python3-venv` package.
 
 ## Published experimental 0.11 RC / Опубликованный кандидат
 
@@ -27,7 +27,7 @@ python -m pip install sedrava==0.11.0rc1
 sedrava --version
 ```
 
-[GitHub 0.11.0rc1](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0rc1) · [PyPI 0.11.0rc1](https://pypi.org/project/sedrava/0.11.0rc1/) · [stable 0.11 acceptance](STABLE_RELEASE_GATES_011.md). The stable package `0.11.0` is under review, **not yet published**.
+[GitHub 0.11.0rc1](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0rc1) · [PyPI 0.11.0rc1](https://pypi.org/project/sedrava/0.11.0rc1/) · [stable 0.11 acceptance](STABLE_RELEASE_GATES_011.md). The [stable 0.11.0](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0) is now available from [PyPI](https://pypi.org/project/sedrava/0.11.0/).
 
 ## First app / Первое приложение
 
@@ -69,7 +69,7 @@ sedrava build android examples/task_manager_navigation.sdr --output build/tasks-
 
 `build android` generates Kotlin/Compose source, **not an APK**. Compile with JDK, Android SDK and Gradle per [BUILD.md](BUILD.md). Data migrations and encrypted persistence are not provided. Final 0.10 APK physical-device acceptance is not recorded.
 
-`sedrava build site` is not in stable **0.10.0** but **is available** in the [published 0.11.0rc1](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0rc1). Stable 0.11.0 is not published yet. [sedrava-site](https://github.com/VasiliiBabkin/sedrava-site) is a separate Astro/Starlight website.
+`sedrava build site` is not in stable **0.10.0** but **is available** in the [published 0.11.0rc1](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0rc1). Stable 0.11.0 is [published](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0). [sedrava-site](https://github.com/VasiliiBabkin/sedrava-site) is a separate Astro/Starlight website.
 
 
 ## Post-release Linux smoke test / Ручная проверка Linux
@@ -91,6 +91,6 @@ python -m http.server 8000 --directory build/site
 
 ## Experimental 0.11 integration / Экспериментальная интеграция
 
-The integration preview adds shared composition, pure functions, bounded collection queries, forms/tables/dialogs, hash routes, local styling and typed public HTTP. It is not a published 0.11.0 or a backend/auth/database service.
+The integration preview adds shared composition, pure functions, bounded collection queries, forms/tables/dialogs, hash routes, local styling and typed public HTTP. It is a published 0.11.0 feature, not a trusted backend/auth/database service.
 
 Реализованные возможности, сборка четырёх проектов и ограничения: [English guide](011_WEB_PLATFORM.en.md), [руководство](011_WEB_PLATFORM.ru.md), [actual status](011_IMPLEMENTATION_STATUS.md). Existing published 0.10.0 instructions above remain applicable to their original targets.
