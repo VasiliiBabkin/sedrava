@@ -25,3 +25,11 @@ expected Result values. Contracts and remaining limitations:
 [English](CORE_012_A2.md), [Русский](CORE_012_A2_RU.md),
 [evidence/status](CORE_012_A2_STATUS.md). These are not published stable 0.11
 features; Map/Set, persisted Results and namespace reconciliation remain separate.
+
+### 0.12 namespaced bounded-core integration (unpublished)
+
+A1/A2 and #47 are combined in a separate draft: module-owned states/actions,
+hygienic bindings, shared limits, original character provenance and strict locked
+imports. [EN](CORE_NAMESPACES_012.md) / [RU](CORE_NAMESPACES_012.ru.md). This
+supersedes the earlier pure-declarations-only module restriction on this branch;
+no server, release or publication is implied. Final evidence is in the draft PR.

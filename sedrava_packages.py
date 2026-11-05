@@ -223,4 +223,8 @@ def read_module(path,root,verified):
     if relative.parts and relative.parts[0]=='vendor':
         if verified is None or path not in verified:raise ValueError('Vendored import is not covered by the reviewed lockfile')
         if sha256(raw).hexdigest()!=verified[path]:raise ValueError('Vendored module changed after lock verification')
-    return raw.decode('utf-8')
+    try:return raw.decode('utf-8')
+    except UnicodeDecodeError as exc:
+        from sedrava_source_map import LocatedError
+        prefix=raw[:exc.start].decode('utf-8');line=prefix.count('\n')+1;column=len(prefix.rsplit('\n',1)[-1])+1
+        raise LocatedError('Source is not valid UTF-8',path,line,column) from exc

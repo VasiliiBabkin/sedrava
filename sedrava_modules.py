@@ -11,6 +11,7 @@ from sedrava_syntax import MAX_SOURCE_CHARS, MAX_BLOCK_DEPTH, source_lines
 def expand(source, source_path=None, _stack=(), _root=None, _files=None, *, with_origins=False, _verified=None):
     source_lines(source)
     from sedrava_source_map import locations, ExpandedSource, MappedLine, origin_for, mapped_lines, replace_span
+    scoped=False
     files = set() if _files is None else _files
     source_map = locations(source, source_path)
     if not _stack and source_path is not None:
@@ -23,6 +24,7 @@ def expand(source, source_path=None, _stack=(), _root=None, _files=None, *, with
     if not _stack:
         from sedrava_namespaces import _IMPORT, resolve_scoped
         if any(_IMPORT.fullmatch(line) for depth, line, _ in source_lines(source) if depth == 0):
+            scoped=True
             source, namespaced_files, source_map = resolve_scoped(source, source_path, with_origins=True, verified=_verified)
             files.update(namespaced_files)
     root = Path(source_path).resolve().parent if _root is None and source_path else _root
@@ -65,7 +67,7 @@ def expand(source, source_path=None, _stack=(), _root=None, _files=None, *, with
         raise ValueError('Expanded imports exceed source limit')
     if not _stack:
         joined, origins = components(joined, origins)
-    joined=ExpandedSource(joined,origins)
+    joined=ExpandedSource(joined,origins,source);joined.scoped=scoped;joined.entry=Path(source_path).resolve() if source_path else None
     return (joined, files, tuple(origins)) if with_origins else (joined, files)
 
 

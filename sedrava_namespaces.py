@@ -13,13 +13,13 @@ import tokenize
 from io import StringIO
 
 from sedrava_syntax import MAX_SOURCE_CHARS, source_lines
-from sedrava_source_map import MappedLine,Origin,replace_span,origin_for,LocatedError
+from sedrava_source_map import MappedLine,Origin,replace_span,origin_for,LocatedError,ExpandedSource
 
 _IDENT = r'[A-Za-z][A-Za-z0-9_]*'
 _MODULE = re.compile(rf'module ({_IDENT}(?:\.{_IDENT})*)\Z')
 _IMPORT = re.compile(rf'import "([^"\n]+\.sdr)" as ({_IDENT})\Z')
 _DECL = re.compile(rf'(export )?(component|style|record|fn|state|derive|action) ({_IDENT})(?=[(: \t])')
-_RESERVED = re.compile(r'M_[0-9a-f]{12}_[A-Za-z][A-Za-z0-9_]*')
+_RESERVED = re.compile(r'(?:M|L)_[0-9a-f]{12}_[A-Za-z][A-Za-z0-9_]*')
 
 
 @dataclass(frozen=True)
@@ -64,7 +64,8 @@ def _rewrite(line, local=None, aliases=None, *, line_no=1, filename='<source>', 
     aliases = aliases or {}
     excluded = set(excluded)
     line=line if isinstance(line,MappedLine) else MappedLine(line)
-    toks = _tokens(line)
+    try:toks = _tokens(line)
+    except ValueError as exc:raise LocatedError(str(exc),filename,line_no,1) from exc
     ops = []
     i = 0
     while i < len(toks):
@@ -97,7 +98,7 @@ def _rewrite(line, local=None, aliases=None, *, line_no=1, filename='<source>', 
 
 def _valid_import(source_path, value, root, line):
     path = Path(value)
-    if path.is_absolute() or '..' in path.parts or '\\' in value or not value.endswith('.sdr'):
+    if path.is_absolute() or '..' in path.parts or '\\' in value or ':' in value or not value.endswith('.sdr'):
         raise ValueError(f'{source_path}:{line}: import must stay within the source directory')
     candidate = source_path.parent / path
     cursor = candidate
@@ -118,7 +119,7 @@ def _local_decl(line, module, path, n):
     if not m:
         return None
     _, kind, name = m.groups()
-    if keyword.iskeyword(name) or name.startswith('M_'):
+    if keyword.iskeyword(name) or name.startswith(('M_','L_')):
         raise ValueError(f'{path}:{n}: reserved declaration name {name}')
     digest = sha256(module.encode('utf-8')).hexdigest()[:12]
     return Symbol(module, name, kind, f'M_{digest}_{name}', bool(m[1]), path, n)
@@ -138,8 +139,10 @@ def resolve_scoped(source, source_path, *, with_origins=False, verified=None):
     module_names = {}
     dependencies = set()
     loading = []
+    total_chars=len(source)
 
     def load(path):
+        nonlocal total_chars
         if path in cache:
             return cache[path]
         if path in loading or len(loading) >= 16:
@@ -150,7 +153,11 @@ def resolve_scoped(source, source_path, *, with_origins=False, verified=None):
         try:
             from sedrava_packages import read_module
             text=read_module(path,root,verified)
-            entries = source_lines(text)
+            total_chars+=len(text)
+            if total_chars>MAX_SOURCE_CHARS:raise ValueError("Combined module source resource limit")
+            from sedrava_source_map import source_error,locations
+            try:entries = source_lines(text)
+            except ValueError as exc:raise source_error(exc,locations(text,path)) from exc
             if not entries or not (head := _MODULE.fullmatch(entries[0][1])) or entries[0][0] != 0:
                 raise ValueError(f'{path}: line 1: namespaced import requires module org.name')
             module_id = head[1]
@@ -159,7 +166,9 @@ def resolve_scoped(source, source_path, *, with_origins=False, verified=None):
             module_names[module_id] = path
             lines = [MappedLine(line) for line in text.splitlines()]
             for no,raw in enumerate(lines,1):
-                if any(t.type==tokenize.NAME and _RESERVED.fullmatch(t.string) for t in _tokens(raw)):
+                try:tokens_here=_tokens(raw)
+                except ValueError as exc:raise LocatedError(str(exc),path,no,1) from exc
+                if any(t.type==tokenize.NAME and _RESERVED.fullmatch(t.string) for t in tokens_here):
                     raise ValueError(f"{path}:{no}: reserved generated symbol identifier")
             symbols = {}
             aliases = {}
@@ -193,6 +202,7 @@ def resolve_scoped(source, source_path, *, with_origins=False, verified=None):
                     raise ValueError(f'{path}: ambiguous local symbol/import alias {alias}')
             result = []
             result_origins = []
+            action_scopes=[]
             for no, line in enumerate(lines, 1):
                 stripped = line.strip()
                 if no == entries[0][2] or (not line.startswith(' ') and _IMPORT.fullmatch(stripped)):
@@ -211,8 +221,10 @@ def resolve_scoped(source, source_path, *, with_origins=False, verified=None):
                         bound = tuple(re.findall(rf'({_IDENT})\s*:', signature[1])) if signature else ()
                         if any(v in symbols or v in aliases for v in bound):
                             raise ValueError(f'{path}:{no}: function parameter conflicts with module symbol/import alias')
-                        line = _rewrite(line, symbols, aliases, line_no=no, filename=str(path), excluded=bound)
+                        parameters={name:Symbol(module_id,name,'binding','L_'+sha256((module_id+':'+sym.name).encode()).hexdigest()[:12]+'_'+name,False,path,no) for name in bound}
+                        line = _rewrite(line, {**symbols,**parameters}, aliases, line_no=no, filename=str(path))
                     elif sym.kind in ('record','state','derive','action'):
+                        if sym.kind=='action':action_scopes=[(4,{})]
                         line = _rewrite(line, symbols if sym.kind!='record' else {}, aliases, line_no=no, filename=str(path))
                     result.append(line)
                     result_origins.append(origin_for(line,(path,no)))
@@ -223,15 +235,28 @@ def resolve_scoped(source, source_path, *, with_origins=False, verified=None):
                     raise ValueError(f'{path}:{no}: invalid top-level module construct')
                 owner=next((symbols[m[3]] for earlier in reversed(lines[:no-1]) if (m:=_DECL.match(earlier))),None)
                 if owner and owner.kind=='action':
-                    bound=re.match(r'\s*(?:let|repeat|for) ([A-Za-z][A-Za-z0-9_]*)(?:, ([A-Za-z][A-Za-z0-9_]*))?',line)
-                    if bound and any(name in symbols or name in aliases for name in bound.groups() if name):raise ValueError(f'{path}:{no}: action binding conflicts with module symbol/import alias')
-                    line=_rewrite(line,symbols,aliases,line_no=no,filename=str(path))
+                    depth=len(line)-len(line.lstrip(' '))
+                    while len(action_scopes)>1 and action_scopes[-1][0]>depth:action_scopes.pop()
+                    if action_scopes[-1][0]<depth:action_scopes.append((depth,{}))
+                    visible={name:value for _,scope in action_scopes for name,value in scope.items()}
+                    bound=re.match(r'\s*(let|repeat|for) ([A-Za-z][A-Za-z0-9_]*)(?:, ([A-Za-z][A-Za-z0-9_]*))?',line)
+                    fresh={}
+                    if bound:
+                        names=[name for name in bound.groups()[1:] if name]
+                        if any(name in symbols or name in aliases for name in names):raise ValueError(f'{path}:{no}: action binding conflicts with module symbol/import alias')
+                        fresh={name:Symbol(module_id,name,'binding','L_'+sha256((module_id+':'+owner.name).encode()).hexdigest()[:12]+'_'+name,False,path,no) for name in names}
+                    line=_rewrite(line,{**symbols,**visible,**fresh},aliases,line_no=no,filename=str(path))
+                    if bound:
+                        if bound[1]=='let':action_scopes[-1][1].update(fresh)
+                        else:action_scopes.append((depth+4,fresh))
                 elif re.match(r'^\s*use\s+', line):
                     line = _rewrite(line, {n:s for n,s in symbols.items() if s.kind=='component'}, aliases, line_no=no, filename=str(path))
                 elif re.search(r'\bstyle\s+(?:[A-Za-z][A-Za-z0-9_]*)(?![A-Za-z0-9_])', line):
                     line = _rewrite(line, {n:s for n,s in symbols.items() if s.kind=='style'}, aliases, line_no=no, filename=str(path))
                 elif re.match(r'^\s*\w+\s*:\s*', line):
-                    line = _rewrite(line, {n:s for n,s in symbols.items() if s.kind=='record'}, aliases, line_no=no, filename=str(path))
+                    colon=line.index(':')
+                    line=line[:colon+1]+_rewrite(line[colon+1:], {n:s for n,s in symbols.items() if s.kind=='record'}, aliases, line_no=no, filename=str(path))
+                line=_rewrite(line,{},aliases,line_no=no,filename=str(path))
                 result.append(line)
                 result_origins.append(origin_for(line,(path,no)))
             built = CompiledModule(module_id, symbols, {n:s for n,s in symbols.items() if s.public}, '\n'.join(result), tuple(nested), tuple(result_origins))
@@ -290,6 +315,8 @@ def resolve_scoped(source, source_path, *, with_origins=False, verified=None):
     output = '\n'.join(out) + '\n'
     if len(output) > MAX_SOURCE_CHARS:
         raise ValueError('Expanded imports exceed source limit')
+    output=ExpandedSource(output,source_map)
+    output.public_symbols={alias+'.'+name:symbol.emitted for alias,module in aliases.items() for name,symbol in module.visible.items()}
     if with_origins:
         assert len(source_map) == len(output.splitlines())
         return output, dependencies, tuple(source_map)

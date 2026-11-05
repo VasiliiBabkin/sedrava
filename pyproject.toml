@@ -41,6 +41,8 @@ py-modules = ['sedrava', 'sedrava_version', 'sedrava_android_identity', 'sedrava
 "share/sedrava/examples/assets" = ["examples/assets/*"]
 "share/sedrava/examples" = ["examples/*.sdr", "examples/README.md"]
 "share/sedrava/examples/modules_core_012" = ["examples/modules_core_012/*.sdr"]
+"share/sedrava/examples/packages_012_demo" = ["examples/packages_012_demo/*.sdr", "examples/packages_012_demo/*.toml", "examples/packages_012_demo/*.lock"]
+"share/sedrava/examples/packages_012_demo/vendor/example.cards" = ["examples/packages_012_demo/vendor/example.cards/*"]
 "share/sedrava/examples/namespaces" = ["examples/namespaces/*.sdr"]
 
 [tool.setuptools.dynamic]

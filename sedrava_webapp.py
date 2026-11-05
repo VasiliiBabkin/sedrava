@@ -140,7 +140,7 @@ def parse_webapp(source):
     raw[head_no] = re.sub(r"^(\s*)webapp\b", r"\1app", raw[head_no], count=1)
     domain = "\n".join(raw[:view_lineno - 1]) + '\nscreen main:\n    text "WebApp placeholder"\n'
     from sedrava_source_map import ExpandedSource
-    domain=ExpandedSource(domain,getattr(source_original,'origins',())) if getattr(source_original,'origins',None) else domain
+    domain=ExpandedSource(domain,getattr(source_original,'origins',()),source_original) if getattr(source_original,'origins',None) else domain
     program = parse_app(domain)
     run(program)
     if program.has_navigation:

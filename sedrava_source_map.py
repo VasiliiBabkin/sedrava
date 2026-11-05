@@ -28,8 +28,8 @@ def replace_span(line,start,end,value):
     return MappedLine(str(line[:start])+value+str(line[end:]),line.columns[:start]+(line.columns[start],)*len(value)+line.columns[end:])
 def origin_for(line,origin):return Origin(*origin,getattr(line,'columns',getattr(origin,'columns',None)))
 class ExpandedSource(str):
-    def __new__(cls,text,origins):
-        value=super().__new__(cls,text);value.origins=tuple(origins);return value
+    def __new__(cls,text,origins,template=None):
+        value=super().__new__(cls,text);value.origins=tuple(origins);value.scoped=getattr(template,"scoped",False);value.entry=getattr(template,"entry",None);value.public_symbols=dict(getattr(template,"public_symbols",{}));return value
 class LocatedError(ValueError):
     def __init__(self,message,source,line,column=None,expanded=None):
         self.message=message;self.source=str(source);self.line=line;self.column=column

@@ -35,3 +35,18 @@ verification are still pending. These initial checks do not establish readiness.
 Next: positive/negative imported-function/action differential corpus, column/error
 regressions, package security regressions, modular WebApp browser fixtures, actual
 Android/JVM/API35, clean installed distributions, bilingual contracts, final report.
+
+## Implemented verification checkpoint
+
+Added hygienic function/action local binders, public qualified CLI action lookup,
+source-input overwrite guards and exact lexical identifier diagnostics. Existing
+flat files with generated-looking names keep their old semantics outside scoped
+imports. Alias-renaming snapshot stability, nested function diagnostic columns,
+component substitution columns, ambient capture, lock schema types, lock output
+atomicity and read-after-verification digest guards have regression tests.
+
+Real Chromium modular app + WebApp scenarios pass complete-state traces (7 actions
+per presentation), reload and retained invalid/incompatible storage. Python/Node/
+compiled Kotlin modular trace passes, including Result of a record. First full
+combined suite: 336 tests passed before later additional regressions. Final count
+and exact-SHA platform/CI evidence will be recorded in the PR after all checks.

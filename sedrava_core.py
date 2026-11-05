@@ -385,9 +385,13 @@ def _parse(source):
             column += getattr(exc, "offset", 0)
             if message.startswith("Unknown identifier: "):
                 identifier = message.partition(": ")[2]
-                match = re.search(r"\b" + re.escape(identifier) + r"\b", source)
-                if match:
-                    column += match.start()
+                import tokenize
+                from io import StringIO
+                try:
+                    tokens=list(tokenize.generate_tokens(StringIO(source+'\n').readline))
+                    token=next((t for i,t in enumerate(tokens) if t.type==tokenize.NAME and t.string==identifier and (i==0 or tokens[i-1].string!='.') and (i+1==len(tokens) or tokens[i+1].string!='=')),None)
+                    if token:column+=token.start[1]
+                except (tokenize.TokenError,IndentationError):pass
             raise ValueError(f"Line {line_number}: column {column}: {message}") from exc
     def label(source, line_number, column=1):
         try:
@@ -841,7 +845,7 @@ def parse(source):
             if isinstance(stmt,If):check_body(stmt.yes);check_body(stmt.no)
             elif isinstance(stmt,(Repeat,ForEach)):check_body(stmt.body)
     for name,body in program.actions.items():
-        if name.startswith('M_'):check_body(body)
+        if getattr(source,'scoped',False) and name.startswith('M_'):check_body(body)
     for name,node in (program.derived or {}).items():
-        if name.startswith('M_'):check_expr(node)
+        if getattr(source,'scoped',False) and name.startswith('M_'):check_expr(node)
     return program

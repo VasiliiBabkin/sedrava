@@ -1,0 +1,16 @@
+webapp "Namespaced bounded core"
+import "model.sdr" as model
+state ready = true
+view main:
+    heading "Namespaced bounded core"
+    paragraph "Typed modules, Unicode and atomic actions"
+    value model.total
+    value model.label
+    value model.code
+    value model.size
+    button "scan" action model.scan
+    button "add" action model.add
+    button "expected" action model.expected
+    button "seed" action model.seed
+    button "audit" action model.audit
+    button "reject" action model.reject

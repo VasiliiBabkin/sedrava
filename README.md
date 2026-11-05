@@ -160,3 +160,8 @@ Experimental bounded-core continuation (not in the published stable package):
 [English syntax and limits](docs/CORE_012_A2.md),
 [Русский справочник](docs/CORE_012_A2_RU.md),
 [actual verification status](docs/CORE_012_A2_STATUS.md).
+
+Namespaced A1/A2 integration (unpublished 0.12 experiment):
+[EN contract](docs/CORE_NAMESPACES_012.md) · [RU](docs/CORE_NAMESPACES_012.ru.md) ·
+[actual status](docs/CORE_NAMESPACES_012_STATUS.md). Modules can own bounded typed
+state/actions; imported code shares the core budgets, Unicode and Result semantics.

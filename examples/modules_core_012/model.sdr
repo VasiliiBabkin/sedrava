@@ -3,6 +3,7 @@ import "text.sdr" as words
 export record Item:
     title: text
 export fn grow(values: list<int>(max=4)) -> list<int>(max=4) = append(values, 9)
+export fn first(xs: list<Item>(max=3)) -> Result<Item, Error> = try_at(xs, 0)
 export state numbers: list<int>(max=4) = [3, 1, 2]
 export state rows: list<Item>(max=3) = []
 export state total = 0
@@ -28,6 +29,9 @@ export action expected:
     total = words.fallback(outcome, 42)
 export action seed:
     rows = append(rows, Item(title=label))
+    let outcome = first(rows)
+    let row = result_or(outcome, Item(title="empty"))
+    label = row.title
 export action audit:
     rows = rows[0:1]
     label = label[0:1]

@@ -74,6 +74,7 @@ jobs:
       - run: python -m pip install playwright==1.62.0
       - run: python -m playwright install --with-deps ${{ matrix.engine }}
       - run: python scripts/test_core_a2_browser.py
+      - run: python scripts/test_namespace_core_browser.py
         env:
           SEDRAVA_BROWSER: ${{ matrix.engine }}
       - run: python scripts/core_a2_receipt.py
@@ -82,7 +83,9 @@ jobs:
         if: always()
         with:
           name: core-a2-browser-${{ matrix.engine }}
-          path: build/core-a2
+          path: |
+            build/core-a2
+            build/namespace-core
   android-a2:
     runs-on: ubuntu-24.04
     steps:
@@ -101,7 +104,9 @@ jobs:
         with:
           gradle-version: '8.11.1'
       - run: python scripts/prepare_core_a2_android.py build/core-a2-android
+      - run: python scripts/prepare_core_a2_android.py build/namespace-core-android examples/modules_core_012/main.sdr
       - run: gradle -p build/core-a2-android --no-daemon :app:assembleDebug :app:testDebugUnitTest :app:lintDebug :app:assembleDebugAndroidTest
+      - run: gradle -p build/namespace-core-android --no-daemon :app:assembleDebug :app:testDebugUnitTest :app:lintDebug :app:assembleDebugAndroidTest
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -113,8 +118,11 @@ jobs:
           arch: x86_64
           target: google_apis
           disable-animations: true
-          script: gradle -p build/core-a2-android --no-daemon :app:connectedDebugAndroidTest
+          script: |
+            gradle -p build/core-a2-android --no-daemon :app:connectedDebugAndroidTest
+            gradle -p build/namespace-core-android --no-daemon :app:connectedDebugAndroidTest
       - run: python scripts/verify_apk.py build/core-a2-android/app/build/outputs/apk/debug/app-debug.apk
+      - run: python scripts/verify_apk.py build/namespace-core-android/app/build/outputs/apk/debug/app-debug.apk
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
@@ -123,3 +131,6 @@ jobs:
             build/core-a2-android/app/build/outputs/
             build/core-a2-android/app/build/reports/
             build/core-a2-android/app/build/test-results/
+            build/namespace-core-android/app/build/outputs/
+            build/namespace-core-android/app/build/reports/
+            build/namespace-core-android/app/build/test-results/

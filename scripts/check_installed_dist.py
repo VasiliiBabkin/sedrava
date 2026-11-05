@@ -50,6 +50,14 @@ def check(archive, folder):
         first={p.relative_to(output):p.read_bytes() for p in output.rglob('*') if p.is_file()}
         run(cli,'build',mode,source,'--output',output)
         assert first=={p.relative_to(output):p.read_bytes() for p in output.rglob('*') if p.is_file()}
+    source=folder/'share/sedrava/examples/modules_core_012/main.sdr'
+    run(cli,'check',source);run(cli,'test',source);run(cli,'run',source,'model.scan')
+    run(cli,'build','web',source,'--output',folder/'modular app/index.html')
+    run(cli,'build','android',source,'--output',folder/'modular android')
+    run(cli,'build','webapp',source.with_name('site.sdr'),'--output',folder/'modular webapp')
+    locked=folder/'share/sedrava/examples/packages_012_demo'
+    run(cli,'verify',locked);run(cli,'check',locked/'site.sdr')
+    run(cli,'build','site',locked/'site.sdr','--output',folder/'locked site')
     print(f'PASS: clean {archive.name}, bundled docs/examples/license, check/test/run/Web/Android and deterministic Web',flush=True)
 
 if __name__=='__main__':

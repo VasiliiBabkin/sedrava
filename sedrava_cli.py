@@ -31,6 +31,15 @@ def atomic_write_text(path, raw):
             os.unlink(temporary)
 
 
+def report_error(exc,source,command,phase,format):
+    from sedrava_diagnostics import from_exception
+    diagnostic=from_exception(exc,source,command,phase=phase)
+    if format=='json':print(json.dumps(diagnostic.as_dict(),ensure_ascii=False,sort_keys=True),file=sys.stderr)
+    elif diagnostic.line is not None:print(f"{diagnostic.source}:{diagnostic.line}:{diagnostic.column or 1}: error: {diagnostic.message}",file=sys.stderr)
+    else:print(f"sedrava: {source}: {diagnostic.message}",file=sys.stderr)
+    return 1
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="sedrava", description="Sedrava experimental compiler")
     parser.add_argument("--version", action="version", version=f"sedrava {VERSION}")
@@ -66,7 +75,7 @@ def main(argv=None):
                 print(f"PASS: {args.project}/sedrava.lock")
             return 0
         except (ValueError, OSError, UnicodeError) as exc:
-            parser.exit(1, f"sedrava: {exc}\n")
+            return report_error(exc,args.project/('sedrava.lock' if args.command=='verify' else 'sedrava.toml'),args.command,'compile',args.diagnostics)
     if args.command == "build" and args.service is not None and args.target != "web":
         parser.error("--service is only supported for build web")
     if args.command == "build" and args.application_id is not None and args.target != "android":
@@ -108,12 +117,15 @@ def main(argv=None):
                 raise ValueError('Site mode is static and Web-only; use check or sedrava build site (no app actions/tests)')
             if args.command == 'build' and args.target in ('site','webapp'):
                 raise ValueError('build '+args.target+' requires a '+args.target+' document, not app')
+        if args.command=='build' and args.target in ('site','webapp'):
+            raise ValueError('build '+args.target+' requires a '+args.target+' document, not app')
         from sedrava_http_inline import split_app_service
         app_source, inline_service = split_app_service(source) if not source.lstrip().startswith("service ") else (source, None)
         from sedrava_modules import expand
-        from sedrava_source_map import ExpandedSource
+        app_inputs={args.source.resolve()}
         if not source.lstrip().startswith("service "):
-            app_source,_,_=expand(app_source,args.source,with_origins=True)
+            app_source,modules,_=expand(app_source,args.source,with_origins=True)
+            app_inputs.update(modules)
         if args.command == "check":
             if source.lstrip().startswith("service "):
                 from sedrava_http_display import parse_display_service as parse_service
@@ -125,6 +137,7 @@ def main(argv=None):
             program = parse(app_source)
             diagnostic_phase = "execute"
             state = program.states.copy()
+            if args.state_file and args.state_file.resolve() in app_inputs:raise ValueError('State output must differ from all source inputs')
             if args.state_file and args.state_file.exists():
                 if args.state_file.stat().st_size > 800000: raise ValueError('Snapshot too large')
                 raw = args.state_file.read_text(encoding='utf-8')
@@ -132,7 +145,9 @@ def main(argv=None):
             if program.has_navigation:
                 from sedrava_navigation import initial_session, dispatch
                 session=initial_session(program,state)
-            for action in args.actions:
+            for requested in args.actions:
+                if getattr(app_source,'scoped',False) and re.fullmatch(r'(?:M|L)_[0-9a-f]{12}_[A-Za-z][A-Za-z0-9_]*',requested):raise ValueError('Use an exported qualified action name, not an internal symbol')
+                action=getattr(app_source,'public_symbols',{}).get(requested,requested)
                 if program.has_navigation:
                     session,accepted=dispatch(program,session,action)
                     state=session.state
@@ -203,8 +218,8 @@ def main(argv=None):
                 from sedrava_http_display import parse_display_options
                 result = embed_api_panel(result, service.name, selected, **parse_display_options(service_source))
                 module = generate_fetch_module(service, schema)
-            if output.resolve() == args.source.resolve():
-                raise ValueError("Web output must differ from the source file")
+            if output.resolve() in app_inputs:
+                raise ValueError("Web output must differ from all source inputs")
             if args.service is not None or inline_service is not None:
                 atomic_write_text(module_path, module)
             atomic_write_text(output, result)
@@ -212,18 +227,11 @@ def main(argv=None):
         else:
             from android_codegen_v03 import generate
             output = args.output or Path("build/generated-android")
+            if any(path.is_relative_to(output.resolve()) for path in app_inputs):raise ValueError('Android output must not contain source inputs')
             print(generate(app_source, output, application_id=args.application_id))
         return 0
     except (OSError, ValueError, AssertionError, RecursionError) as exc:
-        from sedrava_diagnostics import from_exception
-        diagnostic = from_exception(exc, args.source, args.command, phase=diagnostic_phase)
-        if args.diagnostics == "json":
-            print(json.dumps(diagnostic.as_dict(), ensure_ascii=False, sort_keys=True), file=sys.stderr)
-        elif diagnostic.line is not None:
-            print(f"{diagnostic.source}:{diagnostic.line}:{diagnostic.column or 1}: error: {diagnostic.message}", file=sys.stderr)
-        else:
-            print(f"sedrava: {args.source}: {diagnostic.message}", file=sys.stderr)
-        return 1
+        return report_error(exc,args.source,args.command,diagnostic_phase,args.diagnostics)
 
 if __name__ == "__main__":
     raise SystemExit(main())
