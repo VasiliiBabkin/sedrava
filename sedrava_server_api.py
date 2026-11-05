@@ -173,6 +173,9 @@ def _local_test_gate(scope):
 
 def _match_route(manifest, scope):
     method, path = scope.get("method"), scope.get("path", "")
+    raw_path = scope.get("raw_path")
+    if raw_path is not None and (not isinstance(raw_path, bytes) or b"%" in raw_path or len(raw_path) > 150):
+        raise APIError(404, "not_found")
     if not isinstance(path, str) or "%" in path or len(path) > 120:
         raise APIError(404, "not_found")
     for route in manifest.get("routes", []):
@@ -195,6 +198,8 @@ def _pagination(scope):
     raw = scope.get("query_string", b"")
     if not isinstance(raw, bytes) or len(raw) > 128:
         raise APIError(400, "invalid_query")
+    if not raw:
+        return (20, 0)
     try:
         args = parse_qs(raw.decode("ascii"), strict_parsing=True, keep_blank_values=True)
     except (UnicodeError, ValueError):
