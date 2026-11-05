@@ -40,21 +40,24 @@ def list_dir(root_fd, relative):
         finally:
             os.close(parent)
     try:
-        entries = os.listdir(descriptor)
-        if len(entries) > MAX_LIST_ENTRIES:
-            raise ValueError("Host directory exceeds 32-entry limit")
         output = []
-        for name in sorted(entries):
-            _segments(name)
-            info = os.stat(name, dir_fd=descriptor, follow_symlinks=False)
-            if stat.S_ISDIR(info.st_mode):
-                kind = "directory"
-            elif stat.S_ISREG(info.st_mode):
-                _regular(info)
-                kind = "file"
-            else:
-                raise ValueError("Host directory contains symlink or special entry")
-            output.append({"name": name, "kind": kind})
+        # scandir streams entries; never materialize an unbounded directory.
+        with os.scandir(descriptor) as entries:
+            for entry in entries:
+                if len(output) >= MAX_LIST_ENTRIES:
+                    raise ValueError("Host directory exceeds 32-entry limit")
+                name = entry.name
+                _segments(name)
+                info = entry.stat(follow_symlinks=False)
+                if stat.S_ISDIR(info.st_mode):
+                    kind = "directory"
+                elif stat.S_ISREG(info.st_mode):
+                    _regular(info)
+                    kind = "file"
+                else:
+                    raise ValueError("Host directory contains symlink or special entry")
+                output.append({"name": name, "kind": kind})
+        output.sort(key=lambda item: item["name"])
         return validate_json(output)
     finally:
         os.close(descriptor)
