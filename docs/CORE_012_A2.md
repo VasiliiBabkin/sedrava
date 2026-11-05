@@ -87,5 +87,6 @@ converted to Result. No exception-message matching or host exception payloads.
 Result state/persistence, nested Result, user-defined error variants and exhaustive
 pattern matching are not supported. This is a bounded first step, not unrestricted
 algebraic data types. Map/Set remain deferred pending portable equality, key and
-snapshot contracts. Namespace integration with #47 requires separate reconciliation;
-this branch does not merge namespace or server experiments.
+snapshot contracts. The standalone A2 branch required separate namespace reconciliation. The current
+integration contract is [CORE_NAMESPACES_012.md](CORE_NAMESPACES_012.md);
+server experiments remain separate.

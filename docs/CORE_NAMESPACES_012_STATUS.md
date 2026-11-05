@@ -50,3 +50,26 @@ per presentation), reload and retained invalid/incompatible storage. Python/Node
 compiled Kotlin modular trace passes, including Result of a record. First full
 combined suite: 336 tests passed before later additional regressions. Final count
 and exact-SHA platform/CI evidence will be recorded in the PR after all checks.
+
+## Scope/provenance hardening checkpoint
+
+Module-owned rule invariants use the common validator and budget. Scope validation
+precedes initial evaluation. UI components/slots cannot become action/domain
+macros that bypass module binding isolation. Mixed legacy imports cannot name a
+private generated symbol. Character origins now preserve caller argument locations
+through nested ref substitutions, while template errors point to their definitions.
+
+25 integration regressions pass, including actual generated Node/compiled Kotlin
+traces and original-file/column checks. Real Chromium passes app and WebApp (8
+actions each), module invariant rollback, persistence and rejected storage; a legacy
+navigation fixture checks a prototype-named state and browser Back/Forward.
+Display labels retain user-visible names instead of compiler-generated IDs.
+
+Package readers bound actual reads (including files changed after stat), snapshot
+manifest bytes consistently, reject oversized integers and compare locks against a
+strict typed schema. Actual compiled vendor bytes must match captured verified
+hashes. No remote imports, code execution or new server capabilities are added.
+
+Final full regression, three-browser jobs, JVM/APK/Lint/API35 and installed archive
+checks are being rerun on the next exact-head checkpoint. Final outcomes and
+artifacts will be recorded in this PR; intermediate runs are not release evidence.

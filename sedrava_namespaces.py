@@ -185,7 +185,7 @@ def resolve_scoped(source, source_path, *, with_origins=False, verified=None):
                     aliases[alias] = load(dep)
                     nested.append(dep)
                     continue
-                if re.fullmatch(r'persist '+_IDENT,raw):continue
+                if re.fullmatch(r'persist '+_IDENT,raw) or raw.startswith('rule '):continue
                 if raw.startswith('import '):
                     raise ValueError(f'{path}:{no}: namespaced modules require explicit import aliases')
                 sym = _local_decl(raw, module_id, path, no)
@@ -229,7 +229,7 @@ def resolve_scoped(source, source_path, *, with_origins=False, verified=None):
                     result.append(line)
                     result_origins.append(origin_for(line,(path,no)))
                     continue
-                if re.fullmatch(r'persist '+_IDENT,line):
+                if re.fullmatch(r'persist '+_IDENT,line) or line.startswith('rule '):
                     result.append(_rewrite(line,symbols,aliases,line_no=no,filename=str(path)));result_origins.append(origin_for(result[-1],(path,no)));continue
                 if not line.startswith(' '):
                     raise ValueError(f'{path}:{no}: invalid top-level module construct')
@@ -257,6 +257,7 @@ def resolve_scoped(source, source_path, *, with_origins=False, verified=None):
                     colon=line.index(':')
                     line=line[:colon+1]+_rewrite(line[colon+1:], {n:s for n,s in symbols.items() if s.kind=='record'}, aliases, line_no=no, filename=str(path))
                 line=_rewrite(line,{},aliases,line_no=no,filename=str(path))
+                if owner and owner.kind=='component':line=_rewrite_ui_references(line,symbols)
                 result.append(line)
                 result_origins.append(origin_for(line,(path,no)))
             built = CompiledModule(module_id, symbols, {n:s for n,s in symbols.items() if s.public}, '\n'.join(result), tuple(nested), tuple(result_origins))
@@ -317,6 +318,8 @@ def resolve_scoped(source, source_path, *, with_origins=False, verified=None):
         raise ValueError('Expanded imports exceed source limit')
     output=ExpandedSource(output,source_map)
     output.public_symbols={alias+'.'+name:symbol.emitted for alias,module in aliases.items() for name,symbol in module.visible.items()}
+    output.display_names={symbol.emitted:symbol.name for module in cache.values() for symbol in module.symbols.values()}
+    for public,emitted_name in reversed(list(output.public_symbols.items())):output.display_names[emitted_name]=public
     if with_origins:
         assert len(source_map) == len(output.splitlines())
         return output, dependencies, tuple(source_map)
@@ -325,18 +328,33 @@ def resolve_scoped(source, source_path, *, with_origins=False, verified=None):
 
 def _schedule_domain(lines,origins,entry):
     """Hoist only imported state/derive/action blocks; entry order stays checked."""
-    pending={k:[] for k in ('state','derive','action')};kept=[];where=[];i=0
+    pending={k:[] for k in ('state','derive','action','rule')};kept=[];where=[];i=0
     while i<len(lines):
         match=re.match(r'(state|persist|derive|action) M_[0-9a-f]{12}_',lines[i])
-        if match and origins[i][0]!=entry:
-            kind='state' if match[1]=='persist' else match[1];block=[]
+        is_rule=lines[i].startswith('rule ')
+        if (match or is_rule) and origins[i][0]!=entry:
+            kind='rule' if is_rule else 'state' if match[1]=='persist' else match[1];block=[]
             block.append((lines[i],origins[i]));i+=1
             while i<len(lines) and (not lines[i].strip() or lines[i].startswith(' ')):
                 block.append((lines[i],origins[i]));i+=1
             pending[kind].extend(block)
         else:kept.append(lines[i]);where.append(origins[i]);i+=1
-    for kind,trigger in [('state',r'^(?:state|persist|derive|action|rule|test|screen|view|navigation) '),('derive',r'^(?:derive|action|rule|test|screen|view|navigation) '),('action',r'^(?:action|rule|test|screen|view|navigation) ')]:
+    for kind,trigger in [('state',r'^(?:state|persist|derive|action|rule|test|screen|view|navigation) '),('derive',r'^(?:derive|action|rule|test|screen|view|navigation) '),('action',r'^(?:action|rule|test|screen|view|navigation) '),('rule',r'^(?:rule|test|screen|view|navigation) ')]:
         if not pending[kind]:continue
         position=next((i for i,line in enumerate(kept) if re.match(trigger,line)),len(kept))
         kept[position:position]=[x[0] for x in pending[kind]];where[position:position]=[x[1] for x in pending[kind]]
     return kept,where
+
+
+def _rewrite_ui_references(line,symbols):
+    """Rewrite typed binding positions, never property names or literal labels."""
+    toks=_tokens(line);edits={}
+    kinds={'state':{'state','derive'},'action':{'action'},'collection':{'state'},'select':{'state'},'search':{'state'},'equals':{'state','derive'},'active':{'state','derive'}}
+    for index,token in enumerate(toks[:-1]):
+        value=toks[index+1]
+        if token.type==tokenize.NAME and token.string in kinds and value.type==tokenize.NAME and value.string in symbols and symbols[value.string].kind in kinds[token.string]:edits[value.start[1]]=(value.end[1],symbols[value.string].emitted)
+        if token.string in ('>','->') and value.type==tokenize.NAME and value.string in symbols and symbols[value.string].kind=='action':edits[value.start[1]]=(value.end[1],symbols[value.string].emitted)
+    positional=re.match(r'\s*(?:value|when|input_text|input_int|show_text) ([A-Za-z][A-Za-z0-9_]*)',line)
+    if positional and positional[1] in symbols and symbols[positional[1]].kind in ('state','derive'):edits[positional.start(1)]=(positional.end(1),symbols[positional[1]].emitted)
+    for start,(end,value) in sorted(edits.items(),reverse=True):line=replace_span(line,start,end,value)
+    return line

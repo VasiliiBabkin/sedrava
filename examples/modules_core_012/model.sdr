@@ -2,6 +2,7 @@ module core.model
 import "text.sdr" as words
 export record Item:
     title: text
+fn title(x: int) -> int = x
 export fn grow(values: list<int>(max=4)) -> list<int>(max=4) = append(values, 9)
 export fn first(xs: list<Item>(max=3)) -> Result<Item, Error> = try_at(xs, 0)
 export state numbers: list<int>(max=4) = [3, 1, 2]
@@ -40,3 +41,7 @@ export action audit:
 export action reject:
     total = 99
     total = numbers[99]
+export action break_rule:
+    total = 99
+    label = "é"
+rule unicode_nfc(label) == label

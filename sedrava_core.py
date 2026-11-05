@@ -156,6 +156,7 @@ class Program:
     initial_screen: str = "main"
     has_navigation: bool = False
     functions: dict = None
+    display_names: dict = None
 
 def parse_expr(source, types, expected=None):
     source, literals = literal_expression(source)
@@ -288,7 +289,7 @@ def evaluate(node, state):
         if isinstance(exc,LocatedError):raise
         if hasattr(node,'source_origin'):
             origin=node.source_origin
-            raise LocatedError(str(exc),origin[0],origin[1],origin.column(node.source_column)) from exc
+            raise LocatedError(str(exc),*origin.point(node.source_column)) from exc
         if hasattr(node, 'source_line') and not str(exc).startswith('Line '):
             raise ValueError(f"Line {node.source_line}: column {node.source_column}: {exc}") from exc
         raise
@@ -610,8 +611,8 @@ def _parse(source):
                     if type_of(node,types) not in (int,bool,str): raise ValueError(f"Line {n}: column {widget_depth+9}: display requires scalar expression")
                     widgets.append(("display",node))
                 elif m := re.fullmatch(r"value ([A-Za-z_][A-Za-z_0-9]*)", item):
-                    if m[1] not in types: raise ValueError(f"Line {n}: unknown state")
-                    if types[m[1]] not in (int, bool, str): raise ValueError(f"Line {n}: column {widget_depth+1}: value requires a scalar; use list for collections")
+                    if m[1] not in types: raise ValueError(f"Line {n}: column {widget_depth+m.start(1)+1}: unknown state")
+                    if types[m[1]] not in (int, bool, str): raise ValueError(f"Line {n}: column {widget_depth+m.start(1)+1}: value requires a scalar; use list for collections")
                     widgets.append(("value", m[1]))
                 elif m := re.fullmatch(r'input ([A-Za-z_][A-Za-z_0-9]*)(?: label (.+))?', item):
                     if m[1] not in states or type(states[m[1]]) not in (int, str):
@@ -683,9 +684,11 @@ def _parse(source):
     if base_work(derived,rules)>MAX_ACTION_WORK:raise ValueError("Derived/invariant evaluation exceeds work limit")
     for action,body in actions.items():
         if action_work(body,derived,rules)>MAX_ACTION_WORK:raise ValueError(f"Line {action_lines[action]}: action exceeds weighted work limit")
-    values = resolve(states, derived)
-    if not all(evaluate(rule, values) for rule in rules): raise ValueError("Invalid initial state")
     program = Program(name, states, actions, tuple(rules), tuple(tests), tuple(widgets), derived, tuple(persistent), records, screens, navigation, initial_screen, has_navigation, functions)
+    _check_module_scope(program,source)
+    values = resolve(states, derived)
+    for rule in rules:
+        if not evaluate(rule,values):raise ValueError(f"Line {rule.source_line}: column {rule.source_column}: Invalid initial state")
     if structured(program):
         from sedrava_records import check_resources
         try:
@@ -826,6 +829,14 @@ def parse(source):
         elif isinstance(value,(tuple,list)):
             for child in value:visit(child)
     visit(program)
+    from dataclasses import replace
+    return replace(program,display_names=dict(getattr(source,"display_names",{})))
+
+
+def _check_module_scope(program,source):
+    if not getattr(source,"scoped",False):return
+    from sedrava_source_map import LocatedError
+    origins=getattr(source,"origins",())
     # Namespaced module actions/derives may use module symbols, never ambient entry state.
     global_values=set(program.states)|set(program.derived or {})
     def check_expr(node):
@@ -834,8 +845,8 @@ def parse(source):
             fail(node)
     def fail(node):
         message='Module declaration cannot capture entry state; import an explicit exported module state'
-        if hasattr(node,'source_origin'):
-            origin=node.source_origin;raise LocatedError(message,origin[0],origin[1],origin.column(node.source_column))
+        if origins and hasattr(node,'source_line') and node.source_line<=len(origins):
+            origin=origins[node.source_line-1];raise LocatedError(message,*origin.point(node.source_column))
         raise ValueError(message)
     def check_body(body):
         for stmt in body:
@@ -848,4 +859,5 @@ def parse(source):
         if getattr(source,'scoped',False) and name.startswith('M_'):check_body(body)
     for name,node in (program.derived or {}).items():
         if getattr(source,'scoped',False) and name.startswith('M_'):check_expr(node)
-    return program
+    for node in program.rules:
+        if origins and hasattr(node,'source_line') and node.source_line<=len(origins) and origins[node.source_line-1][0]!=getattr(source,'entry',None):check_expr(node)

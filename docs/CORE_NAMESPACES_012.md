@@ -21,6 +21,7 @@ export action scan:
     for index, value in numbers:
         total = total + value
         numbers = list_replace_at(numbers, index, value * 2)
+rule total >= 0
 ```
 
 An entry imports this file with `import "counter.sdr" as counter`, then uses
@@ -28,9 +29,9 @@ An entry imports this file with `import "counter.sdr" as counter`, then uses
 uses `value counter.total` and `button "Scan" action counter.scan` in a view.
 `sedrava run main.sdr counter.scan` resolves the same explicit public action.
 
-Modules now declare record/fn/component/style **and state/derive/action**. Any
+Modules now declare record/fn/component/style **and state/derive/action** and module-owned rule invariants. Any
 symbol is private unless marked export. `persist name` refers to an owned state.
-Module actions/derived expressions may use their own symbols or explicit public
+Module actions/derived expressions/invariants may use their own symbols or explicit public
 imports, never capture entry-app state. Functions remain pure checked expression
 functions; their bodies do not acquire a separate statement interpreter. Bounded
 loops are in ordinary actions. There is no implicit action execution on import.

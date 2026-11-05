@@ -1,6 +1,6 @@
 # Sedrava — experimental lexical namespaces (0.12 Slice A)
 
-**Status: experimental PR, not part of released 0.10.0, not a stable 0.12 release.**
+**Status: experimental PR, not part of published stable 0.11.0, not a stable 0.12 release.**
 
 ## Actual source example
 
@@ -38,7 +38,7 @@ python -m unittest tests.test_namespaced_modules_012 -v
 
 ## Working capabilities
 
-- New `module org.name`, `export component/style/record/fn`, `import "file.sdr" as alias` and qualified `alias.Symbol`.
+- New `module org.name`, `export component/style/record/fn/state/derive/action`, `import "file.sdr" as alias` and qualified `alias.Symbol`.
 - Omitted `export` makes a module declaration internal; it can still be used from within the defining module.
 - Colliding declaration names from independent modules are given distinct canonical IDs. Lexical-token rewrite leaves strings and comments unchanged before the original typed compiler validates results.
 - Nested aliases, duplicate module IDs, alias conflicts, private access, symlinks, path traversal, cycles, size/depth bounds and duplicate physical imports are checked.
@@ -47,6 +47,10 @@ python -m unittest tests.test_namespaced_modules_012 -v
 
 ## Not yet implemented
 
-Full symbol-aware typed IR and accurate diagnostics for every original file/line, semver package manager, lockfile, re-exports, imported mutable state, stable public ABI, server/SQLite/PostgreSQL, authentication and permissions. Static sites support imported components/styles; WebApps support those plus checked functions/records, subject to existing target restrictions.
-
-This is a **first tested lexical namespace implementation**, not completion of the entire architecture in [design PR #38](https://github.com/VasiliiBabkin/sedrava/pull/38). Next: preserve namespace identities in AST/IR, complete cross-file source maps, then packages and independent trusted server runtime.
+A native multi-file typed IR, re-exports, stable public ABI, remote registry/semver
+resolution, server/SQL/authentication and permissions remain unimplemented.
+The integrated branch now supports module-owned mutable state/actions/invariants,
+original file/line/character provenance and local versioned SHA-256 locks.
+See the current [EN integration contract](CORE_NAMESPACES_012.md) /
+[RU](CORE_NAMESPACES_012.ru.md) and [package contract](PACKAGES_012_EXPERIMENTAL.md).
+Old slice results describe their historical SHA, not current integration readiness.

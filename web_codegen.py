@@ -164,17 +164,20 @@ def generate(source, _program=None, _domain_only=False):
             title_seen = True
         elif widget[0] == "value":
             key = html.escape(widget[1], quote=True)
-            widgets.append(f'<p>{key}: <output data-state="{key}"></output></p>')
+            label=html.escape((program.display_names or {}).get(widget[1],widget[1]))
+            widgets.append(f'<p>{label}: <output data-state="{key}"></output></p>')
         elif widget[0] == "input_text":
             key = html.escape(widget[1], quote=True)
             error_id = "error-" + key + ("-" + str(widget_index) if key in input_seen else "")
             input_seen.add(key)
-            widgets.append(f'<label>{key}: <textarea data-input="{key}" aria-describedby="{error_id}" aria-invalid="false"></textarea></label><small id="{error_id}" role="alert" hidden>Text must contain at most 1024 Unicode scalar values and satisfy the declared rules</small>')
+            label=html.escape((program.display_names or {}).get(widget[1],widget[1]))
+            widgets.append(f'<label>{label}: <textarea data-input="{key}" aria-describedby="{error_id}" aria-invalid="false"></textarea></label><small id="{error_id}" role="alert" hidden>Text must contain at most 1024 Unicode scalar values and satisfy the declared rules</small>')
         elif widget[0] == "input_int":
             key = html.escape(widget[1], quote=True)
             error_id = "error-" + key + ("-" + str(widget_index) if key in input_seen else "")
             input_seen.add(key)
-            widgets.append(f'<label>{key}: <input type="number" step="1" min="-2147483648" max="2147483647" data-input="{key}" aria-describedby="{error_id}"></label><small id="{error_id}" role="alert" hidden>Value does not satisfy the declared rules</small>')
+            label=html.escape((program.display_names or {}).get(widget[1],widget[1]))
+            widgets.append(f'<label>{label}: <input type="number" step="1" min="-2147483648" max="2147483647" data-input="{key}" aria-describedby="{error_id}"></label><small id="{error_id}" role="alert" hidden>Value does not satisfy the declared rules</small>')
         elif widget[0] == "show_text":
             key = html.escape(widget[1], quote=True)
             widgets.append(f'<p data-show="{key}" hidden>{html.escape(widget[2])}</p>')

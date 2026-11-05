@@ -10,7 +10,7 @@
 site.sdr для WebApp. Оба импортируют один model.sdr, тот — text.sdr. Правка
 сгенерированного кода не требуется.
 
-Модуль поддерживает record/fn/component/style, а теперь также state/derive/action.
+Модуль поддерживает record/fn/component/style, а теперь также state/derive/action и собственные инварианты rule.
 Символ доступен через импорт только при export. persist сохраняет собственное
 состояние модуля. Действия и вычисляемые значения не могут неявно обращаться к
 состоянию входного приложения; разрешены собственные символы и явные экспорты
@@ -27,6 +27,7 @@ export action scan:
     for index, value in numbers:
         total = total + value
         numbers = list_replace_at(numbers, index, value * 2)
+rule total >= 0
 ```
 
 Входной файл использует `import "counter.sdr" as counter`, `value counter.total`

@@ -1,6 +1,6 @@
 # Sedrava 0.12 B1 — offline local package locks
 
-**Experimental draft only. No registry, download/install manager, remote packages or released 0.12.0.** This slice stacks on [namespace PR #39](https://github.com/VasiliiBabkin/sedrava/pull/39) and [provenance PR #40](https://github.com/VasiliiBabkin/sedrava/pull/40). Published 0.10 remains unchanged.
+**Experimental draft only. No registry, download/install manager, remote packages or released 0.12.0.** This slice stacks on [namespace PR #39](https://github.com/VasiliiBabkin/sedrava/pull/39) and [provenance PR #40](https://github.com/VasiliiBabkin/sedrava/pull/40). Published stable 0.11 remains unchanged. Current integration with A1/A2 is described in [EN](CORE_NAMESPACES_012.md) / [RU](CORE_NAMESPACES_012.ru.md).
 
 ## A real working vendored example
 

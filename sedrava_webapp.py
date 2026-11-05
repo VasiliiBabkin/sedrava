@@ -450,7 +450,7 @@ def generate_webapp(document, source_dir=".", _inputs=None):
             return common[:-1]+attr('type','submit')+'>'+html.escape(props['text'])+'</button>'
         if kind == "value":
             key = html.escape(props["state"], quote=True)
-            label = html.escape(props.get("label", props["state"]))
+            label = html.escape(props.get("label", (program.display_names or {}).get(props["state"],props["state"])))
             return common + "<span>" + label + ': </span><output data-state="' + key + '" aria-live="polite"></output></div>'
         if kind in ("navigate", "back"):
             attrs=attr('type','button')+(' data-back="true"' if kind=='back' else attr('data-navigate',props['to']))

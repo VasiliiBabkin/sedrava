@@ -11,7 +11,7 @@ project=Path(sys.argv[1]);source_path=Path(sys.argv[2]) if len(sys.argv)>2 else 
 from sedrava_modules import expand
 source=expand(source_path.read_text(),source_path)[0];program=parse(source);generate(source,project,_program=program)
 sequence=['scan','order','fail_bounds','fail_sum','remove','add','add','seed_rows','audit_a1','delete_rows','normalize','fold','expected_error','clear','scan']
-if len(sys.argv)>2:sequence=['scan','add','add','expected','seed','audit','reject']
+if len(sys.argv)>2:sequence=['scan','add','add','expected','seed','audit','break_rule','reject']
 labels=sequence.copy()
 sequence=[label if label in program.actions else next(k for k in program.actions if k.endswith('_'+label)) for label in labels]
 expected=reference(source,sequence);package=project_identity(project)
@@ -36,7 +36,7 @@ lines+=['ui.activityRule.scenario.recreate();ui.waitForIdle();ui.onNodeWithText(
 for widget in program.widgets:
     if widget[0]=='value' and widget[1] in expected[-1]['state']:
         key=widget[1];value=expected[-1]['state'][key]
-        if type(value) in (str,int,bool):lines+=['ui.onNodeWithText('+quoted(key+': '+(str(value).lower() if type(value) is bool else str(value)))+',substring=false).assertExists()']
+        if type(value) in (str,int,bool):lines+=['ui.onNodeWithText('+quoted((program.display_names or {}).get(key,key)+': '+(str(value).lower() if type(value) is bool else str(value)))+',substring=false).assertExists()']
 lines+=['}}']
 test=kotlin_path(project,'androidTest','CoreA2UiTest.kt');test.parent.mkdir(parents=True,exist_ok=True);test.write_text('\n'.join(lines))
 print(project)

@@ -1,3 +1,7 @@
+# Historical standalone A2 evidence
+
+This file records PR #51 before namespace integration. Current status: [integration journal](CORE_NAMESPACES_012_STATUS.md). Historical VERSION/CI claims below apply to their named checkpoints.
+
 # Bounded core continuation — working status / Текущее состояние
 
 Experimental child branch of PR #50 (`feature/012-bounded-core-text-loops-a1`),

@@ -14,3 +14,4 @@ view main:
     button "seed" action model.seed
     button "audit" action model.audit
     button "reject" action model.reject
+    button "break_rule" action model.break_rule

@@ -295,7 +295,7 @@ def generate(source, output, _program=None, _domain_only=False, application_id=N
             lines.append("    Text(" + quoted(widget[1]) + ", style = MaterialTheme.typography." + style + semantics + ")")
             title_seen = True
         elif widget[0] == "value":
-            lines.append("    Text(" + quoted(widget[1] + ": ") + " + " + user[widget[1]] + ".toString())")
+            lines.append("    Text(" + quoted((program.display_names or {}).get(widget[1],widget[1]) + ": ") + " + " + user[widget[1]] + ".toString())")
         elif widget[0] in ("input_int", "input_text"):
             key = widget[1]
             text = widget[0] == "input_text"
@@ -315,7 +315,7 @@ def generate(source, output, _program=None, _domain_only=False, application_id=N
             if program.persistent:
                 lines.append('          if (!persistState(prefs,next)) actionError = "Could not save state"' if (structured(program)) else '          if (!persistState(prefs,next)) actionError = "Could not save state; changes may be temporary"')
             message = "Text must contain at most 1024 Unicode scalar values and satisfy the declared rules" if text else "Value does not satisfy the declared rules"
-            lines += ["        }", "      }, isError = error_" + key + ", supportingText = { if (error_" + key + ") Text(" + quoted(message) + ") }, modifier = Modifier.fillMaxWidth(), label = { Text(" + quoted(key) + ") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType." + ("Text" if text else "Number") + "))", "    }"]
+            lines += ["        }", "      }, isError = error_" + key + ", supportingText = { if (error_" + key + ") Text(" + quoted(message) + ") }, modifier = Modifier.fillMaxWidth(), label = { Text(" + quoted((program.display_names or {}).get(key,key)) + ") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType." + ("Text" if text else "Number") + "))", "    }"]
         elif widget[0] == "show_text":
             lines.append("    if (" + user[widget[1]] + ") { Text(" + quoted(widget[2]) + ") }")
         else:

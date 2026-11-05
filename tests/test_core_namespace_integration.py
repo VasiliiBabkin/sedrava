@@ -14,7 +14,7 @@ def expanded():return expand(EXAMPLE.read_text(),EXAMPLE)[0]
 def actions(program,names):return [next(k for k in program.actions if k.endswith('_'+name)) for name in names]
 class Integration(unittest.TestCase):
     def test_full_python_js_kotlin_module_trace(self):
-        source=expanded();program=parse(source);seq=actions(program,['scan','add','add','expected','seed','audit','reject'])
+        source=expanded();program=parse(source);seq=actions(program,['scan','add','add','expected','seed','audit','break_rule','reject'])
         expected=reference(source,seq)
         self.assertEqual(expected,javascript(source,seq));self.assertEqual(expected,kotlin(source,seq))
         self.assertFalse(expected[2]['accepted']);self.assertFalse(expected[-1]['accepted'])
@@ -89,6 +89,53 @@ class Integration(unittest.TestCase):
         with contextlib.redirect_stdout(stdout):self.assertEqual(main(['run',str(EXAMPLE),'model.scan']),0)
         state=json.loads(stdout.getvalue());self.assertEqual(next(v for k,v in state.items() if k.endswith('_total')),6)
         with contextlib.redirect_stderr(io.StringIO()):self.assertEqual(main(['run',str(EXAMPLE),actions(parse(expanded()),['scan'])[0]]),1)
+    def test_module_scope_is_checked_before_initial_evaluation(self):
+        import sedrava_unicode
+        self.put('m.sdr','module example.scope\nexport derive stolen = unicode_nfc(secret)\n')
+        source='app "Scope"\nimport "m.sdr" as m\nstate secret = "é"\n'
+        with patch('sedrava_unicode.normalize',wraps=sedrava_unicode.normalize) as normalize_call:
+            with self.assertRaisesRegex(ValueError,'cannot capture entry state'):parse_document(source,self.put('main.sdr',source))
+            self.assertEqual(normalize_call.call_count,0)
+    def test_module_initial_invariant_keeps_original_location(self):
+        module=self.put('m.sdr','module example.rule\nexport state label = "é"\nrule unicode_nfc(label) == label\n')
+        source='app "Rule"\nimport "m.sdr" as m\n'
+        with self.assertRaisesRegex(ValueError,'Invalid initial state') as err:parse_document(source,self.put('main.sdr',source))
+        self.assertEqual(err.exception.source,str(module));self.assertEqual(err.exception.line,3);self.assertEqual(err.exception.column,6)
+    def test_legacy_import_cannot_escape_namespaced_privacy(self):
+        hidden='M_'+sha256(b'example.hidden').hexdigest()[:12]+'_secret'
+        self.put('m.sdr','module example.hidden\nfn secret(x: int) -> int = x+1\nexport fn safe(x: int) -> int = x\n')
+        self.put('legacy.sdr','fn steal(x: int) -> int = '+hidden+'(x)\n')
+        source='app "Mixed"\nimport "m.sdr" as m\nimport "legacy.sdr"\n'
+        with self.assertRaisesRegex(ValueError,'Reserved generated'):parse_document(source,self.put('main.sdr',source))
+    def test_module_component_can_bind_its_private_state_and_action(self):
+        self.put('m.sdr','module example.private\nstate count = 0\nstate values: list<int>(max=1) = []\npersist count\naction bump: count = count + 1\nexport component Panel:\n    value count\n    button "Private" -> bump\n')
+        source='app "Private"\nimport "m.sdr" as m\nscreen main:\n    use m.Panel\n';entry=self.put('main.sdr',source);lowered=expand(source,entry)[0];program=parse(lowered)
+        sequence=actions(program,['bump']);expected=reference(lowered,sequence)
+        self.assertEqual(expected,javascript(lowered,sequence));self.assertEqual(expected,kotlin(lowered,sequence))
+        with self.assertRaisesRegex(ValueError,'not an exported'):parse_document(source.replace('use m.Panel','button "No" -> m.bump'),entry)
+    def test_lock_integer_resource_bound(self):
+        self.project();path=self.root/'sedrava.lock';path.write_text('{"schema":'+('9'*5000)+'}')
+        with self.assertRaisesRegex(ValueError,'Invalid sedrava.lock JSON'):verify(self.root)
+    def test_aggregate_module_source_budget(self):
+        for name in ('a','b'):self.put(name+'.sdr','module example.'+name+'\n'+('#'+('x'*60000))+'\nexport fn safe(x: int) -> int = x\n')
+        source='app "Budget"\nimport "a.sdr" as a\nimport "b.sdr" as b\n'
+        with self.assertRaisesRegex(ValueError,'Combined module source resource limit'):parse_document(source,self.put('main.sdr',source))
+    def test_nested_component_reference_reports_call_argument(self):
+        self.put('ui.sdr','module example.arguments\ncomponent Inner(value: ref):\n    value $value\nexport component Panel(value: ref):\n    use Inner value $value\n')
+        line='    use ui.Panel value missing'
+        source='app "Arguments"\nimport "ui.sdr" as ui\nscreen main:\n'+line+'\n';entry=self.put('main.sdr',source)
+        with self.assertRaises(ValueError) as err:parse_document(source,entry)
+        self.assertEqual(err.exception.source,str(entry));self.assertEqual(err.exception.line,4);self.assertEqual(err.exception.column,line.index('missing')+1)
+    def test_ui_component_cannot_inject_domain_statements(self):
+        module=self.put('ui.sdr','module example.boundary\nexport component Bad:\n    n = n + 1\n')
+        source='app "Boundary"\nimport "ui.sdr" as ui\nstate n = 0\naction unsafe:\n    use ui.Bad\n';entry=self.put('main.sdr',source)
+        with self.assertRaisesRegex(ValueError,'UI components cannot emit domain') as err:parse_document(source,entry)
+        self.assertEqual(err.exception.source,str(module));self.assertEqual(err.exception.line,3)
+    def test_ui_slot_cannot_be_used_as_an_action_macro(self):
+        self.put('ui.sdr','module example.slot\nexport component Identity:\n    slot\n')
+        source='app "Boundary"\nimport "ui.sdr" as ui\nstate n = 0\naction unsafe:\n    use ui.Identity:\n        n = n + 1\n';entry=self.put('main.sdr',source)
+        with self.assertRaisesRegex(ValueError,'UI components cannot emit domain') as err:parse_document(source,entry)
+        self.assertEqual(err.exception.source,str(entry));self.assertEqual(err.exception.line,6)
     def test_module_action_cannot_capture_entry_state(self):
         self.put('m.sdr','module example.model\nexport action steal:\n    private_data = 9\n')
         source='app "Scope"\nimport "m.sdr" as m\nstate private_data = 0\n'

@@ -1,0 +1,16 @@
+app "Legacy binding names"
+state constructor = 0
+action bump: constructor = constructor + 1
+screen main:
+    text "Home"
+    value constructor
+    button "Increment" -> bump
+    button "Next" -> next_page
+screen other:
+    text "Other"
+    value constructor
+    button "Back" -> previous
+navigation:
+    initial main
+    action next_page -> other
+    action previous -> pop

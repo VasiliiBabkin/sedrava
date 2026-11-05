@@ -22,6 +22,7 @@ def generate_navigation(source, program):
     bindings={k:{'target':v.target,'action':v.action} for k,v in program.navigation.items()}
     runtime='\n'.join([
         'const initialScreen='+q(program.initial_screen)+';',
+        'const presentationNames=JSON.parse('+q(__import__('json').dumps(program.display_names or {}))+');',
         'const screenNames='+q(list(program.screens))+';',
         'const navigationBindings=JSON.parse('+q(__import__('json').dumps(bindings))+');',
         'function domainValues(domain){const values={__proto__:null,...domain};'+''.join(derived)+'return values;}',
@@ -43,7 +44,7 @@ def generate_navigation(source, program):
                 if w not in texts[:2]: parts.append('addText(host,'+q(args[0])+',"notice");')
                 continue
             elif w.kind.startswith('input'):
-                key=args[0]; label=args[1] if len(args)>1 else key
+                key=args[0]; label=args[1] if len(args)>1 else (program.display_names or {}).get(key,key)
                 ident='field-'+screen.name+'-'+str(index)
                 attrs=' id="'+ident+'" data-input="'+html.escape(key,quote=True)+'" aria-describedby="error-'+ident+'" aria-invalid="false"'
                 control='<textarea'+attrs+'></textarea>' if w.kind=='input_text' else '<input type="text" inputmode="numeric"'+attrs+'>'
@@ -59,7 +60,7 @@ def generate_navigation(source, program):
                 parts.append('{ const el=addText(host,"","display");el.id='+q(ident)+';try { el.textContent=String('+expression+'); } catch(_) { el.textContent="Unavailable"; } }')
                 refresh.append('{ const el=document.getElementById('+q(ident)+');if(el){try {el.textContent=String('+expression+');}catch(_){el.textContent="Unavailable";}} }')
             elif w.kind=='value':
-                parts.append('{ const el=addText(host,'+q(args[0]+': ')+'+String(values['+q(args[0])+']),"notice");el.dataset.value='+q(args[0])+'; }')
+                parts.append('{ const el=addText(host,'+q((program.display_names or {}).get(args[0],args[0])+': ')+'+String(values['+q(args[0])+']),"notice");el.dataset.value='+q(args[0])+'; }')
             elif w.kind in ('list','list_open'):
                 collection,selected=args[:2]
                 command=args[2] if w.kind=='list_open' else None
@@ -132,7 +133,7 @@ function render(resetInputs=false,focus=false){
  const active=session.stack.at(-1),values=domainValues(session.state);
  if(!resetInputs&&root.dataset.screen===active){
   root.querySelectorAll('[data-show]').forEach(el=>{el.hidden=!values[el.dataset.show];});
-  root.querySelectorAll('[data-value]').forEach(el=>{el.textContent=el.dataset.value+': '+String(values[el.dataset.value]);});
+  root.querySelectorAll('[data-value]').forEach(el=>{el.textContent=(Object.hasOwn(presentationNames,el.dataset.value)?presentationNames[el.dataset.value]:el.dataset.value)+': '+String(values[el.dataset.value]);});
   root.querySelectorAll('[data-input]').forEach(el=>{if(document.activeElement!==el)el.value=String(session.state[el.dataset.input]);});
   switch(active){/*REFRESH_CASES*/}
   return;

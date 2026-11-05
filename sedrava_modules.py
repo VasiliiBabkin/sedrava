@@ -8,12 +8,20 @@ import re
 from sedrava_syntax import MAX_SOURCE_CHARS, MAX_BLOCK_DEPTH, source_lines
 
 
-def expand(source, source_path=None, _stack=(), _root=None, _files=None, *, with_origins=False, _verified=None):
+def expand(source, source_path=None, _stack=(), _root=None, _files=None, *, with_origins=False, _verified=None, _scoped=False):
     source_lines(source)
     from sedrava_source_map import locations, ExpandedSource, MappedLine, origin_for, mapped_lines, replace_span
-    scoped=False
+    scoped=_scoped
     files = set() if _files is None else _files
     source_map = locations(source, source_path)
+    if _stack and scoped:
+        from sedrava_namespaces import _tokens,_RESERVED
+        import tokenize
+        from sedrava_source_map import LocatedError
+        for no,line in enumerate(source.splitlines(),1):
+            try:tokens=_tokens(line)
+            except ValueError as exc:raise LocatedError(str(exc),source_path,no,1) from exc
+            if any(t.type==tokenize.NAME and _RESERVED.fullmatch(t.string) for t in tokens):raise LocatedError("Reserved generated symbol in scoped legacy import",source_path,no,1)
     if not _stack and source_path is not None:
         from sedrava_packages import verified_inputs
         _verified=verified_inputs(source_path)
@@ -59,7 +67,7 @@ def expand(source, source_path=None, _stack=(), _root=None, _files=None, *, with
         for depth, declaration, n in source_lines(text):
             if depth == 0 and not declaration.startswith(('component ', 'style ', 'import ', 'fn ', 'record ')):
                 raise ValueError(f'Line {number}: column 1: module {value}:{n} may only export components/styles/records/functions/imports')
-        expanded, _, child_origins = expand(text, path, (*_stack, path), root, files, with_origins=True,_verified=_verified)
+        expanded, _, child_origins = expand(text, path, (*_stack, path), root, files, with_origins=True,_verified=_verified,_scoped=scoped)
         output.extend(expanded.splitlines())
         origins.extend(child_origins)
     joined = '\n'.join(output)
@@ -106,41 +114,56 @@ def components(source, origins=None):
             raise ValueError('Component requires four-space-indented content')
         definitions[name] = (params, [line[4:] if line.startswith('    ') else line for line in body], body_origins)
     from sedrava_site import tokens
+    from sedrava_source_map import LocatedError,Origin,source_error
+    def fail_component(message,origin,col):
+        path,line,column=origin.point(col) if isinstance(origin,Origin) else (*origin,col)
+        if path is None:raise ValueError(f"Line {line}: column {column}: {message}")
+        raise LocatedError(message,path,line,column)
+    def validate_ui_line(line,origin):
+        first=line.lstrip().split(maxsplit=1)
+        if not first:return
+        word=first[0].rstrip(':')
+        if word in {"app","site","webapp","module","import","export","state","derive","action","record","fn","persist","rule","test","screen","view","navigation","require","for","repeat","if","else","while","return","let"} or re.match(r"\s*[A-Za-z_][A-Za-z_0-9]*\s*=(?!=)",line):
+            fail_component("UI components cannot emit domain declarations or action statements",origin,len(line)-len(line.lstrip())+1)
 
     def instantiate(lines, line_origins, stack=()):
         result, result_origins = [], []
         i = 0
         while i < len(lines):
-            line = lines[i]; origin = line_origins[i]; i += 1
+            line = lines[i]; origin = origin_for(line,line_origins[i]); i += 1
             call = re.fullmatch(r'( *)use ([A-Za-z][A-Za-z0-9_]*)(.*)', line)
             if not call:
+                if stack:validate_ui_line(line,origin)
                 result.append(line); result_origins.append(origin); continue
             prefix, name, rest = call.groups()
             if name not in definitions or name in stack or len(stack) >= MAX_BLOCK_DEPTH:
-                raise ValueError(f'Line {i}: column {len(prefix)+1}: unknown/recursive component {name}')
+                fail_component(f"unknown/recursive component {name}",origin,len(prefix)+1)
             block = rest.rstrip().endswith(':')
-            args = tokens(rest.rstrip()[:-1] if block else rest, i, len(prefix))
+            try:args = tokens(rest.rstrip()[:-1] if block else rest,1,call.start(3))
+            except ValueError as exc:raise source_error(exc,(origin,)) from exc
             params, template, template_origins = definitions[name]
             if len(args) % 2:
-                raise ValueError(f'Line {i}: column 1: component parameters require name/value pairs')
+                fail_component('component parameters require name/value pairs',origin,call.start(3)+1)
             values = {}
+            value_origins={}
             for key, value in zip(args[::2], args[1::2]):
                 if key.value in values or key.value not in params:
-                    raise ValueError(f'Line {i}: column 1: invalid typed component parameter {key.value}')
+                    fail_component(f'invalid typed component parameter {key.value}',origin,value.span.column)
                 expected=params[key.value]
                 reference=expected=='reference'
                 if (reference and (value.quoted or type(value.value) is not str or not re.fullmatch('[A-Za-z][A-Za-z0-9_]*',value.value))) or (not reference and type(value.value) is not expected):
-                    raise ValueError(f'Line {i}: column 1: invalid typed component parameter {key.value}')
+                    fail_component(f'invalid typed component parameter {key.value}',origin,value.span.column)
                 values[key.value] = value.value if reference else json.dumps(value.value, ensure_ascii=False)
+                value_origins[key.value]=origin.point(value.span.column) if isinstance(origin,Origin) else (*origin,value.span.column)
             if set(values) != set(params):
-                raise ValueError(f'Line {i}: column 1: component requires exact parameters')
+                fail_component('component requires exact parameters',origin,call.start(3)+1)
             children, children_origins = [], []
             if block:
                 while i < len(lines) and (not lines[i].strip() or len(lines[i])-len(lines[i].lstrip(' ')) > len(prefix)):
                     children.append(lines[i][len(prefix)+4:]); children_origins.append(line_origins[i]); i += 1
             slots = sum(line.strip() == 'slot' for line in template)
             if slots > 1 or bool(children) != bool(slots):
-                raise ValueError(f'Line {i}: column 1: component slot requires matching content')
+                fail_component('component slot requires matching content',origin,len(prefix)+1)
             expanded, expanded_origins = [], []
             for text, template_origin in zip(template, template_origins):
                 if text.strip() == 'slot':
@@ -154,9 +177,9 @@ def components(source, origins=None):
                         if j%2==0:
                             for match in re.finditer(r'\$([A-Za-z][A-Za-z0-9_]*)',part):
                                 if match[1] not in values:raise ValueError('Unknown component parameter '+match[1])
-                                edits.append((offset+match.start(),offset+match.end(),values[match[1]]))
+                                edits.append((offset+match.start(),offset+match.end(),values[match[1]],value_origins[match[1]]))
                         offset+=len(part)
-                    for start,end,value in reversed(edits):text=replace_span(text,start,end,value)
+                    for start,end,value,point in reversed(edits):text=replace_span(text,start,end,value,point)
                     expanded.append(prefix+text)
                     expanded_origins.append(template_origin)
             child_lines, child_locations = instantiate(expanded, expanded_origins, (*stack, name))
