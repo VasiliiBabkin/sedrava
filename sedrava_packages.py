@@ -151,7 +151,7 @@ def _strict_json(data):
                 raise ValueError('Duplicate key in lockfile')
             result[key] = value
         return result
-    return json.loads(data, object_pairs_hook=decode_pairs)
+    return json.loads(data, object_pairs_hook=decode_pairs,parse_float=lambda _: (_ for _ in ()).throw(ValueError('Integer lock schema required')),parse_constant=lambda _: (_ for _ in ()).throw(ValueError('Invalid JSON constant')))
 
 
 def _encode(value):
@@ -169,7 +169,9 @@ def lock(project):
     try:
         with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', prefix='.sedrava-lock-', dir=root, delete=False) as fh:
             tmp = Path(fh.name)
-            fh.write(_encode(model))
+            encoded=_encode(model)
+            if len(encoded.encode('utf-8'))>128000:raise ValueError('Lockfile resource limit')
+            fh.write(encoded)
             fh.flush()
             os.fsync(fh.fileno())
         os.replace(tmp, target)
@@ -187,10 +189,10 @@ def verify(project):
         raise ValueError('Missing/invalid sedrava.lock; run sedrava lock first')
     try:
         current = _strict_json(target.read_text(encoding='utf-8'))
-    except (ValueError, UnicodeError) as exc:
+    except (ValueError, UnicodeError, RecursionError) as exc:
         raise ValueError('Invalid sedrava.lock JSON') from exc
     expected = snapshot(root)
-    if type(current) is not dict or current != expected:
+    if type(current) is not dict or _encode(current) != _encode(expected):
         raise ValueError('Local dependency lock mismatch: run sedrava lock after reviewing changes')
     return expected
 
@@ -199,7 +201,26 @@ def verify_if_project(source_path):
     if source_path is None:
         return None
     root = Path(source_path).resolve().parent
-    if (root / _MANIFEST).exists() or (root / _LOCK).exists():
+    if any(p.exists() or p.is_symlink() for p in (root/_MANIFEST,root/_LOCK)):
         verify(root)
         return (root / _MANIFEST, root / _LOCK)
     return None
+
+
+def verified_inputs(source_path):
+    root=Path(source_path).resolve().parent if source_path is not None else None
+    if root is None or not any(p.exists() or p.is_symlink() for p in (root/_MANIFEST,root/_LOCK)):return None
+    model=verify(root)
+    return {root/pkg['path']/name:digest for pkg in model['packages'] for name,digest in pkg['files'].items()}
+
+def read_module(path,root,verified):
+    """Compile only bytes covered by the checked lock, not a later replacement."""
+    from sedrava_syntax import MAX_SOURCE_CHARS
+    path=Path(path);root=Path(root)
+    with path.open('rb') as stream:raw=stream.read(MAX_SOURCE_CHARS*4+1)
+    if len(raw)>MAX_SOURCE_CHARS*4:raise ValueError('Module resource limit')
+    relative=path.relative_to(root)
+    if relative.parts and relative.parts[0]=='vendor':
+        if verified is None or path not in verified:raise ValueError('Vendored import is not covered by the reviewed lockfile')
+        if sha256(raw).hexdigest()!=verified[path]:raise ValueError('Vendored module changed after lock verification')
+    return raw.decode('utf-8')

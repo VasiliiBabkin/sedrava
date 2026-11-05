@@ -1,0 +1,4 @@
+module core.text
+export fn folded(value: text) -> text = text_casefold(unicode_nfc(value))
+export fn checked(value: int) -> Result<int, Error> = try_add(value, 1)
+export fn fallback(result: Result<int, Error>, value: int) -> int = result_or(result, value)

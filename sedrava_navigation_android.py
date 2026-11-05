@@ -1,6 +1,6 @@
 """Kotlin/Compose navigation adapter sharing the existing emitted domain model."""
 from dataclasses import replace
-from android_codegen_v03 import generate, kt, quoted as q
+from android_codegen_v03 import generate, kt, quoted as q, platform_persistence
 
 
 def navigation_functions(program):
@@ -49,7 +49,7 @@ def navigation_functions(program):
 
 def generate_navigation(source, output, program, application_id=None):
     target=generate(source,output,_program=replace(program,widgets=(("text",program.name),)),_domain_only=True, application_id=application_id)
-    base=target.read_text(encoding='utf-8')
+    base=target.read_text(encoding='utf-8')+'\n'.join(platform_persistence(program))+'\n'
     imports='''import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.foundation.background

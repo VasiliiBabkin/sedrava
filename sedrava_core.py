@@ -2,10 +2,12 @@
 import ast
 import keyword
 import re
-from sedrava_records import RecordType, ListType, RecordValue, ListValue, value_type, validate, operation
+from sedrava_records import RecordType, ListType, RecordValue, ListValue, value_type, validate, operation, structured
+from sedrava_sequences import ValueList,ValueListType,NAMES as VALUE_LIST_OPS
 from dataclasses import dataclass
 from sedrava_functions import FunctionType, expression_cost, signature_type
 from sedrava_stdlib import SIGNATURES
+from sedrava_results import NAMES as RESULT_NAMES
 from sedrava_queries import NAMES as QUERY_NAMES, type_query
 from sedrava_navigation import Span, Widget, Screen, Navigation, MAX_SCREENS, MAX_NAV_COMMANDS
 
@@ -121,6 +123,24 @@ class If:
     no: tuple
 
 @dataclass(frozen=True)
+class Repeat:
+    """Statically bounded, half-open repetition with a scoped int counter."""
+    name: str
+    count: int
+    body: tuple
+    start: int = 0
+    step: int = 1
+
+@dataclass(frozen=True)
+class ForEach:
+    name: str
+    index: str | None
+    collection: ast.expr
+    kind: object
+    capacity: int
+    body: tuple
+
+@dataclass(frozen=True)
 class Program:
     name: str
     states: dict
@@ -137,7 +157,7 @@ class Program:
     has_navigation: bool = False
     functions: dict = None
 
-def parse_expr(source, types):
+def parse_expr(source, types, expected=None):
     source, literals = literal_expression(source)
     try:
         node = ast.parse(source, mode="eval").body
@@ -149,6 +169,7 @@ def parse_expr(source, types):
     node = ReplaceLiterals().visit(node)
     if sum(1 for _ in ast.walk(node)) > MAX_AST_NODES:
         raise ValueError("Expression exceeds complexity limit")
+    if isinstance(node,ast.List) and isinstance(expected,ValueListType):node.literal_kind=expected
     # The signed minimum must fold in every AST position, including list-valued
     # fields (call arguments and comparison operands), before range validation.
     class SignedMinimum(ast.NodeTransformer):
@@ -167,13 +188,31 @@ def parse_expr(source, types):
         if expression_cost(node)>MAX_DERIVED_NODES:raise ValueError("Expression/function exceeds complexity limit")
     except ValueError as exc:
         unknown = next((item.id for item in ast.walk(node)
-                        if isinstance(item, ast.Name) and item.id not in types and item.id not in SIGNATURES and item.id not in QUERY_NAMES and item.id not in ('append','update','remove','get','has','count','next_id')), None)
+                        if isinstance(item, ast.Name) and item.id not in types and item.id not in SIGNATURES and item.id not in QUERY_NAMES and item.id not in RESULT_NAMES and item.id not in ('append','update','remove','get','has','count','next_id','list_at','list_slice','list_clear','list_remove_at','list_replace_at','list_index','list_identity','list_capacity','list_sort','list_sum')), None)
         if unknown is not None:
             raise ValueError(f"Unknown identifier: {unknown}") from exc
         raise
     return node
 
 def type_of(node, types):
+    if isinstance(node,ast.List) and hasattr(node,'literal_kind'):
+        kind=node.literal_kind
+        if len(node.elts)>kind.capacity or any(type_of(item,types) is not kind.element for item in node.elts):raise ValueError('Bounded list literal type/capacity mismatch')
+        return kind
+    if isinstance(node, ast.Subscript):
+        kind=type_of(node.value, types)
+        if kind is not str and not isinstance(kind, (ListType,ValueListType)):
+            raise ValueError("Indexed value must be text or a bounded record list")
+        node.subscript_kind=kind
+        if isinstance(node.slice, ast.Slice):
+            if (node.slice.lower is None or node.slice.upper is None or node.slice.step is not None
+                    or type_of(node.slice.lower,types) is not int
+                    or type_of(node.slice.upper,types) is not int):
+                raise ValueError("Slice requires explicit int start:end and no step")
+            return kind
+        if type_of(node.slice,types) is not int:
+            raise ValueError("Index must be int")
+        return str if kind is str else kind.element if isinstance(kind,ValueListType) else kind.record
     if isinstance(node, ast.Attribute):
         kind = type_of(node.value, types)
         if isinstance(kind, RecordType) and node.attr in dict(kind.fields): return dict(kind.fields)[node.attr]
@@ -193,21 +232,29 @@ def type_of(node, types):
             if any(type_of(k.value, types) != dict(kind.fields)[k.arg] for k in node.keywords): raise ValueError("Record field type mismatch")
             node.record_type = kind
             return kind
+        from sedrava_results import NAMES as RESULT_NAMES,type_result
+        if name in RESULT_NAMES:return type_result(node,types,type_of)
         if name in QUERY_NAMES:return type_query(node,types,type_of)
         if name in SIGNATURES:
             parameters,result=SIGNATURES[name]
             if node.keywords or len(node.args)!=len(parameters) or any(type_of(arg,types) is not kind for arg,kind in zip(node.args,parameters)):raise ValueError('Standard operation argument type/count mismatch')
             node.pure_builtin=name
             return result
-        if name in ('append', 'update', 'remove', 'get', 'has', 'count', 'next_id') and not node.keywords:
-            count = {'append': 2, 'update': 3, 'remove': 2, 'get': 2, 'has': 2, 'count': 1, 'next_id': 1}[name]
-            if len(node.args) != count: raise ValueError("Invalid operation arguments")
-            kind = type_of(node.args[0], types)
-            if not isinstance(kind, ListType): raise ValueError("Collection required")
-            node.collection_type = kind
-            if name in ('get', 'has', 'remove', 'update') and type_of(node.args[1], types) is not int: raise ValueError("Identity must be int")
-            if name in ('append', 'update') and type_of(node.args[-1], types) != kind.record: raise ValueError("Wrong record type")
-            return kind.record if name == 'get' else bool if name == 'has' else int if name in ('count', 'next_id') else kind
+        operations={'append':2,'update':3,'remove':2,'get':2,'has':2,'count':1,'next_id':1,'list_at':2,'list_slice':3,'list_clear':1,'list_remove_at':2,'list_replace_at':3,'list_index':2,'list_identity':2,'list_capacity':1,'list_sort':1,'list_sum':1}
+        if name in operations and not node.keywords:
+            if len(node.args)!=operations[name]:raise ValueError('Invalid operation arguments')
+            kind=type_of(node.args[0],types)
+            if not isinstance(kind,(ListType,ValueListType)):raise ValueError('Collection required')
+            vector=isinstance(kind,ValueListType);element=kind.element if vector else kind.record
+            if vector and name not in VALUE_LIST_OPS:raise ValueError('Stable record identity operation requires a record list')
+            if not vector and name in ('list_sort','list_sum'):raise ValueError('Use typed record queries for sort/sum')
+            if name=='list_sum' and element is not int:raise ValueError('Sum requires list<int>')
+            if name in ('get','has','remove','update','list_at','list_slice','list_remove_at','list_replace_at','list_identity') and type_of(node.args[1],types) is not int:raise ValueError('Identity/index must be int')
+            if name=='list_slice' and type_of(node.args[2],types) is not int:raise ValueError('Slice end must be int')
+            if name in ('append','update','list_replace_at','list_index') and type_of(node.args[-1],types)!=element:raise ValueError('Wrong list element type')
+            node.collection_type=kind
+            node.collection_cost=kind.capacity+(kind.capacity**2 if name=='list_sort' else 0)
+            return element if name in ('get','list_at') else bool if name=='has' else int if name in ('count','next_id','list_index','list_identity','list_capacity','list_sum') else kind
         raise ValueError("Unknown operation")
     if isinstance(node,ast.IfExp):
         if type_of(node.test,types) is not bool or type_of(node.body,types)!=type_of(node.orelse,types):raise ValueError('Conditional requires bool and matching branch types')
@@ -237,16 +284,39 @@ def evaluate(node, state):
     try:
         return _evaluate(node, state)
     except ValueError as exc:
+        from sedrava_source_map import LocatedError
+        if isinstance(exc,LocatedError):raise
+        if hasattr(node,'source_origin'):
+            origin=node.source_origin
+            raise LocatedError(str(exc),origin[0],origin[1],origin.column(node.source_column)) from exc
         if hasattr(node, 'source_line') and not str(exc).startswith('Line '):
             raise ValueError(f"Line {node.source_line}: column {node.source_column}: {exc}") from exc
         raise
 
 
 def _evaluate(node, state):
+    if isinstance(node,ast.List) and hasattr(node,'literal_kind'):return validate(ValueList(node.literal_kind,tuple(evaluate(item,state) for item in node.elts)))
+    if isinstance(node, ast.Subscript):
+        base=evaluate(node.value,state)
+        if isinstance(node.slice,ast.Slice):
+            start=evaluate(node.slice.lower,state)
+            end=evaluate(node.slice.upper,state)
+            if type(base) is str:
+                from sedrava_stdlib import apply
+                return apply('text_slice',[base,start,end])
+            return operation('list_slice',[base,start,end])
+        index=evaluate(node.slice,state)
+        if type(base) is str:
+            from sedrava_stdlib import apply
+            return apply('text_at',[base,index])
+        return operation('list_at',[base,index])
     if isinstance(node, ast.Attribute):
         record = evaluate(node.value, state)
         return record.values[[k for k, _ in record.kind.fields].index(node.attr)]
     if isinstance(node, ast.Call):
+        if hasattr(node,"result_operation"):
+            from sedrava_results import evaluate as result_evaluate
+            return result_evaluate(node,[evaluate(arg,state) for arg in node.args])
         if hasattr(node,"collection_query"):
             from sedrava_queries import evaluate_query
             return evaluate_query(node,state,evaluate,checked_int)
@@ -287,7 +357,7 @@ def _evaluate(node, state):
         return a >= b
     raise ValueError("Unsupported expression")
 
-def parse(source):
+def _parse(source):
     lines = source_lines(source, limit=MAX_SOURCE_CHARS)
     if lines and lines[0][1].split()[0] == 'site':
         raise ValueError(f"Line {lines[0][2]}: column 1: Site mode is Web-only; use sedrava build site")
@@ -297,6 +367,7 @@ def parse(source):
     persistent = []
     records = {}
     functions = {}
+    action_lines={}
     types = {}
     name = None
     screens, navigation = {}, {}
@@ -304,9 +375,9 @@ def parse(source):
     navigation_seen = False
     widget_spans = []
     i = 0
-    def expression(source, known_types, line_number, column=1):
+    def expression(source, known_types, line_number, column=1, expected=None):
         try:
-            node = parse_expr(source, known_types)
+            node = parse_expr(source, known_types,expected)
             node.source_line, node.source_column = line_number, column
             return node
         except ValueError as exc:
@@ -327,7 +398,20 @@ def parse(source):
         except LiteralError as exc:
             raise ValueError(f"Line {line_number}: column {column + exc.offset}: {exc}") from exc
     def statement_count(body):
-        return sum(1 + (statement_count(stmt.yes) + statement_count(stmt.no) if isinstance(stmt, If) else 0) for stmt in body)
+        total=0
+        for stmt in body:
+            if isinstance(stmt, If):
+                weight=1+max(statement_count(stmt.yes),statement_count(stmt.no))
+            elif isinstance(stmt,ForEach):
+                weight=1+stmt.capacity*statement_count(stmt.body)
+            elif isinstance(stmt, Repeat):
+                weight=1+stmt.count*statement_count(stmt.body)
+            else:
+                weight=1
+            total+=weight
+            if total>MAX_ACTION_STEPS:
+                return total
+        return total
     def block(pos, indent, nesting=0, known=None):
         known=dict(types if known is None else known)
         if nesting > MAX_BLOCK_DEPTH:
@@ -337,6 +421,34 @@ def parse(source):
             depth, line, number = lines[pos]
             if depth < indent or line == "else:": break
             if depth != indent: raise ValueError(f"Line {number}: indentation")
+            if line.startswith('for '):
+                match=re.fullmatch(r'for (?:([A-Za-z][A-Za-z0-9_]*), )?([A-Za-z][A-Za-z0-9_]*) in (.+):',line)
+                if not match:raise ValueError(f'Line {number}: invalid bounded for')
+                bindings=[name for name in match.groups()[:2] if name]
+                if len(set(bindings))!=len(bindings) or any(name in known or keyword.iskeyword(name) or name in ('true','false') for name in bindings):raise ValueError(f'Line {number}: invalid loop binding')
+                collection=expression(match[3],known,number,depth+match.start(3)+1);kind=type_of(collection,known)
+                if kind is not str and not isinstance(kind,(ListType,ValueListType)):raise ValueError(f'Line {number}: for requires bounded list or text')
+                element=str if kind is str else kind.element if isinstance(kind,ValueListType) else kind.record
+                scope={**known,match[2]:element}
+                if match[1]:scope[match[1]]=int
+                if pos+1>=len(lines) or lines[pos+1][0]<=indent:raise ValueError(f'Line {number}: empty for')
+                body,pos=block(pos+1,lines[pos+1][0],nesting+1,scope)
+                result.append(ForEach(match[2],match[1],collection,kind,1024 if kind is str else kind.capacity,tuple(body)))
+                continue
+            if line.startswith("repeat "):
+                match=re.fullmatch(r"repeat ([A-Za-z][A-Za-z0-9_]*) in range\(([-]?[0-9]{1,10}), ([-]?[0-9]{1,10})(?:, ([-]?[0-9]{1,10}))?\):",line)
+                if not match or match[1] in known or keyword.iskeyword(match[1]) or match[1] in ('true','false'):
+                    raise ValueError(f"Line {number}: invalid bounded repeat")
+                start,end,step=int(match[2]),int(match[3]),int(match[4] or 1)
+                if not all(INT_MIN<=value<=INT_MAX for value in (start,end,step)) or step==0:
+                    raise ValueError(f"Line {number}: invalid int32 range bounds/step")
+                count=len(range(start,end,step))
+                if count>100:raise ValueError(f"Line {number}: repeat exceeds 100 iterations")
+                if pos+1 >= len(lines) or lines[pos+1][0]<=indent:
+                    raise ValueError(f"Line {number}: empty repeat")
+                body,pos=block(pos+1,lines[pos+1][0],nesting+1,{**known,match[1]:int})
+                result.append(Repeat(match[1],count,tuple(body),start,step))
+                continue
             if line.startswith("if ") and line.endswith(":"):
                 condition = expression(line[3:-1], known, number, depth + 4)
                 if type_of(condition, known) is not bool: raise ValueError(f"Line {number}: condition must be bool")
@@ -359,8 +471,8 @@ def parse(source):
                 known[local[1]]=type_of(expr,known);result.append(Let(local[1],expr));pos+=1;continue
             m = re.fullmatch(r"([A-Za-z_][A-Za-z_0-9]*)\s*=\s*(.+)", line)
             if not m or m[1] not in states: raise ValueError(f"Line {number}: invalid assignment")
-            node = expression(m[2], known, number, depth + m.start(2) + 1)
-            if type_of(node, known) != types[m[1]]: raise ValueError(f"Line {number}: type mismatch")
+            node = expression(m[2], known, number, depth + m.start(2) + 1,types[m[1]])
+            if type_of(node, known) != types[m[1]]: raise ValueError(f"Line {number}: column {depth+m.start(2)+1}: type mismatch")
             result.append(Assign(m[1], node))
             pos += 1
         return tuple(result), pos
@@ -371,9 +483,10 @@ def parse(source):
             if name is not None: raise ValueError(f"Line {number}: duplicate app")
             name = label(m[1], number, 5)
         elif m := re.fullmatch(r"fn ([A-Za-z][A-Za-z0-9_]*)\((.*?)\) -> (.+?) = (.+)",line):
-            if states or actions or m[1] in types or keyword.iskeyword(m[1]) or len(functions)>=32 or m[1] in SIGNATURES or m[1] in QUERY_NAMES or m[1] in ('true','false','append','update','remove','get','has','count','next_id'):raise ValueError(f'Line {number}: invalid pure function declaration')
+            if states or actions or m[1] in types or keyword.iskeyword(m[1]) or len(functions)>=32 or m[1] in SIGNATURES or m[1] in QUERY_NAMES or m[1] in RESULT_NAMES or m[1] in ('true','false','append','update','remove','get','has','count','next_id','list_at','list_slice','list_clear','list_remove_at','list_replace_at','list_index','list_identity','list_capacity','list_sort','list_sum'):raise ValueError(f'Line {number}: invalid pure function declaration')
             params=[]
-            for param in m[2].split(',') if m[2].strip() else ():
+            from sedrava_functions import split_parameters
+            for param in split_parameters(m[2]):
                 spec=re.fullmatch(r'\s*([A-Za-z][A-Za-z0-9_]*)\s*:\s*(.+?)\s*',param)
                 if not spec or spec[1] in types or spec[1] in ('true','false') or spec[1] in dict(params) or keyword.iskeyword(spec[1]):raise ValueError(f'Line {number}: invalid function parameter')
                 try:params.append((spec[1],signature_type(spec[2],records)))
@@ -386,7 +499,7 @@ def parse(source):
             function=FunctionType(m[1],tuple(params),result_type,body,expression_cost(body))
             functions[m[1]]=function;types[m[1]]=function
         elif m := re.fullmatch(r"record ([A-Za-z_][A-Za-z_0-9]*):", line):
-            if states or actions or len(records) >= 16 or m[1] in types or keyword.iskeyword(m[1]) or m[1] in ('true','false','append','update','remove','get','has','count','next_id'): raise ValueError(f"Line {number}: column 1: invalid record declaration")
+            if states or actions or len(records) >= 16 or m[1] in types or keyword.iskeyword(m[1]) or m[1] in ('true','false','append','update','remove','get','has','count','next_id','list_at','list_slice','list_clear','list_remove_at','list_replace_at','list_index','list_identity','list_capacity','list_sort','list_sum'): raise ValueError(f"Line {number}: column 1: invalid record declaration")
             fields = []
             i += 1
             while i < len(lines) and lines[i][0] > 0:
@@ -398,11 +511,16 @@ def parse(source):
             if not 1 <= len(fields) <= 16: raise ValueError(f"Line {number}: column 1: record field limit")
             records[m[1]] = types[m[1]] = RecordType(m[1], tuple(fields))
             continue
-        elif m := re.fullmatch(r"state ([A-Za-z_][A-Za-z_0-9]*): list<([A-Za-z_][A-Za-z_0-9]*)>\(max=([0-9]+)\) = \[\]", line):
-            if actions or rules or tests or widgets or m[1] in types or keyword.iskeyword(m[1]) or m[1] in ('true','false') or m[2] not in records or not 1 <= int(m[3]) <= 100 or sum(isinstance(v, ListValue) for v in states.values()) >= 16:
-                raise ValueError(f"Line {number}: column 1: invalid collection declaration")
-            types[m[1]] = ListType(records[m[2]], int(m[3]))
-            states[m[1]] = ListValue(types[m[1]])
+        elif m := re.fullmatch(r"state ([A-Za-z_][A-Za-z_0-9]*): list<([A-Za-z_][A-Za-z_0-9]*)>\(max=([0-9]+)\) = (.+)",line):
+            element={'int':int,'bool':bool,'text':str,**records}.get(m[2])
+            if actions or rules or tests or widgets or m[1] in types or keyword.iskeyword(m[1]) or m[1] in ('true','false') or element is None or not 1<=int(m[3])<=100 or sum(isinstance(v,(ListValue,ValueList)) for v in states.values())>=16:
+                raise ValueError(f"Line {number}: invalid bounded list declaration")
+            kind=ListType(element,int(m[3])) if isinstance(element,RecordType) else ValueListType(element,int(m[3]))
+            if isinstance(kind,ListType):
+                if m[4]!='[]':raise ValueError(f"Line {number}: record lists start empty to preserve identity allocation")
+                value=ListValue(kind)
+            else:value=evaluate(expression(m[4],{},number,m.start(4)+1,kind),{})
+            types[m[1]]=kind;states[m[1]]=validate(value,kind)
         elif m := re.fullmatch(r"state ([A-Za-z_][A-Za-z_0-9]*)\s*=\s*(.+)", line):
             if actions or rules or tests or widgets: raise ValueError(f"Line {number}: states must precede actions")
             if m[1] in types: raise ValueError(f"Line {number}: duplicate state")
@@ -410,7 +528,7 @@ def parse(source):
                 raise ValueError(f"Line {number}: reserved identifier {m[1]}")
             node = expression(m[2], {}, number, m.start(2) + 1)
             try:
-                states[m[1]] = evaluate(node, {})
+                states[m[1]] = checked_value(evaluate(node, {}))
             except ValueError as exc:
                 raise ValueError(f"Line {number}: column {m.start(2) + 1}: {exc}") from exc
             types[m[1]] = type(states[m[1]])
@@ -435,6 +553,9 @@ def parse(source):
             body, i = block(i+1, lines[i+1][0])
             if statement_count(body) > MAX_ACTION_STEPS:
                 raise ValueError(f"Line {number}: action exceeds statement limit")
+            from sedrava_cost import action_work,MAX_ACTION_WORK
+            if action_work(body,derived)>MAX_ACTION_WORK:raise ValueError(f"Line {number}: action exceeds weighted work limit")
+            action_lines[m[1]]=number
             actions[m[1]] = body
             continue
         elif line.startswith("rule "):
@@ -553,10 +674,15 @@ def parse(source):
         sizes[key] = sum(sizes.get(item.id, 1) if isinstance(item, ast.Name) else 1+(item.pure_function.cost if isinstance(item,ast.Call) and hasattr(item,"pure_function") else 0)+getattr(item,"query_cost",0) for item in ast.walk(expr))
         if sizes[key] > MAX_DERIVED_NODES:
             raise ValueError("Derived expression exceeds expansion limit")
+    from sedrava_cost import action_work,MAX_ACTION_WORK
+    from sedrava_cost import base_work
+    if base_work(derived,rules)>MAX_ACTION_WORK:raise ValueError("Derived/invariant evaluation exceeds work limit")
+    for action,body in actions.items():
+        if action_work(body,derived,rules)>MAX_ACTION_WORK:raise ValueError(f"Line {action_lines[action]}: action exceeds weighted work limit")
     values = resolve(states, derived)
     if not all(evaluate(rule, values) for rule in rules): raise ValueError("Invalid initial state")
     program = Program(name, states, actions, tuple(rules), tuple(tests), tuple(widgets), derived, tuple(persistent), records, screens, navigation, initial_screen, has_navigation, functions)
-    if records or has_navigation:
+    if structured(program):
         from sedrava_records import check_resources
         try:
             check_resources(program, states)
@@ -577,7 +703,7 @@ def valid_state(program, state):
         for key, initial in program.states.items():
             validate(state[key], value_type(initial))
         values = resolve(state, program.derived)
-        if program.records or program.has_navigation:
+        if structured(program):
             from sedrava_records import check_resources
             check_resources(program, state)
         return all(evaluate(rule, values) for rule in program.rules)
@@ -593,7 +719,7 @@ def edit_state(program, state, key, value):
 
 
 def restore_state(program, saved):
-    if program.records or program.has_navigation:
+    if structured(program):
         from sedrava_records import restore_snapshot
         try: return restore_snapshot(program, saved)
         except ValueError: return program.states.copy()
@@ -611,11 +737,15 @@ def transition(program, state, action):
     if action not in program.actions: raise ValueError("Unknown action")
     if not valid_state(program, state): raise ValueError("Invalid action input state")
     candidate = state.copy()
+    from sedrava_cost import MAX_ACTION_WORK,statement_work,base_work
     steps = 0
+    work_left=MAX_ACTION_WORK-base_work(program.derived,program.rules)
     def execute(stmts, local=None):
-        nonlocal steps
+        nonlocal steps,work_left
         local=dict(local or {})
         for stmt in stmts:
+            work_left-=statement_work(stmt,program.derived)
+            if work_left<0:raise ValueError("Action exceeds execution work limit")
             steps += 1
             if steps > MAX_ACTION_STEPS:
                 raise ValueError("Action exceeds execution step limit")
@@ -627,11 +757,24 @@ def transition(program, state, action):
             elif isinstance(stmt, Assign):
                 candidate[stmt.name] = evaluate(stmt.expr, values)
                 resolve(candidate, program.derived)
-            else:
+            elif isinstance(stmt,ForEach):
+                collection=evaluate(stmt.collection,values)
+                snapshot=tuple(collection) if type(collection) is str else tuple(record for _,record in collection.items) if isinstance(collection,ListValue) else collection.items
+                for index,item in enumerate(snapshot):
+                    scope={**local,stmt.name:item}
+                    if stmt.index:scope[stmt.index]=index
+                    execute(stmt.body,scope)
+            elif isinstance(stmt, Repeat):
+                for ordinal in range(stmt.count):
+                    repeat_index=checked_int(stmt.start+ordinal*stmt.step)
+                    execute(stmt.body,{**local,stmt.name:repeat_index})
+            elif isinstance(stmt, If):
                 execute(stmt.yes if evaluate(stmt.condition, values) else stmt.no, local)
+            else:
+                raise ValueError("Unsupported action statement")
     execute(program.actions[action])
     values = resolve(candidate, program.derived)
-    if program.records or program.has_navigation:
+    if structured(program):
         from sedrava_records import check_resources
         check_resources(program, candidate)
     if not all(evaluate(rule, values) for rule in program.rules):
@@ -653,3 +796,52 @@ def run(program):
             if not accepted: raise AssertionError(f"{name}: invariant violated")
         if not evaluate(expected, resolve(state, program.derived)): raise AssertionError(f"{name}: assertion failed")
     return len(program.tests)
+
+
+def parse(source):
+    """Parse shared domain IR and retain original expression provenance."""
+    from sedrava_source_map import source_error,LocatedError
+    from dataclasses import fields,is_dataclass
+    origins=getattr(source,'origins',())
+    try:program=_parse(source)
+    except ValueError as exc:
+        mapped=source_error(exc,origins)
+        if mapped is exc:raise
+        raise mapped from exc
+    seen=set()
+    def visit(value):
+        if id(value) in seen:return
+        seen.add(id(value))
+        if isinstance(value,ast.AST):
+            if origins and hasattr(value,'source_line') and value.source_line<=len(origins):value.source_origin=origins[value.source_line-1]
+            for child in ast.iter_child_nodes(value):visit(child)
+        elif is_dataclass(value):
+            for field in fields(value):visit(getattr(value,field.name))
+        elif isinstance(value,dict):
+            for child in value.values():visit(child)
+        elif isinstance(value,(tuple,list)):
+            for child in value:visit(child)
+    visit(program)
+    # Namespaced module actions/derives may use module symbols, never ambient entry state.
+    global_values=set(program.states)|set(program.derived or {})
+    def check_expr(node):
+        callees={id(n.func) for n in ast.walk(node) if isinstance(n,ast.Call)}
+        if any(isinstance(n,ast.Name) and id(n) not in callees and n.id in global_values and not n.id.startswith('M_') for n in ast.walk(node)):
+            fail(node)
+    def fail(node):
+        message='Module declaration cannot capture entry state; import an explicit exported module state'
+        if hasattr(node,'source_origin'):
+            origin=node.source_origin;raise LocatedError(message,origin[0],origin[1],origin.column(node.source_column))
+        raise ValueError(message)
+    def check_body(body):
+        for stmt in body:
+            if isinstance(stmt,Assign) and not stmt.name.startswith('M_'):fail(stmt.expr)
+            for key in ('expr','condition','collection'):
+                if hasattr(stmt,key):check_expr(getattr(stmt,key))
+            if isinstance(stmt,If):check_body(stmt.yes);check_body(stmt.no)
+            elif isinstance(stmt,(Repeat,ForEach)):check_body(stmt.body)
+    for name,body in program.actions.items():
+        if name.startswith('M_'):check_body(body)
+    for name,node in (program.derived or {}).items():
+        if name.startswith('M_'):check_expr(node)
+    return program

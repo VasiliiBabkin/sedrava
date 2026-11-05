@@ -14,7 +14,7 @@ import re
 import tempfile
 
 from sedrava_core import parse as parse_app, run, type_of
-from sedrava_records import ListType, value_type
+from sedrava_records import ListType, value_type,structured
 from sedrava_syntax import source_lines, MAX_BLOCK_DEPTH
 from sedrava_site import (BREAKPOINTS, COMMON, COMPONENTS, THEME, Component,
                           Definition, Parameter, Property, Span, choice, fail,
@@ -85,8 +85,10 @@ UI_DYNAMIC['table']=replace(UI_DYNAMIC['list'],tag='div',parameters={**UI_DYNAMI
 
 
 def parse_webapp(source):
+    source_original=source
     from sedrava_modules import components
-    source = components(source)
+    source = components(source,getattr(source,'origins',None))
+    if isinstance(source,tuple):source=__import__('sedrava_source_map').ExpandedSource(source[0],source[1])
     from sedrava_web_assets import read_directives
     source, settings = read_directives(source)
     if any(key in settings for key in ("origin","robots","social-image")):raise ValueError("Static publishing metadata requires site mode")
@@ -137,6 +139,8 @@ def parse_webapp(source):
     head_no = lines[0][2] - 1
     raw[head_no] = re.sub(r"^(\s*)webapp\b", r"\1app", raw[head_no], count=1)
     domain = "\n".join(raw[:view_lineno - 1]) + '\nscreen main:\n    text "WebApp placeholder"\n'
+    from sedrava_source_map import ExpandedSource
+    domain=ExpandedSource(domain,getattr(source_original,'origins',())) if getattr(source_original,'origins',None) else domain
     program = parse_app(domain)
     run(program)
     if program.has_navigation:
@@ -630,7 +634,7 @@ def generate_webapp(document, source_dir=".", _inputs=None):
     if document.services:
         from sedrava_web_services import generate_services
         from sedrava_records_codegen import STRICT_JSON
-        ui_js='let remoteReady=false;\n'+('' if program.records or program.has_navigation else STRICT_JSON)+ui_js+generate_services(document.services, program)
+        ui_js='let remoteReady=false;\n'+('' if structured(program) else STRICT_JSON)+ui_js+generate_services(document.services, program)
     title = html.escape(document.name)
     index = ('<!doctype html>\n<html lang="en"><head><meta charset="utf-8">'
              '<meta name="viewport" content="width=device-width,initial-scale=1">'

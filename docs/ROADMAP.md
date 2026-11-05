@@ -16,3 +16,12 @@
 **Release discipline:** Python 3.10/3.12/3.13, actual browser and Android tests, clean-installed wheel/sdist, reproducibility, 0.10 and published RC upgrade/rollback, known limitations and explicit owner approval for exact source SHA and hashes. [0.11 RC upgrade audit](UPGRADE_AUDIT_011.md) · [EN guide](011_WEB_PLATFORM.en.md) · [RU guide](011_WEB_PLATFORM.ru.md) · [0.10 stability](STABILITY_AUDIT_010.md).
 
 The official [documentation website](https://sedrava.virtreal.ru/) is built separately with Astro/Starlight. A Sedrava-generated dev preview is separate. **Describe the application; get the application. / Опиши — получи.**
+
+### Experimental bounded core A2 (dependent on PR #50)
+
+Source-only work: typed bounded scalar lists, snapshot foreach, signed bounded
+ranges, portable work accounting, Unicode 15 normalization/folding and ephemeral
+expected Result values. Contracts and remaining limitations:
+[English](CORE_012_A2.md), [Русский](CORE_012_A2_RU.md),
+[evidence/status](CORE_012_A2_STATUS.md). These are not published stable 0.11
+features; Map/Set, persisted Results and namespace reconciliation remain separate.

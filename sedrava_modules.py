@@ -8,12 +8,14 @@ import re
 from sedrava_syntax import MAX_SOURCE_CHARS, MAX_BLOCK_DEPTH, source_lines
 
 
-def expand(source, source_path=None, _stack=(), _root=None, _files=None, *, with_origins=False):
+def expand(source, source_path=None, _stack=(), _root=None, _files=None, *, with_origins=False, _verified=None):
     source_lines(source)
-    from sedrava_source_map import locations
+    from sedrava_source_map import locations, ExpandedSource, MappedLine, origin_for, mapped_lines, replace_span
     files = set() if _files is None else _files
     source_map = locations(source, source_path)
     if not _stack and source_path is not None:
+        from sedrava_packages import verified_inputs
+        _verified=verified_inputs(source_path)
         from sedrava_packages import verify_if_project
         package_files = verify_if_project(source_path)
         if package_files:
@@ -21,7 +23,7 @@ def expand(source, source_path=None, _stack=(), _root=None, _files=None, *, with
     if not _stack:
         from sedrava_namespaces import _IMPORT, resolve_scoped
         if any(_IMPORT.fullmatch(line) for depth, line, _ in source_lines(source) if depth == 0):
-            source, namespaced_files, source_map = resolve_scoped(source, source_path, with_origins=True)
+            source, namespaced_files, source_map = resolve_scoped(source, source_path, with_origins=True, verified=_verified)
             files.update(namespaced_files)
     root = Path(source_path).resolve().parent if _root is None and source_path else _root
     output, origins = [], []
@@ -50,11 +52,12 @@ def expand(source, source_path=None, _stack=(), _root=None, _files=None, *, with
         if path.stat().st_size > MAX_SOURCE_CHARS * 4 or len(files) >= 32:
             raise ValueError(f'Line {number}: column 1: module resource limit')
         files.add(path)
-        text = path.read_text(encoding='utf-8')
+        from sedrava_packages import read_module
+        text=read_module(path,root,_verified)
         for depth, declaration, n in source_lines(text):
             if depth == 0 and not declaration.startswith(('component ', 'style ', 'import ', 'fn ', 'record ')):
                 raise ValueError(f'Line {number}: column 1: module {value}:{n} may only export components/styles/records/functions/imports')
-        expanded, _, child_origins = expand(text, path, (*_stack, path), root, files, with_origins=True)
+        expanded, _, child_origins = expand(text, path, (*_stack, path), root, files, with_origins=True,_verified=_verified)
         output.extend(expanded.splitlines())
         origins.extend(child_origins)
     joined = '\n'.join(output)
@@ -62,6 +65,7 @@ def expand(source, source_path=None, _stack=(), _root=None, _files=None, *, with
         raise ValueError('Expanded imports exceed source limit')
     if not _stack:
         joined, origins = components(joined, origins)
+    joined=ExpandedSource(joined,origins)
     return (joined, files, tuple(origins)) if with_origins else (joined, files)
 
 
@@ -74,7 +78,8 @@ def components(source, origins=None):
         raise ValueError('Source map does not match source lines')
     # Resolve definitions after imports. They are templates, never executable source.
     definitions = {}
-    lines = source.splitlines()
+    from sedrava_source_map import mapped_lines,origin_for,replace_span,ExpandedSource
+    lines = mapped_lines(source,origins)
     kept = []
     kept_origins = []
     pos = 0
@@ -142,13 +147,15 @@ def components(source, origins=None):
                     expanded_origins.extend(children_origins)
                 else:
                     # Parameters use $name outside literals; expansion yields typed literal tokens.
-                    parts = re.split(r'("(?:[^"\\]|\\.)*")', text)
-                    for j in range(0, len(parts), 2):
-                        def replace(m):
-                            if m[1] not in values: raise ValueError('Unknown component parameter '+m[1])
-                            return values[m[1]]
-                        parts[j] = re.sub(r'\$([A-Za-z][A-Za-z0-9_]*)', replace, parts[j])
-                    expanded.append(prefix+''.join(parts))
+                    edits=[];offset=0
+                    for j,part in enumerate(re.split(r'("(?:[^"\\]|\\.)*")',text)):
+                        if j%2==0:
+                            for match in re.finditer(r'\$([A-Za-z][A-Za-z0-9_]*)',part):
+                                if match[1] not in values:raise ValueError('Unknown component parameter '+match[1])
+                                edits.append((offset+match.start(),offset+match.end(),values[match[1]]))
+                        offset+=len(part)
+                    for start,end,value in reversed(edits):text=replace_span(text,start,end,value)
+                    expanded.append(prefix+text)
                     expanded_origins.append(template_origin)
             child_lines, child_locations = instantiate(expanded, expanded_origins, (*stack, name))
             result.extend(child_lines)
@@ -157,7 +164,8 @@ def components(source, origins=None):
                 raise ValueError('Expanded components exceed source limit')
         return result, result_origins
     result_lines, result_origins = instantiate(kept, kept_origins)
-    result = '\n'.join(result_lines)+'\n'
+    result_origins=[origin_for(line,origin) for line,origin in zip(result_lines,result_origins)]
+    result = ExpandedSource('\n'.join(result_lines)+'\n',result_origins)
     if len(result) > MAX_SOURCE_CHARS:
         raise ValueError('Expanded components exceed source limit')
     return (result, result_origins) if traced else result

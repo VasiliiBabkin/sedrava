@@ -156,3 +156,7 @@ The [stable 0.11.0](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.
 ## Experimental 0.12.0a1 — isolated namespace/package branch
 
 This source branch adds experimental namespaced modules with exports/aliases, original-source diagnostic file and line reporting, and deterministic offline vendored dependencies with hash-pinned lockfiles. See [alpha guide](docs/RELEASE_TRACK_012_ALPHA.md), [namespaces](docs/NAMESPACES_012_EXPERIMENTAL.md), [source provenance](docs/MODULE_PROVENANCE_012.md), and [local packages](docs/PACKAGES_012_EXPERIMENTAL.md). This alpha is **not published**, has no hosted package registry, database, trusted backend or authentication, and does not change the published stable Sedrava 0.11.0.
+Experimental bounded-core continuation (not in the published stable package):
+[English syntax and limits](docs/CORE_012_A2.md),
+[Русский справочник](docs/CORE_012_A2_RU.md),
+[actual verification status](docs/CORE_012_A2_STATUS.md).

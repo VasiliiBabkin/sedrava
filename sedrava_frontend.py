@@ -16,4 +16,5 @@ def parse_document(source, source_path=None):
         except ValueError as exc:
             raise source_error(exc, origins) from exc
     from sedrava_core import parse
+    source,_,_=expand(source,source_path,with_origins=True)
     return parse(source)

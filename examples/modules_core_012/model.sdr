@@ -1,0 +1,38 @@
+module core.model
+import "text.sdr" as words
+export record Item:
+    title: text
+export fn grow(values: list<int>(max=4)) -> list<int>(max=4) = append(values, 9)
+export state numbers: list<int>(max=4) = [3, 1, 2]
+export state rows: list<Item>(max=3) = []
+export state total = 0
+export state label = ""
+export state code = ""
+persist numbers
+persist rows
+persist total
+persist label
+persist code
+export derive size = count(numbers)
+export action scan:
+    total = 0
+    for index, value in numbers:
+        total = total + value
+        numbers = list_replace_at(numbers, index, value * 2)
+    label = words.folded("é Straße 😀")
+export action add:
+    numbers = grow(numbers)
+export action expected:
+    let outcome = words.checked(2147483647)
+    code = result_code(outcome)
+    total = words.fallback(outcome, 42)
+export action seed:
+    rows = append(rows, Item(title=label))
+export action audit:
+    rows = rows[0:1]
+    label = label[0:1]
+    repeat index in range(4, -1, -2):
+        total = total + index
+export action reject:
+    total = 99
+    total = numbers[99]

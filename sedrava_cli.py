@@ -34,6 +34,8 @@ def atomic_write_text(path, raw):
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="sedrava", description="Sedrava experimental compiler")
     parser.add_argument("--version", action="version", version=f"sedrava {VERSION}")
+    parser.add_argument("--diagnostics", choices=("text","json"), default="text",
+                        help="Error output format; JSON is a structured diagnostic on stderr")
     commands = parser.add_subparsers(dest="command", required=True)
     check = commands.add_parser("check", help="Parse and type-check an Sedrava program")
     check.add_argument("source", type=Path)
@@ -69,6 +71,7 @@ def main(argv=None):
         parser.error("--service is only supported for build web")
     if args.command == "build" and args.application_id is not None and args.target != "android":
         parser.error("--application-id is only supported for build android")
+    diagnostic_phase = "compile"
     try:
         if args.source.stat().st_size > MAX_SOURCE_CHARS * 4:
             raise ValueError("Source exceeds size limit")
@@ -107,6 +110,10 @@ def main(argv=None):
                 raise ValueError('build '+args.target+' requires a '+args.target+' document, not app')
         from sedrava_http_inline import split_app_service
         app_source, inline_service = split_app_service(source) if not source.lstrip().startswith("service ") else (source, None)
+        from sedrava_modules import expand
+        from sedrava_source_map import ExpandedSource
+        if not source.lstrip().startswith("service "):
+            app_source,_,_=expand(app_source,args.source,with_origins=True)
         if args.command == "check":
             if source.lstrip().startswith("service "):
                 from sedrava_http_display import parse_display_service as parse_service
@@ -116,6 +123,7 @@ def main(argv=None):
             print(f"OK: {args.source}")
         elif args.command == "run":
             program = parse(app_source)
+            diagnostic_phase = "execute"
             state = program.states.copy()
             if args.state_file and args.state_file.exists():
                 if args.state_file.stat().st_size > 800000: raise ValueError('Snapshot too large')
@@ -138,7 +146,9 @@ def main(argv=None):
             if program.has_navigation: result={"state":result,"stack":list(session.stack)}
             print(json.dumps(result,ensure_ascii=False,sort_keys=True))
         elif args.command == "test":
-            count = run(parse(app_source))
+            program = parse(app_source)
+            diagnostic_phase = "execute"
+            count = run(program)
             print(f"PASS: {count} Sedrava tests")
         elif args.command == "build" and args.target == "api-web":
             from sedrava_http_display import parse_display_service as parse_service
@@ -202,15 +212,17 @@ def main(argv=None):
         else:
             from android_codegen_v03 import generate
             output = args.output or Path("build/generated-android")
-            print(generate(source, output, application_id=args.application_id))
+            print(generate(app_source, output, application_id=args.application_id))
         return 0
     except (OSError, ValueError, AssertionError, RecursionError) as exc:
-        message = str(exc)
-        match = re.match(r"Line (\d+): (?:column (\d+): )?(.*)", message)
-        if match:
-            print(f"{args.source}:{match.group(1)}:{match.group(2) or 1}: error: {match.group(3)}", file=sys.stderr)
+        from sedrava_diagnostics import from_exception
+        diagnostic = from_exception(exc, args.source, args.command, phase=diagnostic_phase)
+        if args.diagnostics == "json":
+            print(json.dumps(diagnostic.as_dict(), ensure_ascii=False, sort_keys=True), file=sys.stderr)
+        elif diagnostic.line is not None:
+            print(f"{diagnostic.source}:{diagnostic.line}:{diagnostic.column or 1}: error: {diagnostic.message}", file=sys.stderr)
         else:
-            print(f"sedrava: {args.source}: {message}", file=sys.stderr)
+            print(f"sedrava: {args.source}: {diagnostic.message}", file=sys.stderr)
         return 1
 
 if __name__ == "__main__":

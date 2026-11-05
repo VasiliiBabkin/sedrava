@@ -13,11 +13,12 @@ import tokenize
 from io import StringIO
 
 from sedrava_syntax import MAX_SOURCE_CHARS, source_lines
+from sedrava_source_map import MappedLine,Origin,replace_span,origin_for,LocatedError
 
 _IDENT = r'[A-Za-z][A-Za-z0-9_]*'
 _MODULE = re.compile(rf'module ({_IDENT}(?:\.{_IDENT})*)\Z')
 _IMPORT = re.compile(rf'import "([^"\n]+\.sdr)" as ({_IDENT})\Z')
-_DECL = re.compile(rf'(export )?(component|style|record|fn) ({_IDENT})(?=[(: \t])')
+_DECL = re.compile(rf'(export )?(component|style|record|fn|state|derive|action) ({_IDENT})(?=[(: \t])')
 _RESERVED = re.compile(r'M_[0-9a-f]{12}_[A-Za-z][A-Za-z0-9_]*')
 
 
@@ -45,8 +46,10 @@ class CompiledModule:
 def _tokens(line):
     """Identifiers and dots outside quoted literals and comments."""
     try:
-        return [t for t in tokenize.generate_tokens(StringIO(line + '\n').readline)
+        tokens=[t for t in tokenize.generate_tokens(StringIO(line + '\n').readline)
                 if t.type not in (tokenize.NL, tokenize.NEWLINE, tokenize.ENDMARKER, tokenize.ENCODING)]
+        if any(t.type==tokenize.NAME and not t.string.isascii() for t in tokens):raise ValueError('Namespace identifiers must be ASCII; implicit identifier normalization is forbidden')
+        return tokens
     except (tokenize.TokenError, IndentationError) as exc:
         raise ValueError(f'Invalid lexical syntax: {exc}') from exc
 
@@ -60,6 +63,7 @@ def _rewrite(line, local=None, aliases=None, *, line_no=1, filename='<source>', 
     local = local or {}
     aliases = aliases or {}
     excluded = set(excluded)
+    line=line if isinstance(line,MappedLine) else MappedLine(line)
     toks = _tokens(line)
     ops = []
     i = 0
@@ -68,12 +72,16 @@ def _rewrite(line, local=None, aliases=None, *, line_no=1, filename='<source>', 
         if t.type != tokenize.NAME:
             i += 1
             continue
+        if i+1<len(toks) and toks[i+1].string=="=" and i>0 and toks[i-1].string in ("(",","):
+            i+=1;continue
         alias = t.string
+        if (alias in ('Result','list') and i+1<len(toks) and toks[i+1].string=='<') or (alias=='Error' and i>0 and i+1<len(toks) and toks[i-1].string==',' and toks[i+1].string=='>'):
+            i+=1;continue
         if alias in aliases and i + 2 < len(toks) and toks[i+1].string == '.' and toks[i+2].type == tokenize.NAME:
             symbol_name = toks[i+2].string
             sym = aliases[alias].visible.get(symbol_name)
             if sym is None:
-                raise ValueError(f'{filename}:{line_no}: {alias}.{symbol_name} is not an exported symbol')
+                raise LocatedError(f'{alias}.{symbol_name} is not an exported symbol',filename,line_no,t.start[1]+1)
             ops.append((t.start[1], toks[i+2].end[1], sym.emitted))
             i += 3
             continue
@@ -83,7 +91,7 @@ def _rewrite(line, local=None, aliases=None, *, line_no=1, filename='<source>', 
             ops.append((t.start[1], t.end[1], local[alias].emitted))
         i += 1
     for start, end, value in reversed(ops):
-        line = line[:start] + value + line[end:]
+        line = replace_span(line,start,end,value)
     return line
 
 
@@ -116,7 +124,7 @@ def _local_decl(line, module, path, n):
     return Symbol(module, name, kind, f'M_{digest}_{name}', bool(m[1]), path, n)
 
 
-def resolve_scoped(source, source_path, *, with_origins=False):
+def resolve_scoped(source, source_path, *, with_origins=False, verified=None):
     """Lower aliased imports while retaining legacy unqualified import support.
 
     Returns source text and checked dependency paths for manifests. Invoked
@@ -140,7 +148,8 @@ def resolve_scoped(source, source_path, *, with_origins=False):
             raise ValueError('Aliased module resource limit')
         loading.append(path)
         try:
-            text = path.read_text(encoding='utf-8')
+            from sedrava_packages import read_module
+            text=read_module(path,root,verified)
             entries = source_lines(text)
             if not entries or not (head := _MODULE.fullmatch(entries[0][1])) or entries[0][0] != 0:
                 raise ValueError(f'{path}: line 1: namespaced import requires module org.name')
@@ -148,7 +157,10 @@ def resolve_scoped(source, source_path, *, with_origins=False):
             if module_id in module_names and module_names[module_id] != path:
                 raise ValueError(f'{path}: duplicate module identity {module_id}')
             module_names[module_id] = path
-            lines = text.splitlines()
+            lines = [MappedLine(line) for line in text.splitlines()]
+            for no,raw in enumerate(lines,1):
+                if any(t.type==tokenize.NAME and _RESERVED.fullmatch(t.string) for t in _tokens(raw)):
+                    raise ValueError(f"{path}:{no}: reserved generated symbol identifier")
             symbols = {}
             aliases = {}
             nested = []
@@ -164,6 +176,7 @@ def resolve_scoped(source, source_path, *, with_origins=False):
                     aliases[alias] = load(dep)
                     nested.append(dep)
                     continue
+                if re.fullmatch(r'persist '+_IDENT,raw):continue
                 if raw.startswith('import '):
                     raise ValueError(f'{path}:{no}: namespaced modules require explicit import aliases')
                 sym = _local_decl(raw, module_id, path, no)
@@ -172,7 +185,7 @@ def resolve_scoped(source, source_path, *, with_origins=False):
                         raise ValueError(f'{path}:{no}: duplicate declaration {sym.name}')
                     symbols[sym.name] = sym
                     continue
-                raise ValueError(f'{path}:{no}: namespaces allow only module/import and fn/record/component/style declarations')
+                raise ValueError(f'{path}:{no}: namespaces allow module/import and typed declarations only')
             if not symbols:
                 raise ValueError(f'{path}: module has no declarations')
             for alias in aliases:
@@ -186,33 +199,41 @@ def resolve_scoped(source, source_path, *, with_origins=False):
                     continue
                 if not line.strip() or stripped.startswith('#'):
                     result.append(line)
-                    result_origins.append((path, no))
+                    result_origins.append(origin_for(line,(path,no)))
                     continue
                 m = _DECL.match(line) if not line.startswith(' ') else None
                 if m:
                     sym = symbols[m[3]]
-                    line = line[:m.start()] + m[2] + ' ' + sym.emitted + line[m.end():]
+                    line=replace_span(line,m.start(3),m.end(3),sym.emitted)
+                    if m[1]:line=replace_span(line,0,len('export '),'')
                     if sym.kind == 'fn':
-                        signature = re.match(r'fn \w+\(([^()]*)\)', line)
+                        signature = re.match(r'fn \w+\((.*?)\) ->', line)
                         bound = tuple(re.findall(rf'({_IDENT})\s*:', signature[1])) if signature else ()
                         if any(v in symbols or v in aliases for v in bound):
                             raise ValueError(f'{path}:{no}: function parameter conflicts with module symbol/import alias')
                         line = _rewrite(line, symbols, aliases, line_no=no, filename=str(path), excluded=bound)
-                    elif sym.kind == 'record':
-                        line = _rewrite(line, {}, aliases, line_no=no, filename=str(path))
+                    elif sym.kind in ('record','state','derive','action'):
+                        line = _rewrite(line, symbols if sym.kind!='record' else {}, aliases, line_no=no, filename=str(path))
                     result.append(line)
-                    result_origins.append((path, no))
+                    result_origins.append(origin_for(line,(path,no)))
                     continue
+                if re.fullmatch(r'persist '+_IDENT,line):
+                    result.append(_rewrite(line,symbols,aliases,line_no=no,filename=str(path)));result_origins.append(origin_for(result[-1],(path,no)));continue
                 if not line.startswith(' '):
                     raise ValueError(f'{path}:{no}: invalid top-level module construct')
-                if re.match(r'^\s*use\s+', line):
+                owner=next((symbols[m[3]] for earlier in reversed(lines[:no-1]) if (m:=_DECL.match(earlier))),None)
+                if owner and owner.kind=='action':
+                    bound=re.match(r'\s*(?:let|repeat|for) ([A-Za-z][A-Za-z0-9_]*)(?:, ([A-Za-z][A-Za-z0-9_]*))?',line)
+                    if bound and any(name in symbols or name in aliases for name in bound.groups() if name):raise ValueError(f'{path}:{no}: action binding conflicts with module symbol/import alias')
+                    line=_rewrite(line,symbols,aliases,line_no=no,filename=str(path))
+                elif re.match(r'^\s*use\s+', line):
                     line = _rewrite(line, {n:s for n,s in symbols.items() if s.kind=='component'}, aliases, line_no=no, filename=str(path))
                 elif re.search(r'\bstyle\s+(?:[A-Za-z][A-Za-z0-9_]*)(?![A-Za-z0-9_])', line):
                     line = _rewrite(line, {n:s for n,s in symbols.items() if s.kind=='style'}, aliases, line_no=no, filename=str(path))
                 elif re.match(r'^\s*\w+\s*:\s*', line):
                     line = _rewrite(line, {n:s for n,s in symbols.items() if s.kind=='record'}, aliases, line_no=no, filename=str(path))
                 result.append(line)
-                result_origins.append((path, no))
+                result_origins.append(origin_for(line,(path,no)))
             built = CompiledModule(module_id, symbols, {n:s for n,s in symbols.items() if s.public}, '\n'.join(result), tuple(nested), tuple(result_origins))
             cache[path] = built
             dependencies.add(path)
@@ -264,7 +285,8 @@ def resolve_scoped(source, source_path, *, with_origins=False):
             raise ValueError(f'{entry}:{no}: invalid namespaced import')
         else:
             out.append(_rewrite(line, aliases=aliases, filename=str(entry), line_no=no))
-            source_map.append((entry, no))
+            source_map.append(origin_for(out[-1],(entry,no)))
+    out,source_map=_schedule_domain(out,source_map,entry)
     output = '\n'.join(out) + '\n'
     if len(output) > MAX_SOURCE_CHARS:
         raise ValueError('Expanded imports exceed source limit')
@@ -272,3 +294,22 @@ def resolve_scoped(source, source_path, *, with_origins=False):
         assert len(source_map) == len(output.splitlines())
         return output, dependencies, tuple(source_map)
     return output, dependencies
+
+
+def _schedule_domain(lines,origins,entry):
+    """Hoist only imported state/derive/action blocks; entry order stays checked."""
+    pending={k:[] for k in ('state','derive','action')};kept=[];where=[];i=0
+    while i<len(lines):
+        match=re.match(r'(state|persist|derive|action) M_[0-9a-f]{12}_',lines[i])
+        if match and origins[i][0]!=entry:
+            kind='state' if match[1]=='persist' else match[1];block=[]
+            block.append((lines[i],origins[i]));i+=1
+            while i<len(lines) and (not lines[i].strip() or lines[i].startswith(' ')):
+                block.append((lines[i],origins[i]));i+=1
+            pending[kind].extend(block)
+        else:kept.append(lines[i]);where.append(origins[i]);i+=1
+    for kind,trigger in [('state',r'^(?:state|persist|derive|action|rule|test|screen|view|navigation) '),('derive',r'^(?:derive|action|rule|test|screen|view|navigation) '),('action',r'^(?:action|rule|test|screen|view|navigation) ')]:
+        if not pending[kind]:continue
+        position=next((i for i,line in enumerate(kept) if re.match(trigger,line)),len(kept))
+        kept[position:position]=[x[0] for x in pending[kind]];where[position:position]=[x[1] for x in pending[kind]]
+    return kept,where
