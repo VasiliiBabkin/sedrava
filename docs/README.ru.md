@@ -1,12 +1,12 @@
-# Sedrava — документация (0.10.0)
+# Sedrava — документация (стабильная 0.11.0)
 
-**Опубликованная версия:** [GitHub 0.10.0](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.10.0) и [PyPI](https://pypi.org/project/sedrava/0.10.0/), 31 октября 2026 года. Язык экспериментальный; это не гарантия готовности к промышленной эксплуатации.
+**Последняя стабильная:** [Sedrava 0.11.0](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0) ([PyPI](https://pypi.org/project/sedrava/0.11.0/)). Предыдущая [0.10.0](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.10.0) ([PyPI](https://pypi.org/project/sedrava/0.10.0/)) доступна. Язык остаётся экспериментальным и не сертифицирован для промышленного использования.
 
 ## Состояние выпусков
 
-Действующая стабильная версия — **0.10.0** (ссылки ниже). Экспериментальная [0.11.0rc1 опубликована на GitHub](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0rc1) и [PyPI](https://pypi.org/project/sedrava/0.11.0rc1/). Стабильная **0.11.0 ещё не опубликована**; её исходники проходят отдельную проверку, Android versionCode 11002. [Критерии выпуска](STABLE_RELEASE_GATES_011.md) · [русские заметки](RELEASE_NOTES_0_11_0.ru.md).
+Действующая стабильная **0.11.0 опубликована** ([GitHub](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0) · [PyPI](https://pypi.org/project/sedrava/0.11.0/)); Android versionCode 11002. Историческая экспериментальная [0.11.0rc1](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0rc1) ([PyPI](https://pypi.org/project/sedrava/0.11.0rc1/)) сохраняется для сравнения. [Критерии](STABLE_RELEASE_GATES_011.md) · [заметки](RELEASE_NOTES_0_11_0.ru.md).
 
-В опубликованном кандидате и готовящейся стабильной версии есть `build site`, `build webapp`, типизированные Web-компоненты, функции и ограниченный HTTP-клиент. Нет встроенного сервера, SQLite, авторизации, миграций и пакетов с пространствами имён.
+В опубликованной стабильной 0.11.0 есть `build site`, `build webapp`, типизированные Web-компоненты, функции и ограниченный HTTP-клиент. Нет встроенного сервера, SQLite, авторизации, миграций и пакетов с пространствами имён.
 
 ## Установка
 
@@ -17,7 +17,7 @@ python -m venv .venv
 # Linux/macOS:
 . .venv/bin/activate
 # Windows PowerShell: .venv\Scripts\Activate.ps1
-python -m pip install sedrava==0.10.0
+python -m pip install sedrava==0.11.0
 sedrava --version
 ```
 
@@ -56,6 +56,6 @@ python -m http.server 8000 --directory build/site
 
 ## Experimental 0.11 integration / Экспериментальная интеграция
 
-The integration preview adds shared composition, pure functions, bounded collection queries, forms/tables/dialogs, hash routes, local styling and typed public HTTP. It is not a published 0.11.0 or a backend/auth/database service.
+The integration preview adds shared composition, pure functions, bounded collection queries, forms/tables/dialogs, hash routes, local styling and typed public HTTP. It is now released in 0.11.0, but is not a generated backend/auth/database service.
 
 Реализованные возможности, сборка четырёх проектов и ограничения: [English guide](011_WEB_PLATFORM.en.md), [руководство](011_WEB_PLATFORM.ru.md), [actual status](011_IMPLEMENTATION_STATUS.md). Existing published 0.10.0 instructions above remain applicable to their original targets.
