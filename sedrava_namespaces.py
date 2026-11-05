@@ -4,16 +4,16 @@ This performs symbol-table based resolution before existing typed IR parsing.
 It never evaluates imported source. Qualified references are resolved with
 lexical tokens, not substring substitution inside strings or comments.
 """
+from collections import ChainMap
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
-import keyword
 import re
 import tokenize
 from io import StringIO
 
-from sedrava_syntax import MAX_SOURCE_CHARS, source_lines
-from sedrava_source_map import MappedLine,Origin,replace_span,origin_for,LocatedError,ExpandedSource
+from sedrava_syntax import MAX_SOURCE_CHARS, source_lines, is_reserved_identifier
+from sedrava_source_map import MappedLine,Origin,replace_span,replace_spans,origin_for,LocatedError,ExpandedSource
 
 _IDENT = r'[A-Za-z][A-Za-z0-9_]*'
 _MODULE = re.compile(rf'module ({_IDENT}(?:\.{_IDENT})*)\Z')
@@ -54,7 +54,7 @@ def _tokens(line):
         raise ValueError(f'Invalid lexical syntax: {exc}') from exc
 
 
-def _rewrite(line, local=None, aliases=None, *, line_no=1, filename='<source>', excluded=()):
+def _rewrite(line, local=None, aliases=None, *, line_no=1, filename='<source>', excluded=(), type_context=False, protected=()):
     """Resolve qualified and local identifiers using canonical Symbol objects.
 
     Changes only lexical NAME and NAME.DOT.NAME spans; the typed domain parser
@@ -63,6 +63,7 @@ def _rewrite(line, local=None, aliases=None, *, line_no=1, filename='<source>', 
     local = local or {}
     aliases = aliases or {}
     excluded = set(excluded)
+    protected = set(protected)
     line=line if isinstance(line,MappedLine) else MappedLine(line)
     try:toks = _tokens(line)
     except ValueError as exc:raise LocatedError(str(exc),filename,line_no,1) from exc
@@ -70,13 +71,13 @@ def _rewrite(line, local=None, aliases=None, *, line_no=1, filename='<source>', 
     i = 0
     while i < len(toks):
         t = toks[i]
-        if t.type != tokenize.NAME:
+        if t.type != tokenize.NAME or t.start[1] in protected:
             i += 1
             continue
         if i+1<len(toks) and toks[i+1].string=="=" and i>0 and toks[i-1].string in ("(",","):
             i+=1;continue
         alias = t.string
-        if (alias in ('Result','list') and i+1<len(toks) and toks[i+1].string=='<') or (alias=='Error' and i>0 and i+1<len(toks) and toks[i-1].string==',' and toks[i+1].string=='>'):
+        if type_context and ((alias in ('Result','list') and i+1<len(toks) and toks[i+1].string=='<') or (alias=='Error' and i>0 and i+1<len(toks) and toks[i-1].string==',' and toks[i+1].string=='>')):
             i+=1;continue
         if alias in aliases and i + 2 < len(toks) and toks[i+1].string == '.' and toks[i+2].type == tokenize.NAME:
             symbol_name = toks[i+2].string
@@ -91,9 +92,9 @@ def _rewrite(line, local=None, aliases=None, *, line_no=1, filename='<source>', 
         elif alias in local and alias not in excluded and (i == 0 or toks[i-1].string != '.'):
             ops.append((t.start[1], t.end[1], local[alias].emitted))
         i += 1
-    for start, end, value in reversed(ops):
-        line = replace_span(line,start,end,value)
-    return line
+    if len(line)+sum(len(value)-(end-start) for start,end,value in ops)>MAX_SOURCE_CHARS:
+        raise LocatedError("Expanded module source resource limit",*origin_for(line,(filename,line_no)).point(1))
+    return replace_spans(line,ops)
 
 
 def _valid_import(source_path, value, root, line):
@@ -114,15 +115,129 @@ def _valid_import(source_path, value, root, line):
     return path
 
 
+def _replace_regions(line, regions):
+    for start, end, replacement in sorted(regions, key=lambda item:item[0], reverse=True):
+        line = line[:start] + replacement + line[end:]
+    return line
+
+
+def _lower_function(line, symbols, aliases, module, name, path, number):
+    from sedrava_functions import FUNCTION_DECLARATION, PARAMETER_DECLARATION, split_parameters, MAX_FUNCTION_PARAMETERS
+    declaration = FUNCTION_DECLARATION.fullmatch(line)
+    if not declaration:
+        return line  # The common parser diagnoses malformed declarations.
+    parameters, regions, cursor = {}, [], declaration.start(2)
+    records = {key:value for key,value in symbols.items() if value.kind=='record'}
+    try:
+        parameter_sources=split_parameters(declaration[2])
+    except ValueError as exc:
+        raise LocatedError(str(exc),*origin_for(line,(path,number)).point(declaration.start(2)+1)) from exc
+    if len(parameter_sources)>MAX_FUNCTION_PARAMETERS:
+        raise LocatedError("function parameter resource limit",*origin_for(line,(path,number)).point(declaration.start(2)+1))
+    for raw in parameter_sources:
+        start = line.find(raw, cursor)
+        cursor = start + len(raw) + 1
+        parameter = PARAMETER_DECLARATION.fullmatch(raw)
+        if not parameter:
+            return line
+        key = parameter[1]
+        position = origin_for(line,(path,number)).point(start+parameter.start(1)+1)
+        if is_reserved_identifier(key):
+            raise LocatedError('reserved function parameter '+key,*position)
+        if key in symbols or key in aliases:
+            raise LocatedError('function parameter conflicts with module symbol/import alias',*position)
+        binding = Symbol(module,key,'binding','L_'+sha256((module+':'+name).encode()).hexdigest()[:12]+'_'+key,False,path,number)
+        parameters[key] = binding
+        first, last = start+parameter.start(1), start+parameter.end(1)
+        regions.append((first,last,replace_span(line[first:last],0,last-first,binding.emitted)))
+        first, last = start+parameter.start(2), start+parameter.end(2)
+        regions.append((first,last,_rewrite(line[first:last],records,aliases,line_no=number,filename=str(path),type_context=True)))
+    for group, local, typed in [(3,records,True),(4,{**symbols,**parameters},False)]:
+        first,last = declaration.start(group),declaration.end(group)
+        regions.append((first,last,_rewrite(line[first:last],local,aliases,line_no=number,filename=str(path),type_context=typed)))
+    return _replace_regions(line,regions)
+
+
+def _lower_value_declaration(line, symbols, aliases, path, number):
+    depth = 0
+    equal = None
+    for token in _tokens(line):
+        if token.string in ('(','[','<'):depth+=1
+        elif token.string in (')',']','>'):depth-=1
+        elif token.string=='=' and depth==0:
+            equal=token.start[1]
+            break
+    if equal is None:
+        return line
+    regions = [(equal+1,len(line),_rewrite(line[equal+1:],symbols,aliases,line_no=number,filename=str(path)))]
+    colon = line.find(':',0,equal)
+    if colon>=0:
+        records={key:value for key,value in symbols.items() if value.kind=='record'}
+        regions.append((colon+1,equal,_rewrite(line[colon+1:equal],records,aliases,line_no=number,filename=str(path),type_context=True)))
+    return _replace_regions(line,regions)
+
+
+def _lower_action_line(line, symbols, aliases, scopes, module, action, path, number):
+    depth=len(line)-len(line.lstrip(' '))
+    while len(scopes)>1 and scopes[-1][0]>depth:scopes.pop()
+    if scopes[-1][0]<depth:scopes.append((depth,{}))
+    bound=re.match(r'\s*(let|repeat|for) ([A-Za-z][A-Za-z0-9_]*)(?:, ([A-Za-z][A-Za-z0-9_]*))?',line)
+    fresh={}
+    if bound:
+        names=[key for key in bound.groups()[1:] if key]
+        for group in (2,3):
+            if bound[group] and is_reserved_identifier(bound[group]):
+                raise LocatedError('reserved action binding '+bound[group],*origin_for(line,(path,number)).point(bound.start(group)+1))
+        if any(key in symbols or key in aliases for key in names):
+            raise LocatedError('action binding conflicts with module symbol/import alias',path,number,1)
+        fresh={key:Symbol(module,key,'binding','L_'+sha256((module+':'+action).encode()).hexdigest()[:12]+'_'+key,False,path,number) for key in names}
+    # Statement keywords are syntax; the same words remain usable in expressions.
+    protected=set()
+    head=re.match(r'\s*([A-Za-z][A-Za-z0-9_]*)',line)
+    assignment=re.match(r'\s*[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)?\s*=(?!=)',line)
+    if head and not assignment:
+        protected.add(head.start(1))
+        if head[1]=='repeat':
+            constructor=re.match(r'\s*repeat [A-Za-z][A-Za-z0-9_]* in (range)\(',line)
+            if constructor:protected.add(constructor.start(1))
+    lowered=_rewrite(line,ChainMap(fresh,*(scope for _,scope in reversed(scopes)),symbols),aliases,line_no=number,filename=str(path),protected=protected)
+    if bound:
+        if bound[1]=='let':scopes[-1][1].update(fresh)
+        else:scopes.append((depth+4,fresh))
+    return lowered
+
+
 def _local_decl(line, module, path, n):
     m = _DECL.match(line)
     if not m:
         return None
     _, kind, name = m.groups()
-    if keyword.iskeyword(name) or name.startswith(('M_','L_')):
-        raise ValueError(f'{path}:{n}: reserved declaration name {name}')
+    if is_reserved_identifier(name) or name.startswith(('M_','L_')):
+        raise LocatedError(f'reserved declaration name {name}',path,n,m.start(3)+1)
     digest = sha256(module.encode('utf-8')).hexdigest()[:12]
     return Symbol(module, name, kind, f'M_{digest}_{name}', bool(m[1]), path, n)
+
+
+def _check_entry_binders(line, aliases, path, number):
+    from sedrava_functions import FUNCTION_DECLARATION, PARAMETER_DECLARATION, split_parameters
+    function=FUNCTION_DECLARATION.fullmatch(line)
+    if function:
+        try:parameters=split_parameters(function[2])
+        except ValueError:return  # Common parser retains responsibility for syntax.
+        cursor=function.start(2)
+        for raw in parameters:
+            start=line.find(raw,cursor);cursor=start+len(raw)+1
+            parameter=PARAMETER_DECLARATION.fullmatch(raw)
+            if parameter and parameter[1] in aliases:
+                raise LocatedError('function parameter conflicts with import alias',*origin_for(line,(path,number)).point(start+parameter.start(1)+1))
+    offset=0
+    action=re.match(r'action [A-Za-z][A-Za-z0-9_]*:\s*',line)
+    if action:offset=action.end()
+    bound=re.match(r'\s*(let|repeat|for) ([A-Za-z][A-Za-z0-9_]*)(?:, ([A-Za-z][A-Za-z0-9_]*))?',line[offset:])
+    if bound:
+        for group in (2,3):
+            if bound[group] in aliases:
+                raise LocatedError('action binding conflicts with import alias',*origin_for(line,(path,number)).point(offset+bound.start(group)+1))
 
 
 def resolve_scoped(source, source_path, *, with_origins=False, verified=None):
@@ -179,8 +294,8 @@ def resolve_scoped(source, source_path, *, with_origins=False, verified=None):
                 import_match = _IMPORT.fullmatch(raw)
                 if import_match:
                     value, alias = import_match.groups()
-                    if alias in aliases or keyword.iskeyword(alias):
-                        raise LocatedError(f'duplicate/reserved import alias {alias}',path,no,1)
+                    if alias in aliases or is_reserved_identifier(alias):
+                        raise LocatedError(f'duplicate/reserved import alias {alias}',path,no,import_match.start(2)+1)
                     dep = _valid_import(path, value, root, no)
                     aliases[alias] = load(dep,(path,no))
                     nested.append(dep)
@@ -203,6 +318,7 @@ def resolve_scoped(source, source_path, *, with_origins=False, verified=None):
             result = []
             result_origins = []
             action_scopes=[]
+            owner=None
             for no, line in enumerate(lines, 1):
                 stripped = line.strip()
                 if no == entries[0][2] or (not line.startswith(' ') and _IMPORT.fullmatch(stripped)):
@@ -214,48 +330,47 @@ def resolve_scoped(source, source_path, *, with_origins=False, verified=None):
                 m = _DECL.match(line) if not line.startswith(' ') else None
                 if m:
                     sym = symbols[m[3]]
+                    owner = sym
                     line=replace_span(line,m.start(3),m.end(3),sym.emitted)
                     if m[1]:line=replace_span(line,0,len('export '),'')
                     if sym.kind == 'fn':
-                        signature = re.match(r'fn \w+\((.*?)\) ->', line)
-                        bound = tuple(re.findall(rf'({_IDENT})\s*:', signature[1])) if signature else ()
-                        if any(v in symbols or v in aliases for v in bound):
-                            raise LocatedError(f'function parameter conflicts with module symbol/import alias',path,no,1)
-                        parameters={name:Symbol(module_id,name,'binding','L_'+sha256((module_id+':'+sym.name).encode()).hexdigest()[:12]+'_'+name,False,path,no) for name in bound}
-                        line = _rewrite(line, {**symbols,**parameters}, aliases, line_no=no, filename=str(path))
-                    elif sym.kind in ('record','state','derive','action'):
-                        if sym.kind=='action':action_scopes=[(4,{})]
-                        line = _rewrite(line, symbols if sym.kind!='record' else {}, aliases, line_no=no, filename=str(path))
+                        line = _lower_function(line, symbols, aliases, module_id, sym.name, path, no)
+                    elif sym.kind in ('state','derive'):
+                        line = _lower_value_declaration(line, symbols, aliases, path, no)
+                    elif sym.kind=='action':
+                        action_scopes=[(4,{})]
+                        colon=line.index(':')
+                        if line[colon+1:].strip():
+                            result.append(line[:colon+1])
+                            result_origins.append(origin_for(result[-1],(path,no)))
+                            begin=colon+1
+                            while begin<len(line) and line[begin]==' ':begin+=1
+                            line=_lower_action_line('    '+line[begin:],symbols,aliases,action_scopes,module_id,sym.name,path,no)
                     result.append(line)
                     result_origins.append(origin_for(line,(path,no)))
                     continue
                 if re.fullmatch(r'persist '+_IDENT,line) or line.startswith('rule '):
-                    result.append(_rewrite(line,symbols,aliases,line_no=no,filename=str(path)));result_origins.append(origin_for(result[-1],(path,no)));continue
+                    prefix=line.index(' ')+1
+                    result.append(line[:prefix]+_rewrite(line[prefix:],symbols,aliases,line_no=no,filename=str(path)));result_origins.append(origin_for(result[-1],(path,no)));continue
                 if not line.startswith(' '):
                     raise LocatedError(f'invalid top-level module construct',path,no,1)
-                owner=next((symbols[m[3]] for earlier in reversed(lines[:no-1]) if (m:=_DECL.match(earlier))),None)
+                if owner and owner.kind=='record':
+                    colon=line.find(':')
+                    if colon>=0:
+                        records={key:value for key,value in symbols.items() if value.kind=='record'}
+                        line=line[:colon+1]+_rewrite(line[colon+1:],records,aliases,line_no=no,filename=str(path),type_context=True)
+                    result.append(line)
+                    result_origins.append(origin_for(line,(path,no)))
+                    continue
                 if owner and owner.kind=='action':
-                    depth=len(line)-len(line.lstrip(' '))
-                    while len(action_scopes)>1 and action_scopes[-1][0]>depth:action_scopes.pop()
-                    if action_scopes[-1][0]<depth:action_scopes.append((depth,{}))
-                    visible={name:value for _,scope in action_scopes for name,value in scope.items()}
-                    bound=re.match(r'\s*(let|repeat|for) ([A-Za-z][A-Za-z0-9_]*)(?:, ([A-Za-z][A-Za-z0-9_]*))?',line)
-                    fresh={}
-                    if bound:
-                        names=[name for name in bound.groups()[1:] if name]
-                        if any(name in symbols or name in aliases for name in names):raise LocatedError(f'action binding conflicts with module symbol/import alias',path,no,1)
-                        fresh={name:Symbol(module_id,name,'binding','L_'+sha256((module_id+':'+owner.name).encode()).hexdigest()[:12]+'_'+name,False,path,no) for name in names}
-                    line=_rewrite(line,{**symbols,**visible,**fresh},aliases,line_no=no,filename=str(path))
-                    if bound:
-                        if bound[1]=='let':action_scopes[-1][1].update(fresh)
-                        else:action_scopes.append((depth+4,fresh))
+                    line=_lower_action_line(line,symbols,aliases,action_scopes,module_id,owner.name,path,no)
                 elif re.match(r'^\s*use\s+', line):
                     line = _rewrite(line, {n:s for n,s in symbols.items() if s.kind=='component'}, aliases, line_no=no, filename=str(path))
                 elif re.search(r'\bstyle\s+(?:[A-Za-z][A-Za-z0-9_]*)(?![A-Za-z0-9_])', line):
                     line = _rewrite(line, {n:s for n,s in symbols.items() if s.kind=='style'}, aliases, line_no=no, filename=str(path))
                 elif re.match(r'^\s*\w+\s*:\s*', line):
                     colon=line.index(':')
-                    line=line[:colon+1]+_rewrite(line[colon+1:], {n:s for n,s in symbols.items() if s.kind=='record'}, aliases, line_no=no, filename=str(path))
+                    line=line[:colon+1]+_rewrite(line[colon+1:], {n:s for n,s in symbols.items() if s.kind=='record'}, aliases, line_no=no, filename=str(path),type_context=True)
                 line=_rewrite(line,{},aliases,line_no=no,filename=str(path))
                 if owner and owner.kind=='component':line=_rewrite_ui_references(line,symbols)
                 result.append(line)
@@ -275,8 +390,8 @@ def resolve_scoped(source, source_path, *, with_origins=False, verified=None):
         if not m:
             continue
         value, alias = m.groups()
-        if alias in aliases or keyword.iskeyword(alias):
-            raise LocatedError(f'duplicate/reserved import alias {alias}',entry,no,1)
+        if alias in aliases or is_reserved_identifier(alias):
+            raise LocatedError(f'duplicate/reserved import alias {alias}',entry,no,m.start(2)+1)
         path = _valid_import(entry, value, root, no)
         aliases[alias] = load(path,(entry,no))
     if not aliases:
@@ -310,6 +425,7 @@ def resolve_scoped(source, source_path, *, with_origins=False, verified=None):
         elif line.startswith('import "') and ' as ' in line and not m:
             raise LocatedError(f'invalid namespaced import',entry,no,1)
         else:
+            _check_entry_binders(line,aliases,entry,no)
             out.append(_rewrite(line, aliases=aliases, filename=str(entry), line_no=no))
             source_map.append(origin_for(out[-1],(entry,no)))
     out,source_map=_schedule_domain(out,source_map,entry)

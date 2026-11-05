@@ -32,6 +32,22 @@ class MappedLine(str):
 def replace_span(line,start,end,value,position=None):
     line=line if isinstance(line,MappedLine) else MappedLine(line)
     return MappedLine(str(line[:start])+value+str(line[end:]),line.columns[:start]+(line.columns[start],)*len(value)+line.columns[end:],line.positions[:start]+((position if position is not None else line.positions[start]),)*len(value)+line.positions[end:])
+def replace_spans(line,spans):
+    """Apply disjoint lexical replacements in one pass, retaining character origins."""
+    line=line if isinstance(line,MappedLine) else MappedLine(line)
+    if not spans:return line
+    raw=str(line)
+    text,columns,positions=[],[],[]
+    cursor=0
+    for start,end,value in sorted(spans):
+        if not cursor<=start<=end<=len(line):raise ValueError('Overlapping source replacements')
+        text.extend((raw[cursor:start],value))
+        columns.extend(line.columns[cursor:start]);columns.extend([line.columns[start]]*len(value))
+        positions.extend(line.positions[cursor:start]);positions.extend([line.positions[start]]*len(value))
+        cursor=end
+    text.append(raw[cursor:])
+    columns.extend(line.columns[cursor:]);positions.extend(line.positions[cursor:])
+    return MappedLine(''.join(text),columns,positions)
 def origin_for(line,origin):return Origin(*origin,getattr(line,'columns',getattr(origin,'columns',None)),getattr(line,'positions',getattr(origin,'positions',None)))
 class ExpandedSource(str):
     def __new__(cls,text,origins,template=None):

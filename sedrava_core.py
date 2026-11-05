@@ -1,17 +1,16 @@
 """Sedrava shared text/int32/bool core: restricted typed AST, interpreter and atomic transitions."""
 import ast
-import keyword
 import re
 from sedrava_records import RecordType, ListType, RecordValue, ListValue, value_type, validate, operation, structured
 from sedrava_sequences import ValueList,ValueListType,NAMES as VALUE_LIST_OPS
 from dataclasses import dataclass
-from sedrava_functions import FunctionType, expression_cost, signature_type
+from sedrava_functions import FunctionType, expression_cost, signature_type, FUNCTION_DECLARATION, PARAMETER_DECLARATION, MAX_FUNCTION_PARAMETERS
 from sedrava_stdlib import SIGNATURES
 from sedrava_results import NAMES as RESULT_NAMES
 from sedrava_queries import NAMES as QUERY_NAMES, type_query
 from sedrava_navigation import Span, Widget, Screen, Navigation, MAX_SCREENS, MAX_NAV_COMMANDS
 
-from sedrava_syntax import MAX_SOURCE_CHARS, source_lines
+from sedrava_syntax import MAX_SOURCE_CHARS, source_lines, is_reserved_identifier
 MAX_TEXT_SCALARS = 1024
 MAX_AST_NODES = 256
 MAX_ACTION_STEPS = 10_000
@@ -430,7 +429,7 @@ def _parse(source):
                 match=re.fullmatch(r'for (?:([A-Za-z][A-Za-z0-9_]*), )?([A-Za-z][A-Za-z0-9_]*) in (.+):',line)
                 if not match:raise ValueError(f'Line {number}: invalid bounded for')
                 bindings=[name for name in match.groups()[:2] if name]
-                if len(set(bindings))!=len(bindings) or any(name in known or keyword.iskeyword(name) or name in ('true','false') for name in bindings):raise ValueError(f'Line {number}: invalid loop binding')
+                if len(set(bindings))!=len(bindings) or any(name in known or is_reserved_identifier(name) for name in bindings):raise ValueError(f'Line {number}: invalid loop binding')
                 collection=expression(match[3],known,number,depth+match.start(3)+1);kind=type_of(collection,known)
                 if kind is not str and not isinstance(kind,(ListType,ValueListType)):raise ValueError(f'Line {number}: for requires bounded list or text')
                 element=str if kind is str else kind.element if isinstance(kind,ValueListType) else kind.record
@@ -442,7 +441,7 @@ def _parse(source):
                 continue
             if line.startswith("repeat "):
                 match=re.fullmatch(r"repeat ([A-Za-z][A-Za-z0-9_]*) in range\(([-]?[0-9]{1,10}), ([-]?[0-9]{1,10})(?:, ([-]?[0-9]{1,10}))?\):",line)
-                if not match or match[1] in known or keyword.iskeyword(match[1]) or match[1] in ('true','false'):
+                if not match or match[1] in known or is_reserved_identifier(match[1]):
                     raise ValueError(f"Line {number}: invalid bounded repeat")
                 start,end,step=int(match[2]),int(match[3]),int(match[4] or 1)
                 if not all(INT_MIN<=value<=INT_MAX for value in (start,end,step)) or step==0:
@@ -471,7 +470,7 @@ def _parse(source):
                 if type_of(node, known) is not bool: raise ValueError(f"Line {number}: column {depth+9}: require must be bool")
                 result.append(Require(node)); pos += 1; continue
             if local := re.fullmatch(r'let ([A-Za-z][A-Za-z0-9_]*)\s*=\s*(.+)',line):
-                if local[1] in known or local[1] in ('true','false') or keyword.iskeyword(local[1]):raise ValueError(f'Line {number}: duplicate/reserved local')
+                if local[1] in known or is_reserved_identifier(local[1]):raise ValueError(f'Line {number}: duplicate/reserved local')
                 expr=expression(local[2],known,number,depth+local.start(2)+1)
                 known[local[1]]=type_of(expr,known);result.append(Let(local[1],expr));pos+=1;continue
             m = re.fullmatch(r"([A-Za-z_][A-Za-z_0-9]*)\s*=\s*(.+)", line)
@@ -487,16 +486,16 @@ def _parse(source):
         if m := re.fullmatch(r'app (.+)', line):
             if name is not None: raise ValueError(f"Line {number}: duplicate app")
             name = label(m[1], number, 5)
-        elif m := re.fullmatch(r"fn ([A-Za-z][A-Za-z0-9_]*)\((.*?)\) -> (.+?) = (.+)",line):
-            if states or actions or m[1] in types or keyword.iskeyword(m[1]) or len(functions)>=32 or m[1] in SIGNATURES or m[1] in QUERY_NAMES or m[1] in RESULT_NAMES or m[1] in ('true','false','append','update','remove','get','has','count','next_id','list_at','list_slice','list_clear','list_remove_at','list_replace_at','list_index','list_identity','list_capacity','list_sort','list_sum'):raise ValueError(f'Line {number}: invalid pure function declaration')
+        elif m := FUNCTION_DECLARATION.fullmatch(line):
+            if states or actions or m[1] in types or is_reserved_identifier(m[1]) or len(functions)>=32 or m[1] in SIGNATURES or m[1] in QUERY_NAMES or m[1] in RESULT_NAMES or m[1] in ('append','update','remove','get','has','count','next_id','list_at','list_slice','list_clear','list_remove_at','list_replace_at','list_index','list_identity','list_capacity','list_sort','list_sum'):raise ValueError(f'Line {number}: invalid pure function declaration')
             params=[]
             from sedrava_functions import split_parameters
             for param in split_parameters(m[2]):
-                spec=re.fullmatch(r'\s*([A-Za-z][A-Za-z0-9_]*)\s*:\s*(.+?)\s*',param)
-                if not spec or spec[1] in types or spec[1] in ('true','false') or spec[1] in dict(params) or keyword.iskeyword(spec[1]):raise ValueError(f'Line {number}: invalid function parameter')
+                spec=PARAMETER_DECLARATION.fullmatch(param)
+                if not spec or spec[1] in types or spec[1] in dict(params) or is_reserved_identifier(spec[1]):raise ValueError(f'Line {number}: invalid function parameter')
                 try:params.append((spec[1],signature_type(spec[2],records)))
                 except ValueError as exc:raise ValueError(f'Line {number}: invalid function parameter type') from exc
-            if len(params)>8:raise ValueError(f'Line {number}: invalid function signature')
+            if len(params)>MAX_FUNCTION_PARAMETERS:raise ValueError(f'Line {number}: invalid function signature')
             try:result_type=signature_type(m[3],records)
             except ValueError as exc:raise ValueError(f'Line {number}: invalid function return type') from exc
             body=expression(m[4],{**records,**functions,**dict(params)},number,m.start(4)+1)
@@ -504,13 +503,13 @@ def _parse(source):
             function=FunctionType(m[1],tuple(params),result_type,body,expression_cost(body))
             functions[m[1]]=function;types[m[1]]=function
         elif m := re.fullmatch(r"record ([A-Za-z_][A-Za-z_0-9]*):", line):
-            if states or actions or len(records) >= 16 or m[1] in types or keyword.iskeyword(m[1]) or m[1] in ('true','false','append','update','remove','get','has','count','next_id','list_at','list_slice','list_clear','list_remove_at','list_replace_at','list_index','list_identity','list_capacity','list_sort','list_sum'): raise ValueError(f"Line {number}: column 1: invalid record declaration")
+            if states or actions or len(records) >= 16 or m[1] in types or is_reserved_identifier(m[1]) or m[1] in ('append','update','remove','get','has','count','next_id','list_at','list_slice','list_clear','list_remove_at','list_replace_at','list_index','list_identity','list_capacity','list_sort','list_sum'): raise ValueError(f"Line {number}: column 1: invalid record declaration")
             fields = []
             i += 1
             while i < len(lines) and lines[i][0] > 0:
                 d, field, n = lines[i]
                 f = re.fullmatch(r"([A-Za-z_][A-Za-z_0-9]*): (int|bool|text)", field)
-                if not f or d != 4 or f[1] in ('id', 'true', 'false') or keyword.iskeyword(f[1]) or f[1] in dict(fields): raise ValueError(f"Line {n}: column {d+1}: invalid record field")
+                if not f or d != 4 or f[1] == 'id' or is_reserved_identifier(f[1]) or f[1] in dict(fields): raise ValueError(f"Line {n}: column {d+1}: invalid record field")
                 fields.append((f[1], {'int': int, 'bool': bool, 'text': str}[f[2]]))
                 i += 1
             if not 1 <= len(fields) <= 16: raise ValueError(f"Line {number}: column 1: record field limit")
@@ -518,7 +517,7 @@ def _parse(source):
             continue
         elif m := re.fullmatch(r"state ([A-Za-z_][A-Za-z_0-9]*): list<([A-Za-z_][A-Za-z_0-9]*)>\(max=([0-9]+)\) = (.+)",line):
             element={'int':int,'bool':bool,'text':str,**records}.get(m[2])
-            if actions or rules or tests or widgets or m[1] in types or keyword.iskeyword(m[1]) or m[1] in ('true','false') or element is None or not 1<=int(m[3])<=100 or sum(isinstance(v,(ListValue,ValueList)) for v in states.values())>=16:
+            if actions or rules or tests or widgets or m[1] in types or is_reserved_identifier(m[1]) or element is None or not 1<=int(m[3])<=100 or sum(isinstance(v,(ListValue,ValueList)) for v in states.values())>=16:
                 raise ValueError(f"Line {number}: invalid bounded list declaration")
             kind=ListType(element,int(m[3])) if isinstance(element,RecordType) else ValueListType(element,int(m[3]))
             if isinstance(kind,ListType):
@@ -529,7 +528,7 @@ def _parse(source):
         elif m := re.fullmatch(r"state ([A-Za-z_][A-Za-z_0-9]*)\s*=\s*(.+)", line):
             if actions or rules or tests or widgets: raise ValueError(f"Line {number}: states must precede actions")
             if m[1] in types: raise ValueError(f"Line {number}: duplicate state")
-            if keyword.iskeyword(m[1]) or m[1] in ("true", "false"):
+            if is_reserved_identifier(m[1]):
                 raise ValueError(f"Line {number}: reserved identifier {m[1]}")
             node = expression(m[2], {}, number, m.start(2) + 1)
             try:
@@ -547,7 +546,7 @@ def _parse(source):
             if m[1] in types:
                 raise ValueError(f"Line {number}: duplicate identifier")
             node = expression(m[2], types, number, m.start(2) + 1)
-            if keyword.iskeyword(m[1]) or m[1] in ("true", "false"):
+            if is_reserved_identifier(m[1]):
                 raise ValueError(f"Line {number}: reserved identifier {m[1]}")
             derived[m[1]] = node
             types[m[1]] = type_of(node, types)
@@ -639,9 +638,9 @@ def _parse(source):
         if screens[initial_screen].guard is not None: raise ValueError(f"Line {screens[initial_screen].span.line}: column 1: initial screen must be unguarded")
         def fail_at(span,message): raise ValueError(f"Line {span.line}: column {span.column}: {message}")
         for screen in screens.values():
-            if len(screen.name)>64 or screen.name in ('pop','true','false') or keyword.iskeyword(screen.name) or screen.name in types or screen.name in actions: fail_at(screen.span,"screen name conflict or invalid identifier")
+            if len(screen.name)>64 or screen.name == 'pop' or is_reserved_identifier(screen.name) or screen.name in types or screen.name in actions: fail_at(screen.span,"screen name conflict or invalid identifier")
         for binding in navigation.values():
-            if len(binding.name)>64 or binding.name in ('true','false') or keyword.iskeyword(binding.name) or binding.name in types or binding.name in actions or binding.name in screens: fail_at(binding.span,"navigation name conflict")
+            if len(binding.name)>64 or is_reserved_identifier(binding.name) or binding.name in types or binding.name in actions or binding.name in screens: fail_at(binding.span,"navigation name conflict")
             if binding.target!='pop' and binding.target not in screens: fail_at(binding.span,"unknown target screen "+binding.target)
             if binding.action and binding.action not in actions: fail_at(binding.span,"unknown domain action "+binding.action)
         used=set(); graph={key:set() for key in screens}

@@ -1,6 +1,11 @@
 """Pure call-by-value expression functions. No host-language execution or closures."""
 import ast
+import re
 from dataclasses import dataclass
+
+MAX_FUNCTION_PARAMETERS = 8
+FUNCTION_DECLARATION = re.compile(r"fn ([A-Za-z][A-Za-z0-9_]*)\((.*?)\) -> (.+?) = (.+)")
+PARAMETER_DECLARATION = re.compile(r"\s*([A-Za-z][A-Za-z0-9_]*)\s*:\s*(.+?)\s*")
 
 @dataclass(frozen=True)
 class FunctionType:

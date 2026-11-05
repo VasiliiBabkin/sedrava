@@ -129,3 +129,22 @@ resource-limit correction; final SHA/CI must advance and rerun. Previous exact-h
 CI had 21/23 successful runs; two WebKit installers were still fetching slow Ubuntu
 packages, not failing application assertions. Their success is not evidence for
 the subsequent source change. Current evidence remains in draft PR #52.
+
+## Original-binder and typed-region audit
+
+Reproduction showed invalid module declarations/binders such as state true, a
+false/class function parameter and let class could be accepted after hygiene hid
+the original reserved word. The common lexical validator now runs before lowering
+(and remains shared with the core). A related valid-program defect required a
+structural correction: value binders named int/text/list/Result must not rewrite
+type annotations or statement keywords. Function and parameter grammar/limits are
+shared; only typed/value/name regions are lowered. Inline action locals use the
+same hygienic path as block actions, preserving original expression columns. Entry
+locals cannot shadow explicit aliases; record labels are not qualified references.
+
+Added real Python/JS/Kotlin traces for these contextual identifiers, negative
+reserved-binder/alias/field-label cases, inline runtime positions, parameter bounds
+and bulk-character provenance equivalence. Batched replacements, incremental
+ownership and chained scope lookup also remove repeated whole-line/history copies.
+40 focused integration tests pass; the full new regression is running before the
+next exact-head checkpoint. Earlier SHA results remain historical, not final proof.

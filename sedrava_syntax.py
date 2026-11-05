@@ -1,4 +1,12 @@
 """Shared .sdr source boundaries and indentation lines for app/site modes."""
+import keyword
+
+
+def is_reserved_identifier(name):
+    """Lexical reserved names, checked before any namespace/local lowering."""
+    return name in ("true", "false") or keyword.iskeyword(name)
+
+
 MAX_SOURCE_CHARS = 100_000
 MAX_BLOCK_DEPTH = 32
 

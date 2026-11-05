@@ -188,6 +188,140 @@ class Integration(unittest.TestCase):
             self.put('m.sdr','module example.attack\nexport fn attack(x: int) -> int = '+name+'(x)\n')
             source='app "Scope"\nimport "m.sdr" as m\n'
             with self.assertRaises(ValueError):parse_document(source,self.put('main.sdr',source))
+    def test_reserved_declarations_are_checked_before_lowering(self):
+        for declaration, name in [('export state true = 0','true'),('export state false = 0','false'),('export fn true(x: int) -> int = x','true')]:
+            with self.subTest(declaration=declaration):
+                module=self.put('m.sdr','module example.reserved\n'+declaration+'\n')
+                source='app "Reserved"\nimport "m.sdr" as m\n'
+                with self.assertRaisesRegex(ValueError,'reserved declaration') as error:
+                    parse_document(source,self.put('main.sdr',source))
+                self.assertEqual((error.exception.source,error.exception.line,error.exception.column),(str(module),2,declaration.index(name)+1))
+
+    def test_reserved_parameters_and_action_binders_cannot_hide_in_generated_names(self):
+        cases=[('export fn safe(false: int) -> int = false','false'),('export fn safe(class: int) -> int = class','class')]
+        for statement, name in [('let class = 1','class'),('let true = 1','true'),('repeat false in range(0, 2):\n        n = n + false','false'),('for class in xs:\n        n = n + class','class')]:
+            cases.append(('export state xs: list<int>(max=2) = [1]\nexport state n = 0\nexport action step:\n    '+statement,name))
+        for body, name in cases:
+            with self.subTest(body=body):
+                module=self.put('m.sdr','module example.reserved\n'+body+'\n')
+                source='app "Reserved"\nimport "m.sdr" as m\n'
+                target=next((index,line) for index,line in enumerate(body.splitlines(),2) if name in line)
+                with self.assertRaisesRegex(ValueError,'reserved (function parameter|action binding)') as error:
+                    parse_document(source,self.put('main.sdr',source))
+                self.assertEqual((error.exception.source,error.exception.line,error.exception.column),(str(module),target[0],target[1].index(name)+1))
+
+    def test_reserved_aliases_report_original_entry_or_nested_import(self):
+        self.put('m.sdr','module example.safe\nexport fn safe(x: int) -> int = x\n')
+        for alias in ('true','false','class'):
+            for nested in (False,True):
+                with self.subTest(alias=alias,nested=nested):
+                    line='import "m.sdr" as '+alias
+                    if nested:
+                        origin=self.put('bridge.sdr','module example.bridge\n'+line+'\nexport fn safe(x: int) -> int = x\n')
+                        source='app "Reserved"\nimport "bridge.sdr" as bridge\n'
+                    else:
+                        source='app "Reserved"\n'+line+'\n'
+                        origin=self.root/'main.sdr'
+                    with self.assertRaisesRegex(ValueError,'reserved import alias') as error:
+                        parse_document(source,self.put('main.sdr',source))
+                    self.assertEqual((error.exception.source,error.exception.line,error.exception.column),(str(origin),2,line.index(alias)+1))
+
+    def test_contextual_type_and_statement_names_execute_on_all_targets(self):
+        bodies=[('''export fn identity(int: int) -> int = int
+export fn less(list: int) -> bool = list < 2
+export fn unpack(Result: Result<int, Error>) -> int = result_or(Result, 0)
+export fn text(bool: bool) -> bool = not bool
+export state state = 0
+export state range = 0
+export state flag = true
+export state values: list<int>(max=2) = [1, 2]
+export state strings: list<text>(max=1) = ["ok"]
+export action step:
+    let let = identity(2)
+    repeat index in range(0, 2):
+        state = state + let + index
+    flag = text(less(unpack(try_add(0, 0))))
+    range = range + 1
+export action inline: let count = identity(3)
+    state = state + count
+rule state >= 0
+''',['step','inline','step']),('''export fn grow(text: text) -> text = concat(text, "!")
+export fn fallback(outcome: Result<int, Error>) -> int = result_or(outcome, 0)
+export state list: list<int>(max=2) = [1]
+export state Result = 0
+export state Error = 0
+export state title = ""
+export action step:
+    list = append(list, 2)
+    Result = fallback(try_add(1, 2))
+    Error = 4
+    title = grow("ok")
+''',['step'])]
+        for index,(body,names) in enumerate(bodies):
+            with self.subTest(index=index):
+                self.put('m.sdr','module example.context'+str(index)+'\n'+body)
+                entry=self.put('main.sdr','app "Context"\nimport "m.sdr" as m\nstate count = 99\nscreen main:\n    value count\n')
+                lowered=expand(entry.read_text(),entry)[0]
+                program=parse(lowered);sequence=actions(program,names);expected=reference(lowered,sequence)
+                self.assertTrue(all(item['accepted'] for item in expected))
+                self.assertEqual(expected,javascript(lowered,sequence));self.assertEqual(expected,kotlin(lowered,sequence))
+                final=expected[-1]['state'];self.assertEqual(final['count'],99)
+                if index==0:
+                    self.assertEqual(next(value for key,value in final.items() if key.endswith('_state')),13)
+                    self.assertIs(next(value for key,value in final.items() if key.endswith('_flag')),False)
+                else:
+                    self.assertEqual(next(value for key,value in final.items() if key.endswith('_title')),'ok!')
+
+    def test_qualified_record_field_label_is_not_rewritten_into_a_valid_identifier(self):
+        self.put('words.sdr','module example.words\nexport fn safe(x: int) -> int = x\n')
+        module=self.put('m.sdr','module example.fields\nimport "words.sdr" as words\nexport record Item:\n    words.safe: int\n')
+        source='app "Fields"\nimport "m.sdr" as m\n'
+        with self.assertRaisesRegex(ValueError,'invalid record field') as error:
+            parse_document(source,self.put('main.sdr',source))
+        self.assertEqual((error.exception.source,error.exception.line,error.exception.column),(str(module),4,5))
+
+    def test_inline_action_failure_preserves_original_expression_column(self):
+        line='export action fail: n = xs[4]'
+        module=self.put('m.sdr','module example.inline\nexport state n = 0\nexport state xs: list<int>(max=1) = [1]\n'+line+'\n')
+        entry=self.put('main.sdr','app "Inline"\nimport "m.sdr" as m\n')
+        output=io.StringIO()
+        with contextlib.redirect_stderr(output):
+            self.assertEqual(main(['--diagnostics=json','run',str(entry),'m.fail']),1)
+        diagnostic=json.loads(output.getvalue())
+        self.assertEqual(diagnostic['phase'],'execute')
+        self.assertEqual(diagnostic['location'],{'source':str(module),'line':4,'column':line.index('xs[4]')+1})
+
+    def test_bulk_character_replacements_preserve_single_span_provenance(self):
+        from sedrava_source_map import MappedLine,replace_span,replace_spans
+        for count in (1,2,16,128):
+            text='😀 '+('abc + '*count)+'end'
+            positions=[None]*(len(text)+1);positions[2]=('caller.sdr',7,11)
+            source=MappedLine(text,positions=positions)
+            spans=[(2+6*index,5+6*index,'M_long_identifier') for index in range(count)]
+            expected=source
+            for start,end,value in reversed(spans):expected=replace_span(expected,start,end,value)
+            actual=replace_spans(source,spans)
+            self.assertEqual(str(actual),str(expected));self.assertEqual(actual.columns,expected.columns);self.assertEqual(actual.positions,expected.positions)
+
+    def test_function_parameter_limit_applies_before_lowering(self):
+        parameters=', '.join('value'+str(index)+': int' for index in range(9))
+        module=self.put('m.sdr','module example.signature\nexport fn safe('+parameters+') -> int = 0\n')
+        source='app "Limit"\nimport "m.sdr" as m\n'
+        with self.assertRaisesRegex(ValueError,'function parameter resource limit') as error:
+            parse_document(source,self.put('main.sdr',source))
+        self.assertEqual((error.exception.source,error.exception.line),(str(module),2))
+
+    def test_entry_local_bindings_cannot_shadow_explicit_import_aliases(self):
+        self.put('m.sdr','module example.alias\nexport fn safe(x: int) -> int = x\n')
+        bodies=['fn safe(m: int) -> int = m', 'state n = 0\naction step:\n    let m = 1\n    n = m', 'state xs: list<int>(max=1) = [1]\nstate n = 0\naction step:\n    for m in xs:\n        n = n + m', 'state n = 0\naction step: let m = 1\n    n = m']
+        for body in bodies:
+            with self.subTest(body=body):
+                source='app "Alias"\nimport "m.sdr" as m\n'+body+'\n'
+                entry=self.put('main.sdr',source)
+                with self.assertRaisesRegex(ValueError,'conflicts with import alias') as error:
+                    parse_document(source,entry)
+                self.assertEqual(error.exception.source,str(entry))
+
     def project(self):
         self.put('sedrava.toml','[package]\nname="example.app"\nversion="1.0.0"\n[dependencies]\n"example.lib"={path="vendor/example.lib",version="1.0.0"}\n')
         self.put('vendor/example.lib/sedrava.toml','[package]\nname="example.lib"\nversion="1.0.0"\n')

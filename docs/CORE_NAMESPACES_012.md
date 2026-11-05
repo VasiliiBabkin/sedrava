@@ -125,3 +125,18 @@ at most 1,024 entries including empty directories, depth 16 and 1,024 relative-p
 characters, alongside the existing 256-file/8-MiB limits. Hidden entries and
 symlinks reject. Ordinary empty directories below these limits do not change locks.
 Oversized trees fail without replacing an existing lock.
+
+## Identifier lowering
+
+Reserved words (including `true`/`false`) are checked in their original spelling
+before hygiene. Pure-function parameters and action binders cannot shadow an
+explicit import alias, in entry files or modules. Type annotations, value
+expressions, declaration names and statement keywords are lowered separately;
+valid names such as `int` in `fn identity(int: int) -> int = int` retain their
+meaning. Record-field labels are never qualified-reference substitutions. Inline
+actions share the same local scope and original-column maps as block actions.
+
+The compiler uses the same function/parameter grammar and eight-parameter limit
+for core parsing and module lowering. Character replacements are batched instead
+of repeatedly copying full source maps. Scope lookup and declaration ownership
+are maintained incrementally, not by rescanning previous module lines.
