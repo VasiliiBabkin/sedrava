@@ -1,5 +1,7 @@
 # Known limitations / Известные ограничения (0.10.0)
 
+**Current release distinction:** [0.11.0rc1 was published experimentally](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0rc1) ([PyPI](https://pypi.org/project/sedrava/0.11.0rc1/)); stable **0.11.0 is still under review**, not published. The 0.10 details below describe that historical baseline. The 0.11 Web targets still do not provide a trusted backend, database, authentication, automatic migration, physical Android certification or production downgrade guarantee. [Stable gates](STABLE_RELEASE_GATES_011.md).
+
 Implemented: int32/bool/text, typed records, ordered bounded collections, atomic actions, strict snapshots, guarded multi-screen navigation, Web/Compose and independent [Android identities](ANDROID_ID.en.md). Version 0.10.0 is published on [PyPI](https://pypi.org/project/sedrava/0.10.0/) and [GitHub](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.10.0). 0.9.0a1 remains the historical GitHub baseline.
 
 - Experimental grammar/API; no stable pre-1.0 compatibility promise. No division, modules, loops, services, timers, deep links, route parameters, nested records or migrations. [Records](RECORDS_COLLECTIONS_010.md), [navigation](NAVIGATION_010_CONTRACT.md).
@@ -30,3 +32,10 @@ Use a verified local wheel in a separate environment; no PyPI/TestPyPI RC has be
 [Release notes EN](RELEASE_NOTES_0_10_0rc2.en.md) · [RU](RELEASE_NOTES_0_10_0rc2.ru.md) · [Upgrade/rollback EN](UPGRADE_0_10_0rc2.en.md) · [RU](UPGRADE_0_10_0rc2.ru.md) · [RC2 report](RC2_010_REPORT.md).
 The historical rc2 source was 0.10.0rc2 (Android 10002); **published 0.10.0** uses Android versionCode **10003**. Historical artifacts and tags remain immutable.
 Версия 0.10.0 опубликована, Android versionCode 10003. Проверка конечного APK на физическом устройстве требует отдельного подтверждения.
+
+
+## Experimental 0.11 integration / Экспериментальная интеграция
+
+The integration preview adds shared composition, pure functions, bounded collection queries, forms/tables/dialogs, hash routes, local styling and typed public HTTP. It is not a published 0.11.0 or a backend/auth/database service.
+
+Реализованные возможности, сборка четырёх проектов и ограничения: [English guide](011_WEB_PLATFORM.en.md), [руководство](011_WEB_PLATFORM.ru.md), [actual status](011_IMPLEMENTATION_STATUS.md). Existing published 0.10.0 instructions above remain applicable to their original targets.

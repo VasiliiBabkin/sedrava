@@ -1,0 +1,273 @@
+"""Integration acceptance against generated Sedrava sources, never patched output."""
+import functools
+import json
+import re
+import os
+import importlib.metadata
+import time
+from urllib.parse import urlsplit
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+import shutil
+import sys
+import tempfile
+import threading
+import unittest
+ROOT=Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(ROOT))
+from sedrava_webapp import build_webapp
+from playwright.sync_api import sync_playwright
+
+class Quiet(SimpleHTTPRequestHandler):
+    mode='normal';calls=[];rows=[{'id':1,'title':'A public product','available':True}]
+    def reply(self,data,status=200):
+        payload=(data if isinstance(data,str) else json.dumps(data)).encode()
+        self.send_response(status);self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(payload)));self.end_headers()
+        try:self.wfile.write(payload)
+        except (BrokenPipeError,ConnectionResetError):pass
+    def do_GET(self):
+        detail=re.fullmatch(r'/api/products/([0-9]+)',urlsplit(self.path).path)
+        if detail:
+            identity=int(detail[1]);Quiet.calls.append(('GET',self.path,None))
+            if Quiet.mode=='error':return self.reply({'error':'offline'},503)
+            if identity==3:time.sleep(.3)
+            return self.reply({'id':identity,'title':'Product '+str(identity),'available':True})
+        if urlsplit(self.path).path!='/api/products':return super().do_GET()
+        Quiet.calls.append(('GET',self.path,None))
+        if Quiet.mode in ('slow','timeout'):time.sleep(.5 if Quiet.mode=='slow' else 1.5)
+        if Quiet.mode=='error':return self.reply({'error':'unavailable'},500)
+        if Quiet.mode=='invalid':return self.reply([{'id':True,'title':'bad','available':True}])
+        if Quiet.mode=='duplicate':return self.reply('[{"id":1,"id":2,"title":"bad","available":true}]')
+        if Quiet.mode=='large':return self.reply([{'id':1,'title':'x'*20000,'available':True}])
+        return self.reply(Quiet.rows)
+    def mutation(self):
+        size=int(self.headers.get('Content-Length','0'));data=json.loads(self.rfile.read(size)) if size else None
+        Quiet.calls.append((self.command,self.path,data))
+        if self.command=='DELETE':Quiet.rows=[];return self.reply('',204)
+        row={'id':1,**data};Quiet.rows=[row];return self.reply(row)
+    do_POST=mutation
+    do_PATCH=mutation
+    do_PUT=mutation
+    do_DELETE=mutation
+    def log_message(self,*args):pass
+
+class Platform(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.folder=tempfile.TemporaryDirectory();cls.root=Path(cls.folder.name)
+        source=ROOT/'examples/platform_tasks.sdr'
+        build_webapp(source.read_text(),cls.root/'tasks',source)
+        source=ROOT/'examples/platform_catalog.sdr'
+        build_webapp(source.read_text(),cls.root/'catalog',source)
+        from site_codegen import build_site
+        source=ROOT/'examples/platform_site.sdr';build_site(source.read_text(),cls.root/'site',source)
+        source=ROOT/'examples/platform_crm.sdr';build_webapp(source.read_text(),cls.root/'crm',source)
+        dynamic='webapp "Parameter cache"\nstate target=1\nservice product:\n    origin self\n    path "/api/products/:target"\n    auto true\n    cache true\n    response one:\n        id int32\n        title text\n        available bool\nview main:\n    heading "Parameter cache"\n    input target label "Product ID"\n    request "Reload" service product\n    remote product title title label "Product"\n'
+        build_webapp(dynamic,cls.root/'dynamic',ROOT/'examples/platform_catalog.sdr')
+        routing='webapp "Pairs"\nstate a=0\nstate b=0\nrule a==b\nview main:\n    heading "Home"\nview pair at "/pair/:a/:b":\n    heading "Pair"\n    value a label "A"\n    value b label "B"\n    back "Home"\n'
+        build_webapp(routing,cls.root/'routing',ROOT/'examples/platform_catalog.sdr')
+        cls.server=ThreadingHTTPServer(('127.0.0.1',0),functools.partial(Quiet,directory=cls.folder.name))
+        cls.thread=threading.Thread(target=cls.server.serve_forever,daemon=True);cls.thread.start()
+        cls.driver=sync_playwright().start();cls.engine=os.environ.get('SEDRAVA_BROWSER','chromium')
+        browser=getattr(cls.driver,cls.engine)
+        options={'executable_path':os.environ.get('SEDRAVA_CHROMIUM') or shutil.which('chromium'),'args':['--no-sandbox']} if cls.engine=='chromium' else {}
+        cls.browser=browser.launch(**options)
+        cls.url='http://127.0.0.1:'+str(cls.server.server_port)
+        cls.evidence=ROOT/'build/platform-evidence';cls.evidence.mkdir(parents=True,exist_ok=True)
+        (cls.evidence/'browser-toolchain.json').write_text(json.dumps({'engine':cls.engine,'browser_version':cls.browser.version,'playwright':importlib.metadata.version('playwright')},indent=2)+'\n')
+    @classmethod
+    def tearDownClass(cls):
+        cls.browser.close();cls.driver.stop();cls.server.shutdown();cls.server.server_close();cls.thread.join();cls.folder.cleanup()
+    def setUp(self):
+        Quiet.mode='normal';Quiet.calls=[];Quiet.rows=[{'id':1,'title':'A public product','available':True}]
+        self.context=self.browser.new_context();self.page=self.context.new_page();self.errors=[]
+        self.context.on('page',lambda p:p.on('pageerror',lambda e:self.errors.append(str(e))))
+        self.page.on('pageerror',lambda e:self.errors.append(str(e)))
+        self.page.goto(self.url+'/tasks/index.html')
+    def tearDown(self):
+        self.context.close();self.assertEqual(self.errors,[])
+    def add(self,title):
+        self.page.get_by_label('New task',exact=True).fill(title);self.page.get_by_role('button',name='Add task',exact=True).click()
+    def select(self,title):self.page.get_by_role('button',name='Select '+title,exact=True).click()
+    def test_crud_routes_history_dialog_and_reload(self):
+        p=self.page;self.add('First task');self.add('Second task');self.select('First task')
+        p.get_by_role('button',name='Open selected task').click();self.assertTrue(p.url.endswith('#/tasks/1'))
+        self.assertEqual(p.evaluate('document.activeElement.textContent'),'Task details')
+        p.get_by_label('Rename selected task').fill('Renamed');p.get_by_role('button',name='Rename task',exact=True).click()
+        p.get_by_role('button',name='Toggle completion').click();p.reload();self.assertTrue(p.url.endswith('#/tasks/1'))
+        p.get_by_role('button',name='Back to tasks').click();p.wait_for_url('**#/')
+        self.assertIn('Completed',p.get_by_role('listitem').filter(has=p.get_by_role('button',name='Select Renamed',exact=True)).inner_text())
+        p.go_forward();p.wait_for_url('**#/tasks/1')
+        p.get_by_role('button',name='Delete task',exact=True).click();self.assertTrue(p.get_by_role('dialog',name='Confirm task deletion',exact=True).evaluate('e=>e.open'))
+        for _ in range(6):
+            p.keyboard.press('Tab')
+            # Native Tab may visit browser chrome, but must never focus background page controls.
+            self.assertTrue(p.locator('dialog').evaluate('e=>e.contains(document.activeElement)||!document.hasFocus()'))
+        p.keyboard.press('Escape');self.assertFalse(p.locator('dialog').evaluate('e=>e.open'))
+        self.assertEqual(p.evaluate('document.activeElement.textContent'),'Delete task')
+        p.get_by_role('button',name='Delete task',exact=True).click();p.get_by_role('button',name='Confirm delete').click()
+        p.wait_for_url('**#/');self.assertFalse(p.locator('dialog').evaluate('e=>e.open'))
+        self.assertEqual(p.get_by_role('button',name='Select Renamed',exact=True).count(),0)
+        p.goto(self.url+'/tasks/index.html#/tasks/999');self.assertIn('no longer exists',p.locator('#sedrava-error').inner_text())
+    def test_search_filter_and_all_required_viewports(self):
+        p=self.page;self.add('Alpha');self.add('Zulu');self.select('Zulu');p.get_by_role('button',name='Open selected task').click();p.get_by_role('button',name='Toggle completion').click();p.get_by_role('button',name='Back to tasks').click();p.wait_for_url('**#/')
+        p.get_by_label('Search tasks').fill('ALP');self.assertEqual(p.locator('[data-each] [data-pick]').count(),1)
+        p.get_by_label('Search tasks').fill('');p.get_by_label('Filter by completion').check();p.get_by_label('Completion status',exact=True).select_option('true')
+        self.assertEqual(p.locator('[data-each] [data-pick]').count(),1);self.assertIn('Zulu',p.locator('[data-each]').inner_text())
+        for width in (320,360,390,768,1024,1440):
+            p.set_viewport_size({'width':width,'height':900})
+            self.assertLessEqual(p.evaluate('document.documentElement.scrollWidth'),width+1)
+            p.screenshot(path=str(self.evidence/f'tasks-{width}.png'),full_page=True)
+        p.get_by_label('Search tasks').fill('missing');self.assertIn('No matching tasks',p.locator('[data-each]').inner_text())
+        p.get_by_label('Search tasks').fill('');p.get_by_label('Filter by completion').uncheck()
+        self.select('Alpha');p.get_by_role('button',name='Open selected task').click();p.get_by_role('button',name='Delete task',exact=True).click()
+        p.screenshot(path=str(self.evidence/'tasks-dialog.png'),full_page=True)
+
+    def test_real_http_methods_schema_limits_timeout_cancel_and_offline_cache(self):
+        p=self.page;p.goto(self.url+'/catalog/index.html')
+        panel=p.locator('[data-remote="catalog"]')
+        panel.locator('[data-remote-status]').get_by_text('success',exact=True).wait_for()
+        self.assertIn('A public product',panel.inner_text())
+        for width in (320,360,390,768,1024,1440):
+            p.set_viewport_size({'width':width,'height':900});self.assertLessEqual(p.evaluate('document.documentElement.scrollWidth'),width+1)
+            p.screenshot(path=str(self.evidence/f'catalog-{width}.png'),full_page=True)
+        for mode,text in [('invalid','Invalid integer'),('duplicate','Duplicate'),('large','byte limit'),('error','HTTP 500'),('timeout','timed out')]:
+            Quiet.mode=mode;p.get_by_role('button',name='Refresh catalog',exact=True).click()
+            panel.locator('[data-remote-status]').filter(has_text=text).wait_for()
+            self.assertIn('A public product',panel.inner_text())
+        p.screenshot(path=str(self.evidence/'catalog-error.png'),full_page=True)
+        Quiet.mode='slow';p.get_by_role('button',name='Refresh catalog',exact=True).click()
+        panel.locator('[data-remote-status]').get_by_text('loading',exact=True).wait_for()
+        p.get_by_role('button',name='Cancel loading',exact=True).click()
+        self.assertIn('cancelled',panel.locator('[data-remote-status]').inner_text())
+        Quiet.mode='normal';p.get_by_role('button',name='Refresh catalog',exact=True).click()
+        panel.locator('[data-remote-status]').get_by_text('success',exact=True).wait_for()
+        Quiet.rows=[{'id':1,'title':'<img src=x onerror=alert(1)>','available':True}]
+        p.get_by_role('button',name='Refresh catalog',exact=True).click()
+        panel.get_by_label('Product',exact=True).filter(has_text='<img src=x').wait_for()
+        self.assertEqual(panel.locator('img').count(),0)
+        self.assertTrue(panel.get_by_text('Available now',exact=True).is_visible())
+        Quiet.rows=[{'id':1,'title':'A public product','available':True}]
+        p.get_by_role('button',name='Refresh catalog',exact=True).click()
+        panel.get_by_label('Product',exact=True).filter(has_text='A public product').wait_for()
+        p.get_by_role('button',name='Manage products',exact=True).click()
+        p.get_by_label('Product name',exact=True).fill('<img src=x onerror=alert(1)>')
+        for button,service in [('Create product','create_product'),('Update product','update_product'),('Replace product','replace_product')]:
+            p.get_by_role('button',name=button,exact=True).click()
+            result=p.locator('[data-remote="'+service+'"]');result.locator('[data-remote-status]').get_by_text('success',exact=True).wait_for()
+            self.assertEqual(result.locator('img').count(),0);self.assertIn('<img src=x',result.inner_text())
+        p.get_by_role('button',name='Delete product',exact=True).click()
+        p.locator('[data-remote="delete_product"] [data-remote-status]').get_by_text('success',exact=True).wait_for()
+        methods={method for method,_,_ in Quiet.calls};self.assertEqual(methods,{'GET','POST','PUT','PATCH','DELETE'})
+        self.assertEqual(next(body for method,_,body in Quiet.calls if method=='POST')['title'],'<img src=x onerror=alert(1)>')
+        p.get_by_role('button',name='Back to catalog',exact=True).click();p.wait_for_url('**#/')
+        Quiet.mode='error';p.reload();self.assertIn('A public product',p.locator('[data-remote="catalog"]').inner_text())
+        (self.evidence/'http-calls.json').write_text(json.dumps(Quiet.calls,indent=2))
+
+    def test_correlated_route_parameters_commit_together(self):
+        p=self.page;p.goto(self.url+'/routing/index.html#/pair/3/3')
+        self.assertEqual(p.locator('[data-state="a"]').inner_text(),'3')
+        self.assertEqual(p.locator('[data-state="b"]').inner_text(),'3')
+        self.assertTrue(p.url.endswith('#/pair/3/3'))
+        p.goto(self.url+'/routing/index.html#/pair/3/4')
+        p.wait_for_url('**#/')
+        self.assertEqual(p.locator('[data-state="a"]').text_content(),'3')
+        self.assertEqual(p.locator('[data-state="b"]').text_content(),'3')
+        self.assertTrue(p.locator('#sedrava-error').is_visible())
+
+    def test_parameterized_http_cache_and_stale_response_isolation(self):
+        p=self.page;p.goto(self.url+'/dynamic/index.html');panel=p.locator('[data-remote="product"]')
+        panel.get_by_role('heading',name='Product 1',exact=True).wait_for()
+        p.get_by_label('Product ID',exact=True).fill('2')
+        panel.get_by_role('heading',name='Product 2',exact=True).wait_for()
+        self.assertNotIn('Product 1',panel.inner_text())
+        p.get_by_label('Product ID',exact=True).fill('3')
+        panel.locator('[data-remote-status]').get_by_text('loading',exact=True).wait_for()
+        p.get_by_label('Product ID',exact=True).fill('2')
+        panel.get_by_role('heading',name='Product 2',exact=True).wait_for()
+        p.wait_for_timeout(450)
+        self.assertNotIn('Product 3',panel.inner_text())
+        Quiet.mode='error';p.get_by_label('Product ID',exact=True).fill('1')
+        panel.get_by_role('heading',name='Product 1',exact=True).wait_for()
+        p.get_by_label('Product ID',exact=True).fill('2')
+        panel.get_by_role('heading',name='Product 2',exact=True).wait_for()
+        keys=p.evaluate('Object.keys(localStorage).filter(k=>k.startsWith("sedrava-api:"))')
+        self.assertEqual(len(keys),2)
+        rejected=next(key for key in keys if key.endswith(':/api/products/2'))
+        p.evaluate('([key])=>localStorage.setItem(key,"{broken")',[rejected])
+        Quiet.mode='normal';p.reload()
+        # Reload starts with target 1; selecting 2 must not overwrite its bad original.
+        p.get_by_label('Product ID',exact=True).fill('2')
+        panel.get_by_role('heading',name='Product 2',exact=True).wait_for()
+        self.assertIn('original retained',panel.locator('[data-remote-status]').inner_text())
+        self.assertEqual(p.evaluate('(key)=>localStorage.getItem(key)',rejected),'{broken')
+
+    def test_static_project_composition_seo_font_and_navigation(self):
+        p=self.page;p.goto(self.url+'/site/index.html');p.evaluate('document.fonts.ready')
+        self.assertTrue(p.evaluate('document.fonts.check("16px PlatformInter")'))
+        self.assertEqual(p.locator('link[rel=canonical]').get_attribute('href'),'https://preview.example.com/')
+        self.assertEqual(p.locator('meta[property="og:title"]').get_attribute('content'),'Sedrava Studio — describe what matters')
+        self.assertIn('Disallow: /',p.request.get(self.url+'/site/robots.txt').text())
+        self.assertEqual(p.request.get(self.url+'/site/sitemap.xml').text().count('<url>'),3)
+        for width in (320,360,390,768,1024,1440):
+            p.set_viewport_size({'width':width,'height':900});self.assertLessEqual(p.evaluate('document.documentElement.scrollWidth'),width+1)
+            p.screenshot(path=str(self.evidence/f'site-{width}.png'),full_page=True)
+        p.get_by_role('link',name='Read the guide',exact=True).click();p.wait_for_url('**/guide/index.html')
+        self.assertIn('From description',p.locator('h1').inner_text());p.go_back();p.wait_for_url('**/site/index.html')
+        p.keyboard.press('Tab');self.assertEqual(p.evaluate('document.activeElement.textContent'),'Skip to content')
+
+    def test_crm_forms_related_table_modal_settings_and_recovery(self):
+        p=self.page;p.goto(self.url+'/crm/index.html')
+        p.get_by_role('button',name='Companies',exact=True).click()
+        p.get_by_label('Company name',exact=True).fill('Acme');p.get_by_label('Industry',exact=True).fill('Engineering')
+        p.get_by_label('Industry',exact=True).press('Enter');p.get_by_role('button',name='Select Acme',exact=True).click()
+        self.assertEqual(p.evaluate('document.activeElement.textContent'),'Acme')
+        p.get_by_role('button',name='Company contacts',exact=True).click();p.wait_for_url('**#/companies/1')
+        p.get_by_label('Contact name',exact=True).fill('Ada');p.get_by_label('Email',exact=True).fill('invalid')
+        self.assertTrue(p.get_by_role('button',name='Add contact',exact=True).is_disabled())
+        p.get_by_label('Email',exact=True).fill('ada@example.com');p.get_by_role('button',name='Add contact',exact=True).click()
+        p.get_by_role('button',name='Select Ada',exact=True).click();p.get_by_role('button',name='Edit selected contact',exact=True).click()
+        self.assertTrue(p.get_by_role('dialog',name='Edit selected contact',exact=True).evaluate('e=>e.open'))
+        p.get_by_label('New contact name',exact=True).fill('Ada Lovelace');p.get_by_role('button',name='Save contact name',exact=True).click();p.get_by_role('button',name='Close editor',exact=True).click()
+        p.get_by_role('button',name='Toggle active',exact=True).click()
+        self.assertIn('false',p.get_by_role('table',name='Contacts',exact=True).inner_text())
+        p.reload();p.wait_for_url('**#/companies/1');self.assertIn('Ada Lovelace',p.get_by_role('table',name='Contacts',exact=True).inner_text())
+        # A related contact prevents deleting its company; rejection retains the records.
+        p.get_by_role('button',name='Back to companies',exact=True).click()
+        p.get_by_role('button',name='Delete company',exact=True).click()
+        self.assertTrue(p.locator('#sedrava-error').is_visible())
+        self.assertIn('Acme',p.get_by_role('table',name='Company directory',exact=True).inner_text())
+        p.get_by_role('button',name='Rename company',exact=True).click()
+        p.get_by_label('New company name',exact=True).fill('Acme Studio')
+        p.get_by_role('button',name='Save company name',exact=True).click()
+        p.get_by_role('button',name='Close company editor',exact=True).click()
+        self.assertIn('Acme Studio',p.get_by_role('table',name='Company directory',exact=True).inner_text())
+        p.get_by_role('button',name='Company contacts',exact=True).click()
+
+        for width in (320,360,390,768,1024,1440):
+            p.set_viewport_size({'width':width,'height':900});self.assertLessEqual(p.evaluate('document.documentElement.scrollWidth'),width+1)
+            p.screenshot(path=str(self.evidence/f'crm-{width}.png'),full_page=True)
+        p.get_by_role('button',name='Back to companies',exact=True).click();p.wait_for_url('**#/companies')
+        p.get_by_role('button',name='Back to dashboard',exact=True).click();p.wait_for_url('**#/')
+        self.assertEqual(p.locator('[data-state=company_count]').inner_text(),'1')
+        self.assertEqual(p.locator('[data-state=contact_count]').inner_text(),'1')
+        self.assertEqual(p.locator('[data-state=active_count]').inner_text(),'0')
+        p.get_by_role('button',name='Settings',exact=True).click();p.get_by_label('Color theme',exact=True).select_option('"dark"')
+        self.assertEqual(p.evaluate('document.documentElement.dataset.theme'),'dark');p.reload()
+        self.assertEqual(p.evaluate('document.documentElement.dataset.theme'),'dark')
+        self.assertEqual(p.locator('body').evaluate('e=>getComputedStyle(e).backgroundColor'),'rgb(16, 16, 26)')
+        p.screenshot(path=str(self.evidence/'crm-dark-settings.png'),full_page=True)
+
+    def test_accessibility_of_four_generated_projects(self):
+        axe=(ROOT/'build/platform-a11y/node_modules/axe-core/axe.min.js').read_text()
+        reports={}
+        for app in ('site','tasks','catalog','crm'):
+            p=self.page;p.goto(self.url+'/'+app+'/index.html');p.evaluate('document.fonts.ready')
+            if app=='catalog':p.locator('[data-remote="catalog"] [data-remote-status]').get_by_text('success',exact=True).wait_for()
+            p.evaluate(axe)
+            result=p.evaluate('async()=>await axe.run(document,{runOnly:{type:"tag",values:["wcag2a","wcag2aa","wcag21aa"]}})')
+            reports[app]={'violations':result['violations'],'passes':len(result['passes']),'incomplete':result['incomplete']}
+            self.assertEqual(result['violations'],[],json.dumps(result['violations'],indent=2))
+        (self.evidence/'accessibility.json').write_text(json.dumps(reports,indent=2))
+
+if __name__=='__main__':unittest.main(verbosity=2)

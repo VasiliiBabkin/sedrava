@@ -1,0 +1,51 @@
+# Sedrava 0.11 experimental B1 collections: task CRUD.
+webapp "Sedrava · Tasks"
+record Task:
+    title: text
+    done: bool
+state tasks: list<Task>(max=100) = []
+state selected = 0
+state new_title = ""
+state rename_to = ""
+persist tasks
+derive empty = count(tasks) == 0
+derive task_count = count(tasks)
+derive chosen = has(tasks, selected)
+action add:
+    require new_title != ""
+    tasks = append(tasks, Task(title=new_title, done=false))
+    new_title = ""
+action rename:
+    require has(tasks, selected)
+    require rename_to != ""
+    tasks = update(tasks, selected, Task(title=rename_to, done=get(tasks, selected).done))
+    rename_to = ""
+action toggle:
+    require has(tasks, selected)
+    tasks = update(tasks, selected, Task(title=get(tasks, selected).title, done=not get(tasks, selected).done))
+action delete:
+    require has(tasks, selected)
+    tasks = remove(tasks, selected)
+    selected = 0
+view main:
+    container max 920:
+        column gap 20:
+            heading "Tasks on Sedrava"
+            paragraph "Offline first. Add a task, then select it to rename, finish or delete." variant lead
+            value task_count label "Tasks"
+            card:
+                column gap 16:
+                    input new_title label "New task"
+                    button "Add task" action add
+            when empty:
+                callout:
+                    paragraph "No tasks yet. Create your first task."
+            list tasks select selected title title status done label "Task list"
+            when chosen:
+                card:
+                    column gap 12:
+                        heading "Selected task" level 2
+                        input rename_to label "Rename selected task"
+                        button "Rename task" action rename
+                        button "Toggle completion" action toggle
+                        button "Delete task" action delete variant secondary

@@ -83,6 +83,8 @@ def checked_wheel_inventory(wheel):
     for directory,patterns in [('docs',('*.md',)),('examples',('*.sdr','README.md'))]:
         for pattern in patterns:
             for file in (ROOT/directory).glob(pattern):expected[data_root+directory+'/'+file.name]=file.read_bytes()
+    for file in (ROOT/'examples/assets').glob('*'):
+        if file.is_file():expected[data_root+'examples/assets/'+file.name]=file.read_bytes()
     info='sedrava-'+VERSION+'.dist-info/'
     metadata={info+name for name in ('licenses/LICENSE','METADATA','WHEEL','entry_points.txt','top_level.txt','RECORD')}
     if set(wheel)!=set(expected)|metadata:raise ValueError('Unexpected/missing wheel inventory, including install-time scripts')
@@ -292,7 +294,10 @@ def main():
     summary,ci=test_evidence(api,runs,nav,records)
     expected_web={}
     for source in sorted((ROOT/'examples').glob('*.sdr')):
-        text=source.read_text(encoding='utf-8');program=parse(text)
+        text=source.read_text(encoding='utf-8')
+        from sedrava_syntax import document_kind
+        if document_kind(text)=='site':continue # Site has a separate checked build artifact.
+        program=parse(text)
         if program.widgets:expected_web[source.stem+'.html']=generate(text).encode()
     if web!=expected_web:raise ValueError('Tested Web inventory/bytes differ from checked source')
     payload=check_distributions(dist)

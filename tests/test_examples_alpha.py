@@ -3,6 +3,10 @@ from pathlib import Path
 import tempfile
 import unittest
 from sedrava_core import parse, run
+from sedrava_frontend import parse_document
+from sedrava_site import Site
+from sedrava_webapp import WebApp, generate_webapp
+from site_codegen import generate_site
 from web_codegen import generate
 from android_codegen_v03 import generate as android
 
@@ -13,7 +17,20 @@ class ExamplesAlpha(unittest.TestCase):
         for path in sorted((ROOT / 'examples').glob('*.sdr')):
             with self.subTest(example=path.name):
                 source = path.read_text(encoding='utf-8')
-                program = parse(source)
+                program = parse_document(source,path)
+                if isinstance(program,WebApp):
+                    first=generate_webapp(program)
+                    second=generate_webapp(parse_document(source,path))
+                    self.assertEqual(first,second)
+                    self.assertIn("index.html",first)
+                    self.assertIn("app.js",first)
+                    continue
+                if isinstance(program,Site):
+                    first,_=generate_site(program,path.parent)
+                    second,_=generate_site(parse_document(source,path),path.parent)
+                    self.assertEqual(first,second)
+                    self.assertIn('index.html',first)
+                    continue
                 self.assertGreater(run(program), 0)
                 if program.widgets:
                     self.assertEqual(generate(source), generate(source))

@@ -16,6 +16,19 @@ sedrava --version
 
 On Windows, create the environment with `py -3 -m venv .venv`, activate with `.venv\Scripts\Activate.ps1`, then run `python -m pip install sedrava==0.10.0`. To work from a repository checkout instead, use `python -m pip install .` after activation. If `python3 -m venv` is unavailable on Ubuntu/Debian, install the distro's `python3-venv` package.
 
+## Published experimental 0.11 RC / Опубликованный кандидат
+
+Try `site` and `webapp` using a separate Python virtual environment. For Debian/Ubuntu, install `python3-venv` first if needed (PEP 668); do not use `--break-system-packages`:
+
+```sh
+python3 -m venv .venv-011
+. .venv-011/bin/activate
+python -m pip install sedrava==0.11.0rc1
+sedrava --version
+```
+
+[GitHub 0.11.0rc1](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0rc1) · [PyPI 0.11.0rc1](https://pypi.org/project/sedrava/0.11.0rc1/) · [stable 0.11 acceptance](STABLE_RELEASE_GATES_011.md). The stable package `0.11.0` is under review, **not yet published**.
+
 ## First app / Первое приложение
 
 Create a UTF-8 file `hello.sdr`:
@@ -56,9 +69,28 @@ sedrava build android examples/task_manager_navigation.sdr --output build/tasks-
 
 `build android` generates Kotlin/Compose source, **not an APK**. Compile with JDK, Android SDK and Gradle per [BUILD.md](BUILD.md). Data migrations and encrypted persistence are not provided. Final 0.10 APK physical-device acceptance is not recorded.
 
-`sedrava build site` is experimental in [draft PR #22](https://github.com/VasiliiBabkin/sedrava/pull/22), **not** part of the released CLI. [sedrava-site](https://github.com/VasiliiBabkin/sedrava-site) is a separate Astro/Starlight website.
+`sedrava build site` is not in stable **0.10.0** but **is available** in the [published 0.11.0rc1](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0rc1). Stable 0.11.0 is not published yet. [sedrava-site](https://github.com/VasiliiBabkin/sedrava-site) is a separate Astro/Starlight website.
 
 
 ## Post-release Linux smoke test / Ручная проверка Linux
 
 Installation from PyPI, CLI `check`/`test`/`run`, HTML generation and tester-confirmed browser interaction passed on 2026-11-01 in a Linux virtual environment using Python 3.13. See the [evidence and scope](MANUAL_LINUX_WEB_SMOKE_0_10_0_2026-11-01.md). Physical Android acceptance is separate.
+
+## Experimental Web UI 0.11 / Экспериментальный Web UI 0.11
+
+Source-branch feature, separate from published RC2. Режим из этой ветки, отдельно от опубликованного RC2.
+
+```sh
+sedrava check examples/web_ui_011_landing.sdr
+sedrava build site examples/web_ui_011_landing.sdr --output build/site
+python -m http.server 8000 --directory build/site
+```
+
+13 static primitives, responsive layouts and safe assets; no deployment. 13 статических компонентов, адаптивность и безопасные ресурсы; без публикации сайта. [English](WEB_UI_011.en.md) · [Русский](WEB_UI_011.ru.md). Existing application commands are unchanged. Команды приложений не изменены.
+
+
+## Experimental 0.11 integration / Экспериментальная интеграция
+
+The integration preview adds shared composition, pure functions, bounded collection queries, forms/tables/dialogs, hash routes, local styling and typed public HTTP. It is not a published 0.11.0 or a backend/auth/database service.
+
+Реализованные возможности, сборка четырёх проектов и ограничения: [English guide](011_WEB_PLATFORM.en.md), [руководство](011_WEB_PLATFORM.ru.md), [actual status](011_IMPLEMENTATION_STATUS.md). Existing published 0.10.0 instructions above remain applicable to their original targets.

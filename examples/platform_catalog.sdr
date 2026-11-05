@@ -1,0 +1,92 @@
+webapp "Sedrava · Catalog"
+record Product:
+    title: text
+    available: bool
+state search_text = ""
+state product_title = ""
+state product_available = true
+state selected_id = 1
+service catalog:
+    origin self
+    path "/api/products"
+    method GET
+    auto true
+    cache true
+    timeout 1000
+    max-bytes 16384
+    response many:
+        id int32
+        title text
+        available bool
+service create_product:
+    origin self
+    path "/api/products"
+    method POST
+    body Product(title=product_title, available=product_available)
+    timeout 1000
+    max-bytes 16384
+    response one:
+        id int32
+        title text
+        available bool
+service update_product:
+    origin self
+    path "/api/products/:selected_id"
+    method PATCH
+    body Product(title=product_title, available=product_available)
+    response one:
+        id int32
+        title text
+        available bool
+service replace_product:
+    origin self
+    path "/api/products/:selected_id"
+    method PUT
+    body Product(title=product_title, available=product_available)
+    response one:
+        id int32
+        title text
+        available bool
+service delete_product:
+    origin self
+    path "/api/products/:selected_id"
+    method DELETE
+    response many:
+        id int32
+        title text
+        available bool
+view main:
+    container max 1120 padding 24:
+        column gap 24:
+            heading "A live catalog"
+            paragraph "Validated public JSON. Cached data remains visible when the network fails." variant lead
+            input search_text label "Search catalog" kind text
+            row:
+                request "Refresh catalog" service catalog
+                cancel "Cancel loading" service catalog
+                navigate "Manage products" to manage
+            remote catalog search search_text title title label "Product catalog":
+                card:
+                    column gap 12:
+                        field title label "Product" size 24 weight bold
+                        row-when available:
+                            paragraph "Available now" variant eyebrow
+                        field id label "Product ID"
+view manage at "/manage":
+    container max 960 padding 24:
+        column gap 20:
+            heading "Manage public demo products"
+            paragraph "These requests require an independently secured server. No authentication or secrets are generated."
+            back "Back to catalog"
+            input product_title label "Product name" kind text
+            checkbox product_available label "Available"
+            input selected_id label "Product ID"
+            row:
+                request "Create product" service create_product
+                request "Update product" service update_product
+                request "Replace product" service replace_product
+                request "Delete product" service delete_product
+            remote create_product title title label "Created product"
+            remote update_product title title label "Updated product"
+            remote replace_product title title label "Replaced product"
+            remote delete_product title title label "Delete result"

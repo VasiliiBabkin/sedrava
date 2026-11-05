@@ -1,37 +1,18 @@
 # Sedrava — Roadmap / Дорожная карта
 
-**Released / Опубликовано:** [Sedrava 0.10.0](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.10.0) and [PyPI](https://pypi.org/project/sedrava/0.10.0/), 31 October 2026.
-**Status:** an experimental public release, not a 1.0 compatibility commitment or a production certification. Final 0.10 Android physical-device acceptance is still not documented.
-**In development:** [Web UI 0.11](https://github.com/VasiliiBabkin/sedrava/pull/22) is a draft PR, not released. Its experimental `build site` command is separate from the Astro/Starlight documentation site.
+## Published releases / Опубликованные версии
 
-## Vision / Видение
+- **0.10.0**, latest stable-version identifier: [GitHub](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.10.0), [PyPI](https://pypi.org/project/sedrava/0.10.0/), published 31 October 2026. Unicode, records, bounded lists, navigation and Web/Android generation.
+- **0.11.0rc1**, published experimental *prerelease*: [GitHub](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0rc1), [PyPI](https://pypi.org/project/sedrava/0.11.0rc1/), published 4 November 2026. Responsive `site`, typed interactive `webapp`, pure functions, collections, forms, hash routes and bounded public HTTP clients.
+- **0.11.0**, *unpublished stable source candidate*: `release/011-stable-preparation`. Fresh exact-head CI, practical upgrades and owner authorization are still required; versionCode 11002. [Release gates](STABLE_RELEASE_GATES_011.md).
+- **0.12.0a1**, *unpublished experimental alpha*: namespaces/aliases [PR #39](https://github.com/VasiliiBabkin/sedrava/pull/39), original-source diagnostics [PR #40](https://github.com/VasiliiBabkin/sedrava/pull/40), offline local packages/locks [PR #41](https://github.com/VasiliiBabkin/sedrava/pull/41) and alpha preparation [PR #43](https://github.com/VasiliiBabkin/sedrava/pull/43). Must be reconciled on the eventual published stable 0.11 baseline.
 
-Describe the application; get the application. / Опиши приложение — получи приложение. State, actions, invariants, tests and UI are described without copying platform boilerplate. Python and generated Web/Android semantics are tested against bounded scenarios; no universal equivalence is claimed.
+## Direction / Направление
 
-## Milestones / Этапы
+**0.11 stable** retains the published RC functionality and previously supported app/Web/Android targets. It does not include 0.12-qualified imports/packages, a trusted server, database, authentication or automatic schema migrations. The browser HTTP client depends on an independently operated API.
 
-| Version | Scope / Направление | Status / Статус |
-| --- | --- | --- |
-| **0.9** | Checked integers, actions, rules, basic Web/Android | Historical GitHub alpha |
-| **0.10** | Unicode text, records, bounded lists, multi-screen navigation | **Released** on GitHub and PyPI |
-| **0.11** | Extended Web UI and responsive website generation | **Draft PR #22**, not in released CLI |
-| **0.12+** | Device capabilities, module/reuse architecture, editors and desktop | Proposed, not committed |
-| **1.0** | Versioned specification, compatible storage and support policy | Long-term goal |
+**0.12 and later** will develop a native typed symbol IR, package-qualified module imports, extension interfaces and developer tooling. A future server/SQLite path is a design proposal rather than an implemented feature or committed release date. No production security certification is claimed for released pre-1.0 versions.
 
-Version numbers are planning milestones, **not release dates**. / Номера — ориентиры, а не сроки.
+**Release discipline:** Python 3.10/3.12/3.13, actual browser and Android tests, clean-installed wheel/sdist, reproducibility, 0.10 and published RC upgrade/rollback, known limitations and explicit owner approval for exact source SHA and hashes. [0.11 RC upgrade audit](UPGRADE_AUDIT_011.md) · [EN guide](011_WEB_PLATFORM.en.md) · [RU guide](011_WEB_PLATFORM.ru.md) · [0.10 stability](STABILITY_AUDIT_010.md).
 
-## Principles / Принципы
-
-- Predictable, atomic state transitions with typed values and explicit invariants.
-- Offline-first where practical; safe resource bounds.
-- Comparable semantics across target runtimes with transparent platform-specific limitations.
-- Source builds, test evidence and documentation before release.
-- Separate experiments, historical records and published features.
-
-## 0.10 release evidence / Проверки 0.10
-
-Release tag `v0.10.0` resolves to commit `688a320025a0d38235eb90c780362ec26b0708e2`. The [release workflow](https://github.com/VasiliiBabkin/sedrava/actions/runs/41237159326) published wheel/sdist on PyPI with digital attestations. Main CI, Android build and text conformance succeeded. [RC1](RC_010_REPORT.md), [RC2](RC2_010_REPORT.md) and [stability audit](STABILITY_AUDIT_010.md) reports describe historical states and are retained unchanged.
-
-**Still open:** [final 0.10 physical-device acceptance](PHYSICAL_DEVICE_010.md). Do not imply all Android devices are supported or that the source contains automatic migrations, encrypted persistence or security certification. See [limitations](KNOWN_LIMITATIONS.md) and [compatibility](COMPATIBILITY_010.md).
-
-[Documentation website repository](https://github.com/VasiliiBabkin/sedrava-site) · [issues](https://github.com/VasiliiBabkin/sedrava/issues).
+The official [documentation website](https://sedrava.virtreal.ru/) is built separately with Astro/Starlight. A Sedrava-generated dev preview is separate. **Describe the application; get the application. / Опиши — получи.**

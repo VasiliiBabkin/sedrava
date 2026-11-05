@@ -6,11 +6,15 @@ import zipfile
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-DIST = ROOT / "dist"
+DIST = pathlib.Path(sys.argv[1]).resolve() if len(sys.argv)>1 else ROOT / "dist"
 EXPECTED_MODULES = {
     "sedrava.py", "sedrava_version.py", "sedrava_android_identity.py", "sedrava_core.py", "sedrava_navigation.py", "sedrava_navigation_web.py", "sedrava_navigation_android.py", "sedrava_cli.py", "sedrava_records.py", "sedrava_records_codegen.py", "sedrava_collections.py",
     "android_codegen.py", "android_codegen_v03.py", "web_codegen.py",
+    "sedrava_syntax.py", "sedrava_frontend.py", "sedrava_site.py", "site_codegen.py",
 }
+EXPECTED_MODULES.update({name+'.py' for name in (
+ 'sedrava_webapp','sedrava_http','sedrava_http_parser','sedrava_http_codegen','sedrava_http_page','sedrava_http_embed','sedrava_http_inline','sedrava_http_display',
+ 'sedrava_modules','sedrava_web_routes','sedrava_web_ui','sedrava_web_queries','sedrava_web_services','sedrava_web_assets','sedrava_functions','sedrava_stdlib','sedrava_queries')})
 LICENSE_MARKER = "Apache License"
 sys.path.insert(0, str(ROOT))
 from sedrava_version import VERSION

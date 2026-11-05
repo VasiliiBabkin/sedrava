@@ -1,0 +1,68 @@
+site "Sedrava · Studio"
+origin "https://preview.example.com"
+robots false
+stylesheet "assets/platform-brand.css"
+license "assets/INTER_LICENSE.txt"
+social-image "assets/sedrava-blueprint.svg"
+import "assets/platform-components.sdr"
+theme:
+    background "#f5f3fa"
+    surface "#ffffff"
+    foreground "#20172f"
+    accent "#6141a3"
+    gold "#775200"
+    muted "#5e566b"
+    border "#d4cce0"
+page home at "/":
+    title "Sedrava Studio — describe what matters"
+    description "A responsive, multi-page static project built from Sedrava."
+    navbar label "Main navigation" class "brand-nav":
+        link "Studio" to "/"
+        link "Journal" to "/journal/"
+        link "Guide" to "/guide/"
+    container max 1160 padding 24 md-padding 40 class "brand-shell":
+        column gap 40:
+            paragraph "A LANGUAGE FOR MAKING THINGS" variant eyebrow
+            heading "Describe your idea.\nBuild something useful."
+            paragraph "Compose shared components, keep accepted data safe, and generate a real interface." variant lead
+            row:
+                button "Read the guide" to "/guide/"
+                link "Engineering journal" to "/journal/"
+            image "assets/sedrava-blueprint.svg" alt "A declarative program with typed state and an action" max 640
+            grid columns 3:
+                use Feature title "Sites":
+                    paragraph "Portable HTML, local resources and page metadata."
+                use Feature title "Applications":
+                    paragraph "Forms, guarded routes and typed atomic actions."
+                use Feature title "Integrations":
+                    paragraph "Explicit public HTTP capabilities with validated JSON."
+    footer label "Site footer" padding 24:
+        paragraph "Experimental integration preview. No production deployment."
+page journal at "/journal/":
+    title "Journal — Sedrava Studio"
+    description "Notes on building an honest, testable Web platform."
+    navbar label "Main navigation" class "brand-nav":
+        link "Studio" to "/"
+        link "Journal" to "/journal/"
+        link "Guide" to "/guide/"
+    container max 960 padding 24 class "brand-shell":
+        column gap 28:
+            heading "The engineering journal"
+            use Feature title "Make the guarantees visible":
+                paragraph "A successful compilation is the start. Real browser interactions establish what the application does."
+            use Feature title "A shared foundation":
+                paragraph "Reusable components are expanded into the same typed presentation tree."
+page guide at "/guide/":
+    title "Guide — Sedrava Studio"
+    description "Build and preview a static site from one source project."
+    navbar label "Main navigation" class "brand-nav":
+        link "Studio" to "/"
+        link "Journal" to "/journal/"
+        link "Guide" to "/guide/"
+    container max 960 padding 24 class "brand-shell":
+        column gap 24:
+            heading "From description to a site"
+            paragraph "Compile locally, preview the generated directory and deploy it as static files after review."
+            code "sedrava build site examples/platform_site.sdr --output build/platform/site"
+            callout variant warning:
+                paragraph "This integration is experimental. Review the implementation status before planning production use."

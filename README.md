@@ -1,10 +1,12 @@
-# Sedrava — published 0.10.0
+# Sedrava — stable 0.10.0, published 0.11 RC and stable 0.11 candidate
 
 **Describe the application; get the application. / Описал — получил.**
 
 **[Dedication / Посвящение](DEDICATION.md):** Геннадию Ивановичу Смирных — учителю информатики, благодаря которому автор Sedrava понял и полюбил программирование.
 
-**Current release:** [Sedrava 0.10.0](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.10.0) (31 October 2026), also [published on PyPI](https://pypi.org/project/sedrava/0.10.0/). Android generator versionCode: **10003**. The older 0.9.0a1 and 0.10.0rc2 releases are historical baselines.
+**Current stable release:** [Sedrava 0.10.0](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.10.0) (31 October 2026), also [published on PyPI](https://pypi.org/project/sedrava/0.10.0/). Android generator versionCode: **10003**. The older 0.9.0a1 and 0.10.0rc2 releases are historical baselines.
+
+**Published prerelease:** [Sedrava 0.11.0rc1](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0rc1) ([PyPI](https://pypi.org/project/sedrava/0.11.0rc1/)). The `0.11.0` stable source candidate is in `release/011-stable-preparation`; it has **not** been published. Android candidate versionCode is 11002 (published RC: 11001).
 
 Start with [Quick Start](docs/QUICKSTART.md), the [text reference](docs/LANGUAGE_0_10_TEXT.md), [text profile example](examples/text_profile.sdr), and [measured report](docs/TEXT_010_REPORT.md). The [task manager](examples/task_manager.sdr) now uses records and lists directly in `.sdr`; the [navigation example](docs/NAVIGATION_QUICKSTART.en.md) adds guarded screens and Back.
 
@@ -124,3 +126,29 @@ Tag **v0.10.0** resolves to commit `688a320025a0d38235eb90c780362ec26b0708e2`; w
 
 
 **Development vs release:** Experimental Web UI / `sedrava build site` is in [draft PR #22](https://github.com/VasiliiBabkin/sedrava/pull/22), not in 0.10.0. The Astro/Starlight docs site is built separately from the language.
+
+## Experimental Web UI 0.11 / Экспериментальный Web UI 0.11
+
+Source-branch feature, separate from published RC2. Режим из этой ветки, отдельно от опубликованного RC2.
+
+```sh
+sedrava check examples/web_ui_011_landing.sdr
+sedrava build site examples/web_ui_011_landing.sdr --output build/site
+python -m http.server 8000 --directory build/site
+```
+
+13 static primitives, responsive layouts and safe assets; no deployment. 13 статических компонентов, адаптивность и безопасные ресурсы; без публикации сайта. [English](docs/WEB_UI_011.en.md) · [Русский](docs/WEB_UI_011.ru.md). Existing application commands are unchanged. Команды приложений не изменены.
+
+
+## Experimental 0.11 integration / Экспериментальная интеграция
+
+The integration preview adds shared composition, pure functions, bounded collection queries, forms/tables/dialogs, hash routes, local styling and typed public HTTP. It is not a published 0.11.0 or a backend/auth/database service.
+
+Реализованные возможности, сборка четырёх проектов и ограничения: [English guide](docs/011_WEB_PLATFORM.en.md), [руководство](docs/011_WEB_PLATFORM.ru.md), [actual status](docs/011_IMPLEMENTATION_STATUS.md). Existing published 0.10.0 instructions above remain applicable to their original targets.
+
+
+## Published 0.11.0rc1; preparing stable 0.11.0
+
+The [experimental RC](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0rc1) is available from [PyPI](https://pypi.org/project/sedrava/0.11.0rc1/) after exact-source CI, distribution checks and practical 0.10 upgrade/rollback testing. It provides responsive `site` generation, interactive `webapp`, typed Web state/components/functions, forms, routes, collection queries and validated public HTTP clients.
+
+The **stable 0.11.0 candidate is not yet published**. It requires fresh exact-head CI and a separate publication decision. [Stable gates](docs/STABLE_RELEASE_GATES_011.md) · [EN release notes](docs/RELEASE_NOTES_0_11_0.en.md) · [RU](docs/RELEASE_NOTES_0_11_0.ru.md). Namespaces, package lockfiles, trusted server, SQLite, authentication and automatic migration are not in 0.11. The official documentation website still uses Astro/Starlight.

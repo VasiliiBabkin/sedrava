@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 540 440" width="540" height="440">
+<rect x="18" y="18" width="504" height="404" rx="26" fill="#151322" stroke="#49415d"/>
+<path d="M18 78H522" stroke="#49415d"/>
+<circle cx="45" cy="48" r="5" fill="#f3d087"/><circle cx="65" cy="48" r="5" fill="#b59bff"/><circle cx="85" cy="48" r="5" fill="#49415d"/>
+<text x="320" y="54" fill="#bfb6d3" font-family="monospace" font-size="13">project.sdr</text>
+<text x="48" y="120" fill="#b59bff" font-family="monospace" font-size="16">app <tspan fill="#f3d087">"A good idea"</tspan></text>
+<text x="48" y="162" fill="#bfb6d3" font-family="monospace" font-size="15">state progress = 0</text>
+<text x="48" y="197" fill="#bfb6d3" font-family="monospace" font-size="15">rule progress &gt;= 0</text>
+<text x="48" y="232" fill="#b59bff" font-family="monospace" font-size="15">action build:</text>
+<text x="72" y="264" fill="#f7f4ff" font-family="monospace" font-size="15">progress = progress + 1</text>
+<path d="M48 300H492" stroke="#49415d"/>
+<rect x="48" y="328" width="205" height="54" rx="12" fill="#272039"/>
+<text x="67" y="361" fill="#b59bff" font-family="monospace" font-size="14">Web + Android</text>
+<circle cx="468" cy="355" r="19" fill="#f3d087"/><path d="M460 354L466 360L477 348" fill="none" stroke="#10101a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -1,0 +1,1 @@
+fn renamed(contact: Contact, label: text) -> Contact = Contact(name=label, email=contact.email, company=contact.company, active=contact.active)

@@ -7,6 +7,7 @@ import subprocess
 import unittest
 from sedrava_records import plain
 from sedrava_core import parse, transition
+from sedrava_syntax import document_kind
 from web_codegen import generate
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -14,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 @unittest.skipUnless(shutil.which('node'), 'Node.js required for differential conformance')
 class AlphaConformance(unittest.TestCase):
     def test_example_and_boundary_traces(self):
-        sources = [p.read_text(encoding='utf-8') for p in sorted((ROOT / 'examples').glob('*.sdr')) if p.name != 'timer.sdr']
+        sources = [p.read_text(encoding='utf-8') for p in sorted((ROOT / 'examples').glob('*.sdr')) if p.name != 'timer.sdr' and document_kind(p.read_text(encoding='utf-8')) == 'app']
         sources.append('''app "Boundaries"
 state n = -2147483648
 state other = 0

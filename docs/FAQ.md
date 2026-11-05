@@ -12,7 +12,7 @@
 
 **Do strings, lists and navigation work in 0.10.0?** Yes. Text is capped at 1024 Unicode scalars, lists at 100 items, navigation at 32 stack entries. See [text](LANGUAGE_0_10_TEXT.md), [records](RECORDS_COLLECTIONS_010.md), [navigation](NAVIGATION_010_CONTRACT.md).
 
-**Does `sedrava build site` work in 0.10.0?** No. It is experimental in [draft PR #22](https://github.com/VasiliiBabkin/sedrava/pull/22). The separate documentation site uses [Astro/Starlight](https://github.com/VasiliiBabkin/sedrava-site).
+**Does `sedrava build site` work in 0.10.0?** No. It is available in the [published experimental 0.11.0rc1](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0rc1) ([PyPI](https://pypi.org/project/sedrava/0.11.0rc1/)); stable 0.11.0 is still under review. The official documentation site uses [Astro/Starlight](https://github.com/VasiliiBabkin/sedrava-site).
 
 **`sedrava: command not found`?** Activate your Python venv and use `python -m pip install sedrava==0.10.0`; verify `python -m pip show sedrava`. Use `python -m pip install .` for source checkouts.
 

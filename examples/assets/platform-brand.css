@@ -1,0 +1,12 @@
+@font-face{font-family:PlatformInter;src:url("platform-inter.woff2") format("woff2");font-weight:400;font-style:normal;font-display:swap}
+/* Local author CSS; no remote dependencies or script permissions. */
+:root{--brand-round:22px}
+body{background:var(--background);font-family:PlatformInter,ui-sans-serif,system-ui,sans-serif}
+.s-heading{font-family:PlatformInter,ui-sans-serif,system-ui,sans-serif;font-weight:750;letter-spacing:-.045em}
+.s-heading:is(h1){font-size:clamp(2.15rem,6vw,4.8rem);line-height:1.08}
+.brand-shell{padding-block:28px}.brand-card{border-radius:var(--brand-round);box-shadow:0 16px 40px #0000000a}
+.brand-nav{display:flex;gap:14px;flex-wrap:wrap;align-items:center;padding:18px 24px}
+.brand-nav a{font-weight:650}.brand-kicker{letter-spacing:.13em;text-transform:uppercase;font-size:.8rem}
+.s-button:focus-visible{outline-offset:4px}.s-webapp input,.s-webapp textarea,.s-webapp select{min-height:48px}
+@media(min-width:768px){.brand-shell{padding-block:52px}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}

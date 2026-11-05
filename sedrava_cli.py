@@ -9,6 +9,9 @@ from sedrava_records import plain, serialize_state, restore_snapshot
 from sedrava_core import MAX_SOURCE_CHARS, parse, run, resolve, transition
 
 from sedrava_version import VERSION
+from sedrava_frontend import parse_document
+from sedrava_site import Site
+from sedrava_webapp import WebApp
 
 def atomic_write_text(path, raw):
     """Replace complete output only after a successful, flushed write."""
@@ -41,11 +44,14 @@ def main(argv=None):
     test = commands.add_parser("test", help="Run embedded Sedrava tests")
     test.add_argument("source", type=Path)
     build = commands.add_parser("build", help="Generate an application")
-    build.add_argument("target", choices=("web", "android"))
+    build.add_argument("target", choices=("web", "android", "site", "webapp", "api-web", "api-page"))
     build.add_argument("source", type=Path)
     build.add_argument("--output", type=Path)
+    build.add_argument("--service", type=Path, help="Experimental read-only API0 service for Web output directory")
     build.add_argument("--application-id", help="Stable Android package identity (lowercase reverse-domain name)")
     args = parser.parse_args(argv)
+    if args.command == "build" and args.service is not None and args.target != "web":
+        parser.error("--service is only supported for build web")
     if args.command == "build" and args.application_id is not None and args.target != "android":
         parser.error("--application-id is only supported for build android")
     try:
@@ -53,11 +59,46 @@ def main(argv=None):
             raise ValueError("Source exceeds size limit")
         with args.source.open(encoding="utf-8") as handle:
             source = handle.read(MAX_SOURCE_CHARS + 1)
+        from sedrava_syntax import document_kind
+        if document_kind(source) in ("site", "webapp"):
+            document = parse_document(source, args.source)
+            if isinstance(document, WebApp):
+                if args.command == 'check':
+                    from sedrava_webapp import generate_webapp
+                    from sedrava_web_assets import collect
+                    generate_webapp(document,args.source.parent)
+                    collect(document.settings,args.source.parent)
+                    print(f"OK: {args.source} (webapp)")
+                    return 0
+                if args.command == 'build' and args.target == 'webapp':
+                    from sedrava_webapp import build_webapp
+                    print(build_webapp(source,args.output or Path('build/webapp'),args.source))
+                    return 0
+                raise ValueError('WebApp B1 is Web-only; use check or sedrava build webapp (run/test/android/site not yet supported)')
+            if isinstance(document, Site):
+                if args.command == 'check':
+                    from site_codegen import generate_site
+                    generate_site(document,args.source.parent)
+                    print(f"OK: {args.source} (site)")
+                    return 0
+                if args.command == 'build' and args.target == 'site':
+                    from site_codegen import build_site
+                    print(build_site(source,args.output or Path('build/site'),args.source))
+                    return 0
+                raise ValueError('Site mode is static and Web-only; use check or sedrava build site (no app actions/tests)')
+            if args.command == 'build' and args.target in ('site','webapp'):
+                raise ValueError('build '+args.target+' requires a '+args.target+' document, not app')
+        from sedrava_http_inline import split_app_service
+        app_source, inline_service = split_app_service(source) if not source.lstrip().startswith("service ") else (source, None)
         if args.command == "check":
-            parse(source)
+            if source.lstrip().startswith("service "):
+                from sedrava_http_display import parse_display_service as parse_service
+                parse_service(source)
+            else:
+                parse(app_source)
             print(f"OK: {args.source}")
         elif args.command == "run":
-            program = parse(source)
+            program = parse(app_source)
             state = program.states.copy()
             if args.state_file and args.state_file.exists():
                 if args.state_file.stat().st_size > 800000: raise ValueError('Snapshot too large')
@@ -80,14 +121,65 @@ def main(argv=None):
             if program.has_navigation: result={"state":result,"stack":list(session.stack)}
             print(json.dumps(result,ensure_ascii=False,sort_keys=True))
         elif args.command == "test":
-            count = run(parse(source))
+            count = run(parse(app_source))
             print(f"PASS: {count} Sedrava tests")
+        elif args.command == "build" and args.target == "api-web":
+            from sedrava_http_display import parse_display_service as parse_service
+            from sedrava_http_codegen import generate_fetch_module
+            service, schema, _ = parse_service(source)
+            output = args.output or Path("build/api-web/service.mjs")
+            if output.resolve() == args.source.resolve():
+                raise ValueError("API output must differ from the source file")
+            atomic_write_text(output, generate_fetch_module(service, schema))
+            print(output)
+        elif args.command == "build" and args.target == "api-page":
+            from sedrava_http_display import parse_display_service as parse_service
+            from sedrava_http_codegen import generate_fetch_module
+            from sedrava_http_page import generate_api_page
+            service, schema, _ = parse_service(source)
+            output = args.output or Path("build/api-page")
+            html_path = output / "index.html"
+            module_path = output / "service.mjs"
+            if output.exists() and not output.is_dir():
+                raise ValueError("API page output must be a directory")
+            if html_path.resolve() == args.source.resolve() or module_path.resolve() == args.source.resolve():
+                raise ValueError("API page output must differ from the source file")
+            module = generate_fetch_module(service, schema)
+            page = generate_api_page(service, schema)
+            atomic_write_text(module_path, module)
+            atomic_write_text(html_path, page)
+            print(html_path)
         elif args.target == "web":
             from web_codegen import generate
             output = args.output or Path("build/web/index.html")
-            result = generate(source)
+            if inline_service is not None and args.service is not None:
+                raise ValueError("Use either an inline service or --service, not both")
+            result = generate(app_source)
+            if args.service is not None or inline_service is not None:
+                from sedrava_http_display import parse_display_service as parse_service
+                from sedrava_http_codegen import generate_fetch_module
+                from sedrava_http_embed import embed_api_panel
+                if args.service is not None:
+                    if args.service.stat().st_size > 32768:
+                        raise ValueError("API declaration exceeds source limit")
+                    service_source = args.service.read_text(encoding="utf-8")
+                else:
+                    service_source = inline_service
+                service, schema, selected = parse_service(service_source)
+                if output.suffix.lower() != ".html":
+                    raise ValueError("Web output with --service must be an HTML file")
+                module_path = output.parent / "service.mjs"
+                if module_path.resolve() in ({args.source.resolve()} | ({args.service.resolve()} if args.service is not None else set())):
+                    raise ValueError("Generated API module must differ from source files")
+                if args.service is not None and output.resolve() == args.service.resolve():
+                    raise ValueError("Web output must differ from service declaration")
+                from sedrava_http_display import parse_display_options
+                result = embed_api_panel(result, service.name, selected, **parse_display_options(service_source))
+                module = generate_fetch_module(service, schema)
             if output.resolve() == args.source.resolve():
                 raise ValueError("Web output must differ from the source file")
+            if args.service is not None or inline_service is not None:
+                atomic_write_text(module_path, module)
             atomic_write_text(output, result)
             print(output)
         else:

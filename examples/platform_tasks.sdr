@@ -1,0 +1,86 @@
+# Sedrava 0.11 integration: offline tasks with typed domain queries.
+webapp "Sedrava · Workspace"
+record Task:
+    title: text
+    done: bool
+fn matches(task: Task, query: text) -> bool = contains(lower_ascii(task.title), lower_ascii(query))
+state tasks: list<Task>(max=100) = []
+state selected = 0
+state new_title = ""
+state rename_to = ""
+state search_text = ""
+state filter_enabled = false
+state filter_done = false
+persist tasks
+derive visible_tasks = filter(tasks, matches, search_text)
+derive empty = count(tasks) == 0
+derive task_count = count(tasks)
+derive chosen = has(tasks, selected)
+derive selected_title = get(tasks, selected).title if has(tasks, selected) else ""
+derive selected_done = get(tasks, selected).done if has(tasks, selected) else false
+action add:
+    require new_title != ""
+    tasks = append(tasks, Task(title=new_title, done=false))
+    new_title = ""
+action rename:
+    require has(tasks, selected)
+    require rename_to != ""
+    tasks = update(tasks, selected, Task(title=rename_to, done=get(tasks, selected).done))
+    rename_to = ""
+action toggle:
+    require has(tasks, selected)
+    tasks = update(tasks, selected, Task(title=get(tasks, selected).title, done=not get(tasks, selected).done))
+action delete:
+    require has(tasks, selected)
+    tasks = remove(tasks, selected)
+    selected = 0
+view main:
+    container max 920:
+        column gap 20:
+            heading "Tasks on Sedrava"
+            paragraph "Offline first. Add a task, then select it to rename, finish or delete." variant lead
+            value task_count label "Tasks"
+            card:
+                column gap 16:
+                    input new_title label "New task" kind text
+                    button "Add task" action add
+            when empty:
+                callout:
+                    paragraph "No tasks yet. Create your first task."
+            input search_text label "Search tasks" kind text
+            checkbox filter_enabled label "Filter by completion"
+            select filter_done label "Completion status":
+                option "In progress" value false
+                option "Completed" value true
+            each visible_tasks select selected title title status done sort title where done equals filter_done active filter_enabled empty "No matching tasks" label "Task list":
+                card:
+                    column gap 12:
+                        field title label "Task" weight bold size 20
+                        row-when done:
+                            paragraph "Completed" variant muted
+                        row:
+                            pick "Select"
+                            button "Toggle" action toggle variant secondary
+            when chosen:
+                navigate "Open selected task" to details
+view details at "/tasks/:selected" when chosen:
+    container max 920:
+        column gap 20:
+            heading "Task details"
+            back "Back to tasks"
+            value selected_title label "Task name"
+            value selected_done label "Completed"
+            when chosen:
+                card:
+                    column gap 12:
+                        heading "Selected task" level 2
+                        input rename_to label "Rename selected task"
+                        button "Rename task" action rename
+                        button "Toggle completion" action toggle
+                        open "Delete task" to confirm_delete
+            dialog id confirm_delete label "Confirm task deletion":
+                column gap 16:
+                    heading "Delete this task?" level 2
+                    paragraph "The accepted deletion is saved immediately."
+                    button "Confirm delete" action delete variant secondary
+                    close "Cancel" to confirm_delete

@@ -1,0 +1,165 @@
+webapp "Sedrava · Client desk"
+stylesheet "assets/platform-brand.css"
+license "assets/INTER_LICENSE.txt"
+import "assets/platform-components.sdr"
+theme light:
+    background "#f5f3fa"
+    surface "#ffffff"
+    foreground "#20172f"
+    accent "#6141a3"
+    gold "#775200"
+    muted "#5e566b"
+    border "#d4cce0"
+theme dark:
+    background "#10101a"
+    surface "#1c1a2b"
+    foreground "#f7f4ff"
+    accent "#b59bff"
+    gold "#f3d087"
+    muted "#bfb6d3"
+    border "#49415d"
+theme-state theme_mode
+style panel:
+    padding 24
+    radius 22
+    shadow soft
+record Company:
+    name: text
+    industry: text
+record Contact:
+    name: text
+    email: text
+    company: int
+    active: bool
+import "assets/crm-logic.sdr"
+fn linked(contact: Contact, pool: list<Company>(max=100)) -> bool = has(pool, contact.company)
+state companies: list<Company>(max=100) = []
+state contacts: list<Contact>(max=100) = []
+state company_id = 0
+state contact_id = 0
+state company_name = ""
+state industry = ""
+state contact_name = ""
+state email = ""
+state search_text = ""
+state show_help = true
+state theme_mode = "light"
+persist companies
+persist contacts
+persist show_help
+persist theme_mode
+derive active_count = count(filter(contacts, "active", true))
+derive company_count = count(companies)
+derive contact_count = count(contacts)
+derive company_selected = has(companies, company_id)
+derive contact_selected = has(contacts, contact_id)
+rule all(contacts, linked, companies)
+action add_company:
+    require company_name != ""
+    companies = append(companies, Company(name=company_name, industry=industry))
+    company_name = ""
+    industry = ""
+action rename_company:
+    require has(companies, company_id)
+    require company_name != ""
+    let current_company = get(companies, company_id)
+    companies = update(companies, company_id, Company(name=company_name, industry=current_company.industry))
+    company_name = ""
+action delete_company:
+    require has(companies, company_id)
+    require count(filter(contacts, "company", company_id)) == 0
+    companies = remove(companies, company_id)
+    company_id = 0
+    contact_id = 0
+action add_contact:
+    require has(companies, company_id)
+    require contact_name != ""
+    require email != ""
+    contacts = append(contacts, Contact(name=contact_name, email=email, company=company_id, active=true))
+    contact_name = ""
+    email = ""
+action rename_contact:
+    require has(contacts, contact_id)
+    require contact_name != ""
+    let previous_contact = get(contacts, contact_id)
+    contacts = update(contacts, contact_id, renamed(previous_contact, contact_name))
+    contact_name = ""
+action toggle_contact:
+    require has(contacts, contact_id)
+    contacts = update(contacts, contact_id, Contact(name=get(contacts, contact_id).name, email=get(contacts, contact_id).email, company=get(contacts, contact_id).company, active=not get(contacts, contact_id).active))
+action delete_contact:
+    require has(contacts, contact_id)
+    contacts = remove(contacts, contact_id)
+    contact_id = 0
+view main:
+    container max 1180 padding 24 class "brand-shell":
+        column gap 28:
+            use AppHeader title "Your client desk":
+                paragraph "Companies, contacts and accepted changes — one local workspace." variant lead
+            row:
+                navigate "Companies" to companies
+                navigate "Settings" to settings
+            grid columns 2:
+                use Metric label "Companies" data company_count
+                use Metric label "Contacts" data contact_count
+                use Metric label "Active contacts" data active_count
+            when show_help:
+                callout:
+                    paragraph "Start by adding a company, select it, then open its contacts. This client stores data locally; it is not a multi-user backend."
+view companies at "/companies":
+    container max 1180 padding 24 class "brand-shell":
+        column gap 24:
+            use AppHeader title "Companies":
+                back "Back to dashboard"
+            form action add_company:
+                input company_name label "Company name" kind text
+                input industry label "Industry" kind text
+                submit "Add company"
+            input search_text label "Search companies"
+            table companies select company_id title name fields "name industry" search search_text sort name label "Company directory"
+            when company_selected:
+                column:
+                    navigate "Company contacts" to contacts
+                    open "Rename company" to edit_company
+                    button "Delete company" action delete_company variant secondary
+            dialog id edit_company label "Rename selected company":
+                column:
+                    heading "Rename company" level 2
+                    form action rename_company:
+                        input company_name label "New company name" kind text
+                        submit "Save company name"
+                    close "Close company editor" to edit_company
+view contacts at "/companies/:company_id" when company_selected:
+    container max 1180 padding 24 class "brand-shell":
+        column gap 24:
+            use AppHeader title "Company contacts":
+                back "Back to companies"
+            form action add_contact:
+                input contact_name label "Contact name" kind text
+                input email label "Email" kind email
+                submit "Add contact"
+            table contacts select contact_id title name fields "name email active" where company equals company_id sort name label "Contacts"
+            when contact_selected:
+                row:
+                    open "Edit selected contact" to edit_contact
+                    button "Toggle active" action toggle_contact
+                    button "Delete contact" action delete_contact variant secondary
+            dialog id edit_contact label "Edit selected contact":
+                column:
+                    heading "Rename contact" level 2
+                    form action rename_contact:
+                        input contact_name label "New contact name"
+                        submit "Save contact name"
+                    close "Close editor" to edit_contact
+view settings at "/settings":
+    container max 960 padding 24 class "brand-shell":
+        column gap 24:
+            use AppHeader title "Workspace settings":
+                back "Back to dashboard"
+            card style panel:
+                column:
+                    select theme_mode label "Color theme":
+                        option "Light" value "light"
+                        option "Dark" value "dark"
+                    checkbox show_help label "Show onboarding help"
+                    paragraph "Preferences and accepted records survive reloads. The palette and typography are project-owned local assets."

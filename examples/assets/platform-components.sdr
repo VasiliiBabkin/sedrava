@@ -1,0 +1,16 @@
+component Feature(title: text):
+    card class "brand-card" padding 24:
+        column gap 16:
+            heading $title level 2
+            slot
+component AppHeader(title: text):
+    column gap 12:
+        paragraph "SEDRAVA / WORKSPACE" variant eyebrow
+        heading $title
+        slot
+
+component Metric(label: text, data: ref):
+    card style panel:
+        column:
+            heading $label level 2
+            value $data label $label
