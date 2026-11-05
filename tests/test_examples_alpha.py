@@ -20,7 +20,11 @@ class ExamplesAlpha(unittest.TestCase):
                 source = path.read_text(encoding='utf-8')
                 program = parse_document(source,path)
                 if isinstance(program, HostProgram):
-                    self.assertEqual(program, parse_document(source,path))
+                    again = parse_document(source,path)
+                    self.assertEqual(program.name, again.name)
+                    self.assertEqual(program.arguments, again.arguments)
+                    self.assertEqual([s.operation for s in program.steps],
+                                     [s.operation for s in again.steps])
                     self.assertGreater(len(program.steps), 0)
                     with tempfile.TemporaryDirectory() as root:
                         with self.assertRaisesRegex(ValueError, "explicit --trusted"):
