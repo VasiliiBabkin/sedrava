@@ -159,7 +159,7 @@ class API013Tests(unittest.TestCase):
             self.assertEqual(self.request("GET", "/api/tasks")[0], 404)
             self.assertEqual(self.request("GET", "/health")[0], 200)
         with patch.dict(os.environ, {"SEDRAVA_API_EXPERIMENTAL_TOKEN": "short"}):
-            self.assertEqual(self.request("GET", "/api/tasks")[:2], (503, {"error": "unavailable"}))
+            self.assertEqual(self.request("GET", "/api/tasks")[:2], (503, {"error": "test_token_not_configured"}))
         self.assertEqual(self.request("GET", "/api/tasks", client="192.0.2.1")[0], 403)
         self.assertEqual(self.request("GET", "/api/tasks", server="0.0.0.0")[0], 403)
         self.assertEqual(self.request("GET", "/api/tasks", host=b"public.example")[0], 403)
