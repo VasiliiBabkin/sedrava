@@ -49,17 +49,47 @@ def main(argv=None):
     build.add_argument("--output", type=Path)
     build.add_argument("--service", type=Path, help="Experimental read-only API0 service for Web output directory")
     build.add_argument("--application-id", help="Stable Android package identity (lowercase reverse-domain name)")
+    host = commands.add_parser("host", help="Opt-in trusted local host documents (never Web/Android)")
+    host_commands = host.add_subparsers(dest="host_command", required=True)
+    host_check = host_commands.add_parser("check", help="Validate host code without filesystem effects")
+    host_check.add_argument("source", type=Path)
+    host_run = host_commands.add_parser("run", help="Execute trusted host code with explicit capabilities")
+    host_run.add_argument("source", type=Path)
+    host_run.add_argument("--root", type=Path, required=True, help="Explicit local workspace directory")
+    host_run.add_argument("--trusted", action="store_true", help="Confirm the host source is trusted")
+    host_run.add_argument("--allow-read", action="store_true", help="Grant bounded local text file reads")
+    host_run.add_argument("--allow-write", action="store_true", help="Grant one atomic local text file write")
+    host_run.add_argument("--arg", dest="host_args", action="append", default=[],
+                          metavar="NAME=VALUE", help="Provide a declared typed host argument")
     args = parser.parse_args(argv)
     if args.command == "build" and args.service is not None and args.target != "web":
         parser.error("--service is only supported for build web")
     if args.command == "build" and args.application_id is not None and args.target != "android":
         parser.error("--application-id is only supported for build android")
     try:
+        if args.command == "host":
+            from sedrava_host import parse_host, run_host
+            if args.source.stat().st_size > MAX_SOURCE_CHARS * 4:
+                raise ValueError("Host source exceeds size limit")
+            with args.source.open(encoding="utf-8") as handle:
+                source = handle.read(MAX_SOURCE_CHARS + 1)
+            program = parse_host(source)
+            if args.host_command == "check":
+                print(f"OK: {args.source} (host; no I/O performed)")
+            else:
+                result = run_host(program, root=args.root, supplied=args.host_args,
+                                  trusted=args.trusted, allow_read=args.allow_read,
+                                  allow_write=args.allow_write)
+                print(json.dumps(result, ensure_ascii=False, sort_keys=True))
+            return 0
         if args.source.stat().st_size > MAX_SOURCE_CHARS * 4:
             raise ValueError("Source exceeds size limit")
         with args.source.open(encoding="utf-8") as handle:
             source = handle.read(MAX_SOURCE_CHARS + 1)
         from sedrava_syntax import document_kind
+        if any(line.startswith("host ") for indent, line, number in
+               __import__("sedrava_syntax").source_lines(source) if indent == 0):
+            raise ValueError("Host documents are never Web/Android apps; use sedrava host check/run")
         if document_kind(source) in ("site", "webapp"):
             document = parse_document(source, args.source)
             if isinstance(document, WebApp):
