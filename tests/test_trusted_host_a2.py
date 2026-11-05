@@ -78,6 +78,13 @@ emit computed
                 run_host(program, root=root, trusted=True,
                          supplied=['payload={"values":[1.5]}'])
 
+    def test_json_document_cannot_escape_into_core_expression(self):
+        for statement in ("let alias = payload", "let raw = concat(payload, \"x\")",
+                          "emit payload"):
+            with self.subTest(statement=statement), self.assertRaises(ValueError):
+                parse_host('host "NoImplicit"\narg payload: json\n' +
+                           statement + '\nemit "ok"\n')
+
     def test_json_typed_fields_and_duplicate_set(self):
         source = '''host "Create JSON"
 arg enabled: bool
