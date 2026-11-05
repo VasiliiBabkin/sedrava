@@ -61,7 +61,8 @@ def main(argv=None):
             source = handle.read(MAX_SOURCE_CHARS + 1)
         # Server documents are a separate restricted source dialect. They are
         # never parsed as browser-owned app state or as arbitrary Python/SQL.
-        if source.lstrip().startswith("server "):
+        first_declaration = next((line.strip() for line in source.splitlines() if line.strip() and not line.lstrip().startswith("#")), "")
+        if first_declaration.startswith("server "):
             from sedrava_server_schema import parse_server, build_server
             if args.command == "check":
                 parse_server(source)
