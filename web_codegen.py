@@ -144,7 +144,7 @@ def generate(source, _program=None, _domain_only=False):
             f"    let _sdr_workLeft={MAX_ACTION_WORK-base_work(program.derived,program.rules)};",
             "    const _sdr_spend=n=>{_sdr_workLeft-=n;if(_sdr_workLeft<0)throw Error('Action exceeds execution work limit');};",
             *statements(body, names,derived=program.derived),
-            f"    return validateState(nextState) && ({rules}) ? nextState : state;",
+            "    return validateState(nextState) ? nextState : state;",
             "  },",
         ])
     render_names = {key: "derivedState[" + json_script(key) + "]" for key in program.states}

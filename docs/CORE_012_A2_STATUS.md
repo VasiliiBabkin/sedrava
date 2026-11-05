@@ -139,3 +139,8 @@ Independent adapter review found JS actions could repair an invalid input state
 entry. Added the same entry validation to emitted JS actions. Regression tests
 exercise actual Node and Python, plus a generated Android JVM assertion. Browser
 restoration already validates input, but adapters must not silently differ.
+
+JS entry-validation hardening also allowed removal of the old redundant invariant
+expression after validateState. Invariants now evaluate once at each transition
+boundary, matching Python/Kotlin and the common two-boundary fuel reservation.
+A real generated-JS/Python normalization counter regression checks this contract.

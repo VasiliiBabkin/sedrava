@@ -38,6 +38,20 @@ def cases():
         for i,value in enumerate(row):
             yield value,[row[1] if i<3 else row[3],row[2] if i<3 else row[4],row[3],row[4]]
 class Unicode012(unittest.TestCase):
+    def test_invariants_are_evaluated_once_per_validation_boundary(self):
+        from sedrava_core import parse,transition
+        from unittest.mock import patch
+        from web_codegen import generate
+        import sedrava_unicode
+        source='app "Rules"\nstate text = "é"\naction copy: text = text\nrule unicode_nfc(text) == "é"\nscreen main:\n    value text\n'
+        program=parse(source)
+        with patch('sedrava_unicode.normalize',wraps=sedrava_unicode.normalize) as normalize_call:
+            transition(program,program.states,'copy')
+            self.assertEqual(normalize_call.call_count,2)
+        with tempfile.TemporaryDirectory() as tmp:
+            path=Path(tmp)/'rules.js'
+            path.write_text(generate(source,_domain_only=True)+'\nlet calls=0;const original=sdrNormalize;sdrNormalize=(...a)=>{calls++;return original(...a)};actions.copy(initialState);if(calls!==2)throw Error("Repeated invariant evaluation: "+calls);')
+            subprocess.run(['node',str(path)],check=True,timeout=30)
     def test_official_python_normalization(self):
         count=0
         for value,expected in cases():
