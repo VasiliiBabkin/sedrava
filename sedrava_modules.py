@@ -109,7 +109,7 @@ def components(source, origins=None,*,scoped=None):
         raise ValueError('Source map does not match source lines')
     # Resolve definitions after imports. They are templates, never executable source.
     definitions = {}
-    from sedrava_source_map import mapped_lines,origin_for,replace_span,ExpandedSource
+    from sedrava_source_map import mapped_lines,origin_for,replace_spans,ExpandedSource
     lines = mapped_lines(source,origins)
     kept = []
     kept_origins = []
@@ -149,12 +149,18 @@ def components(source, origins=None,*,scoped=None):
 
     def instantiate(lines, line_origins, stack=()):
         result, result_origins = [], []
+        size=0
+        owner=None
         i = 0
         while i < len(lines):
             line = lines[i]; origin = origin_for(line,line_origins[i]); i += 1
+            if line.strip() and not line.startswith(' ') and not line.startswith('#'):
+                owner=line.split(maxsplit=1)[0].rstrip(':')
             call = re.fullmatch(r'( *)use ([A-Za-z][A-Za-z0-9_]*)(.*)', line)
             if not call:
                 if stack and scoped:validate_ui_line(line,origin)
+                size+=len(line)+1
+                if size>MAX_SOURCE_CHARS:fail_component('Expanded components exceed source limit',origin,1)
                 result.append(line); result_origins.append(origin); continue
             prefix, name, rest = call.groups()
             if name not in definitions or name in stack or len(stack) >= MAX_BLOCK_DEPTH:
@@ -200,14 +206,18 @@ def components(source, origins=None,*,scoped=None):
                                 if match[1] not in values:raise ValueError('Unknown component parameter '+match[1])
                                 edits.append((offset+match.start(),offset+match.end(),values[match[1]],value_origins[match[1]]))
                         offset+=len(part)
-                    for start,end,value,point in reversed(edits):text=replace_span(text,start,end,value,point)
+                    length=len(prefix)+len(text)+sum(len(value)-(end-start) for start,end,value,_ in edits)
+                    if length+1>MAX_SOURCE_CHARS:fail_component('Expanded components exceed source limit',origin,len(prefix)+1)
+                    text=replace_spans(text,edits)
                     expanded.append(prefix+text)
                     expanded_origins.append(template_origin)
             child_lines, child_locations = instantiate(expanded, expanded_origins, (*stack, name))
+            if scoped and owner in {'fn','state','derive','record','action','persist','rule','test','navigation','service','api','theme','style'}:
+                fail_component('UI components cannot be instantiated in domain declarations',origin,len(prefix)+1)
+            size+=sum(len(child)+1 for child in child_lines)
+            if size>MAX_SOURCE_CHARS:fail_component('Expanded components exceed source limit',origin,len(prefix)+1)
             result.extend(child_lines)
             result_origins.extend(child_locations)
-            if sum(map(len, result)) > MAX_SOURCE_CHARS:
-                raise ValueError('Expanded components exceed source limit')
         return result, result_origins
     result_lines, result_origins = instantiate(kept, kept_origins)
     result_origins=[origin_for(line,origin) for line,origin in zip(result_lines,result_origins)]

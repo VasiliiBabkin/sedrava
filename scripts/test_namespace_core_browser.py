@@ -12,6 +12,7 @@ labels=['scan','add','add','expected','seed','audit','break_rule','reject'];sequ
 subprocess.run([sys.executable,'-m','sedrava_cli','build','web',str(source_path),'--output',str(folder/'app/index.html')],check=True,cwd=ROOT)
 subprocess.run([sys.executable,'-m','sedrava_cli','build','webapp',str(source_path.with_name('site.sdr')),'--output',str(folder/'webapp')],check=True,cwd=ROOT)
 subprocess.run([sys.executable,'-m','sedrava_cli','build','web',str(ROOT/'tests/fixtures/namespace_legacy_navigation.sdr'),'--output',str(folder/'legacy/index.html')],check=True,cwd=ROOT)
+subprocess.run([sys.executable,'-m','sedrava_cli','build','site',str(ROOT/'tests/fixtures/namespace_context_ui.sdr'),'--output',str(folder/'context-ui')],check=True,cwd=ROOT)
 class Quiet(http.server.SimpleHTTPRequestHandler):
     def log_message(self,*args):pass
 server=http.server.ThreadingHTTPServer(('127.0.0.1',0),functools.partial(Quiet,directory=folder));threading.Thread(target=server.serve_forever,daemon=True).start()
@@ -41,6 +42,13 @@ try:
     page.go_back();assert page.get_by_role('heading',name='Home',exact=True).is_visible()
     page.go_forward();assert page.get_by_role('heading',name='Other',exact=True).is_visible()
     assert not errors,errors;page.close();results.append({'mode':'legacy-navigation','prototype_named_state':True,'back_forward':True,'pageerrors':errors})
+    page=browser.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
+    page.goto('http://127.0.0.1:'+str(server.server_port)+'/context-ui/index.html')
+    paragraph=page.get_by_text('Contextual UI',exact=True);assert paragraph.is_visible()
+    assert paragraph.locator('..').evaluate('(node)=>getComputedStyle(node).paddingTop')=='37px'
+    page.reload();assert page.get_by_text('Contextual UI',exact=True).is_visible()
+    page.screenshot(path=str(folder/(engine+'-context-ui.png')),full_page=True)
+    assert not errors,errors;page.close();results.append({'mode':'contextual-site','private_use_style_names':True,'computed_padding':37,'pageerrors':errors})
     (folder/(engine+'-results.json')).write_text(json.dumps({'engine':engine,'browser_version':browser.version,'results':results},indent=2));browser.close()
  print('PASS',engine,'modular app and WebApp, complete-state traces/reload/rejected storage')
 finally:server.shutdown()

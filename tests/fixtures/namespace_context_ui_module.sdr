@@ -1,0 +1,8 @@
+module example.context.ui
+style style:
+    padding 37
+component use:
+    card style style:
+        paragraph "Contextual UI"
+export component Panel:
+    use use

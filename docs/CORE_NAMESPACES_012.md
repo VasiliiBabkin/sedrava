@@ -140,3 +140,8 @@ The compiler uses the same function/parameter grammar and eight-parameter limit
 for core parsing and module lowering. Character replacements are batched instead
 of repeatedly copying full source maps. Scope lookup and declaration ownership
 are maintained incrementally, not by rescanning previous module lines.
+
+Scoped UI templates cannot be instantiated inside domain declarations, including
+record fields. Entry and module record labels stay labels. Parameter-substitution
+growth is checked before creating strings/maps; recursive expansion also checks
+cumulative output before extending its parent. Legacy unscoped macros remain.

@@ -39,11 +39,13 @@ def replace_spans(line,spans):
     raw=str(line)
     text,columns,positions=[],[],[]
     cursor=0
-    for start,end,value in sorted(spans):
+    for span in sorted(spans,key=lambda item:item[0]):
+        start,end,value=span[:3]
+        position=span[3] if len(span)==4 else line.positions[start]
         if not cursor<=start<=end<=len(line):raise ValueError('Overlapping source replacements')
         text.extend((raw[cursor:start],value))
         columns.extend(line.columns[cursor:start]);columns.extend([line.columns[start]]*len(value))
-        positions.extend(line.positions[cursor:start]);positions.extend([line.positions[start]]*len(value))
+        positions.extend(line.positions[cursor:start]);positions.extend([position]*len(value))
         cursor=end
     text.append(raw[cursor:])
     columns.extend(line.columns[cursor:]);positions.extend(line.positions[cursor:])

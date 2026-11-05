@@ -279,6 +279,11 @@ export action step:
         with self.assertRaisesRegex(ValueError,'invalid record field') as error:
             parse_document(source,self.put('main.sdr',source))
         self.assertEqual((error.exception.source,error.exception.line,error.exception.column),(str(module),4,5))
+        source='app "Fields"\nimport "words.sdr" as words\nrecord Item:\n    words.safe: int\n'
+        entry=self.put('main.sdr',source)
+        with self.assertRaisesRegex(ValueError,'invalid record field') as error:
+            parse_document(source,entry)
+        self.assertEqual((error.exception.source,error.exception.line,error.exception.column),(str(entry),4,5))
 
     def test_inline_action_failure_preserves_original_expression_column(self):
         line='export action fail: n = xs[4]'
@@ -297,9 +302,9 @@ export action step:
             text='😀 '+('abc + '*count)+'end'
             positions=[None]*(len(text)+1);positions[2]=('caller.sdr',7,11)
             source=MappedLine(text,positions=positions)
-            spans=[(2+6*index,5+6*index,'M_long_identifier') for index in range(count)]
+            spans=[(2+6*index,5+6*index,'M_long_identifier')+((('caller.sdr',8,index+1),) if index%2 else ()) for index in range(count)]
             expected=source
-            for start,end,value in reversed(spans):expected=replace_span(expected,start,end,value)
+            for span in reversed(spans):expected=replace_span(expected,*span)
             actual=replace_spans(source,spans)
             self.assertEqual(str(actual),str(expected));self.assertEqual(actual.columns,expected.columns);self.assertEqual(actual.positions,expected.positions)
 
@@ -321,6 +326,23 @@ export action step:
                 with self.assertRaisesRegex(ValueError,'conflicts with import alias') as error:
                     parse_document(source,entry)
                 self.assertEqual(error.exception.source,str(entry))
+
+    def test_scoped_components_cannot_define_fields_inside_domain_records(self):
+        self.put('ui.sdr','module example.fields\nexport component Fields:\n    title: text\n')
+        source='app "Fields"\nimport "ui.sdr" as ui\nrecord Item:\n    use ui.Fields\n'
+        entry=self.put('main.sdr',source)
+        with self.assertRaisesRegex(ValueError,'UI components cannot be instantiated in domain') as error:
+            parse_document(source,entry)
+        self.assertEqual((error.exception.source,error.exception.line,error.exception.column),(str(entry),4,5))
+
+    def test_component_growth_is_rejected_before_literal_materialization(self):
+        from sedrava_modules import components
+        source='site "Budget"\ncomponent Expand(text: text):\n    paragraph '+(' $text'*8)+'\npage home at "/":\n    title "Budget"\n    use Expand text "'+('a'*200)+'"\n'
+        self.assertLess(len(source),1000)
+        with patch('sedrava_modules.MAX_SOURCE_CHARS',1000), patch('sedrava_source_map.replace_spans',side_effect=AssertionError('Materialized oversized substitution')) as replacement:
+            with self.assertRaisesRegex(ValueError,'Expanded components exceed source limit'):
+                components(source,scoped=True)
+            replacement.assert_not_called()
 
     def project(self):
         self.put('sedrava.toml','[package]\nname="example.app"\nversion="1.0.0"\n[dependencies]\n"example.lib"={path="vendor/example.lib",version="1.0.0"}\n')

@@ -356,7 +356,10 @@ def resolve_scoped(source, source_path, *, with_origins=False, verified=None):
                     raise LocatedError(f'invalid top-level module construct',path,no,1)
                 if owner and owner.kind=='record':
                     colon=line.find(':')
-                    if colon>=0:
+                    if colon<0:
+                        use=re.match(r'\s*use\s+',line)
+                        if use:line=line[:use.end()]+_rewrite(line[use.end():],{key:value for key,value in symbols.items() if value.kind=='component'},aliases,line_no=no,filename=str(path))
+                    else:
                         records={key:value for key,value in symbols.items() if value.kind=='record'}
                         line=line[:colon+1]+_rewrite(line[colon+1:],records,aliases,line_no=no,filename=str(path),type_context=True)
                     result.append(line)
@@ -364,10 +367,10 @@ def resolve_scoped(source, source_path, *, with_origins=False, verified=None):
                     continue
                 if owner and owner.kind=='action':
                     line=_lower_action_line(line,symbols,aliases,action_scopes,module_id,owner.name,path,no)
-                elif re.match(r'^\s*use\s+', line):
-                    line = _rewrite(line, {n:s for n,s in symbols.items() if s.kind=='component'}, aliases, line_no=no, filename=str(path))
-                elif re.search(r'\bstyle\s+(?:[A-Za-z][A-Za-z0-9_]*)(?![A-Za-z0-9_])', line):
-                    line = _rewrite(line, {n:s for n,s in symbols.items() if s.kind=='style'}, aliases, line_no=no, filename=str(path))
+                elif use:=re.match(r'^\s*use\s+', line):
+                    line = line[:use.end()]+_rewrite(line[use.end():], {n:s for n,s in symbols.items() if s.kind=='component'}, aliases, line_no=no, filename=str(path))
+                elif style:=re.search(r'\bstyle\s+([A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)?)',line):
+                    line = line[:style.start(1)]+_rewrite(line[style.start(1):style.end(1)],{n:s for n,s in symbols.items() if s.kind=='style'},aliases,line_no=no,filename=str(path))+line[style.end(1):]
                 elif re.match(r'^\s*\w+\s*:\s*', line):
                     colon=line.index(':')
                     line=line[:colon+1]+_rewrite(line[colon+1:], {n:s for n,s in symbols.items() if s.kind=='record'}, aliases, line_no=no, filename=str(path),type_context=True)
@@ -417,7 +420,11 @@ def resolve_scoped(source, source_path, *, with_origins=False, verified=None):
         source_map.extend(cache[path].origins)
     out = []
     source_map = []
+    entry_record=False
     for no, line in enumerate(source.splitlines(), 1):
+        line=MappedLine(line)
+        if line.strip() and not line.startswith(' ') and not line.startswith('#'):
+            entry_record=bool(re.fullmatch(r'record [A-Za-z_][A-Za-z_0-9]*:',line))
         m = _IMPORT.fullmatch(line)
         if m:
             path = _valid_import(entry, m[1], root, no)
@@ -425,8 +432,13 @@ def resolve_scoped(source, source_path, *, with_origins=False, verified=None):
         elif line.startswith('import "') and ' as ' in line and not m:
             raise LocatedError(f'invalid namespaced import',entry,no,1)
         else:
-            _check_entry_binders(line,aliases,entry,no)
-            out.append(_rewrite(line, aliases=aliases, filename=str(entry), line_no=no))
+            if entry_record and line.startswith(' '):
+                colon=line.find(':')
+                lowered=_rewrite(line,aliases=aliases,filename=str(entry),line_no=no) if colon<0 else line[:colon+1]+_rewrite(line[colon+1:],aliases=aliases,filename=str(entry),line_no=no,type_context=True)
+            else:
+                _check_entry_binders(line,aliases,entry,no)
+                lowered=_rewrite(line, aliases=aliases, filename=str(entry), line_no=no)
+            out.append(lowered)
             source_map.append(origin_for(out[-1],(entry,no)))
     out,source_map=_schedule_domain(out,source_map,entry)
     output = '\n'.join(out) + '\n'

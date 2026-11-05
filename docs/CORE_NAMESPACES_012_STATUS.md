@@ -148,3 +148,13 @@ and bulk-character provenance equivalence. Batched replacements, incremental
 ownership and chained scope lookup also remove repeated whole-line/history copies.
 40 focused integration tests pass; the full new regression is running before the
 next exact-head checkpoint. Earlier SHA results remain historical, not final proof.
+
+## UI expansion boundary checkpoint
+
+42 focused integration tests and the full 378-test working-tree regression pass,
+with real Chromium app/WebApp/legacy navigation and a static site whose private
+component/style names are use/style (computed padding 37px). UI templates cannot
+add domain record fields; root record labels never become alias substitutions.
+Substitution growth is checked before string/source-map materialization and parent
+output before concatenation. The shared bulk mapper retains caller positions.
+This is a checkpoint, not final-SHA CI evidence.
