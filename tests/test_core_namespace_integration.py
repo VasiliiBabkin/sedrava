@@ -136,6 +136,12 @@ class Integration(unittest.TestCase):
         source='app "Boundary"\nimport "ui.sdr" as ui\nstate n = 0\naction unsafe:\n    use ui.Identity:\n        n = n + 1\n';entry=self.put('main.sdr',source)
         with self.assertRaisesRegex(ValueError,'UI components cannot emit domain') as err:parse_document(source,entry)
         self.assertEqual(err.exception.source,str(entry));self.assertEqual(err.exception.line,6)
+    def test_missing_package_extra_keeps_actionable_diagnostic(self):
+        self.project()
+        with patch('sedrava_packages._toml',side_effect=ValueError('Python 3.10 package locking requires tomli; install sedrava[packages]')):
+            error=io.StringIO()
+            with contextlib.redirect_stderr(error):self.assertEqual(main(['--diagnostics=json','verify',str(self.root)]),1)
+            self.assertIn('install sedrava[packages]',json.loads(error.getvalue())['message'])
     def test_module_action_cannot_capture_entry_state(self):
         self.put('m.sdr','module example.model\nexport action steal:\n    private_data = 9\n')
         source='app "Scope"\nimport "m.sdr" as m\nstate private_data = 0\n'

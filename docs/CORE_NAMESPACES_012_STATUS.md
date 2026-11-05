@@ -73,3 +73,9 @@ hashes. No remote imports, code execution or new server capabilities are added.
 Final full regression, three-browser jobs, JVM/APK/Lint/API35 and installed archive
 checks are being rerun on the next exact-head checkpoint. Final outcomes and
 artifacts will be recorded in this PR; intermediate runs are not release evidence.
+
+CI confirmed the Python 3.10 clean-install omission: base CLI worked, but the new
+installed locked-package example requires the declared packages extra in its
+isolated venv. Tests now exercise base commands first, install the extra, then
+verify locked packages. Missing-parser errors retain the actionable extra-install
+hint instead of being misreported as corrupt TOML. No dependency checks were bypassed.

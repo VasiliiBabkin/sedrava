@@ -52,10 +52,11 @@ def _checked_path(root, relative):
 def _read_manifest(path,with_bytes=False):
     if path.is_symlink() or not path.is_file() or path.stat().st_size > 32768:
         raise ValueError('Package manifest missing, linked or too large')
+    parser=_toml()
     try:
         with path.open('rb') as stream:raw=stream.read(32769)
         if len(raw)>32768:raise ValueError('Manifest resource limit')
-        data = _toml().loads(raw.decode('utf-8'))
+        data = parser.loads(raw.decode('utf-8'))
     except (UnicodeError, ValueError, RecursionError) as exc:
         raise ValueError(f'Invalid TOML manifest: {path}') from exc
     if set(data) != {'package'} and set(data) != {'package', 'dependencies'}:
