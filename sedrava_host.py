@@ -4,6 +4,7 @@ Experimental v1: bounded pure scalar expressions plus capability-gated UTF-8
 file reads and one atomic write. This is NOT an OS sandbox for hostile code.
 """
 import ast
+import keyword
 import os
 import re
 import secrets
@@ -13,6 +14,18 @@ from pathlib import Path
 
 from sedrava_core import checked_int, checked_text, evaluate, parse_expr, read_literal, type_of
 from sedrava_syntax import source_lines
+from sedrava_stdlib import SIGNATURES
+from sedrava_queries import NAMES as QUERY_NAMES
+
+_RESERVED = set(SIGNATURES) | set(QUERY_NAMES) | {
+    "append", "update", "remove", "get", "has", "count", "next_id",
+    "true", "false"
+}
+
+def _valid_binding(name, known):
+    return (name not in known and name not in _RESERVED and
+            not keyword.iskeyword(name) and not name.startswith("_"))
+
 
 MAX_STEPS = 64
 MAX_ARGS = 16
@@ -78,20 +91,20 @@ def parse_host(source):
                 raise ValueError(f"Line {number}: {exc}") from exc
 
         if m := re.fullmatch(r"arg ([A-Za-z][A-Za-z0-9_]*): (text|int|bool)", line):
-            if steps or len(arguments) >= MAX_ARGS or m[1] in types:
+            if steps or len(arguments) >= MAX_ARGS or not _valid_binding(m[1], types):
                 raise ValueError(f"Line {number}: invalid or duplicate host argument")
             kind = {"text": str, "int": int, "bool": bool}[m[2]]
             types[m[1]] = kind
             arguments.append((m[1], kind))
         elif m := re.fullmatch(r"let ([A-Za-z][A-Za-z0-9_]*) = (.+)", line):
-            if m[1] in types:
-                raise ValueError(f"Line {number}: duplicate host binding")
+            if not _valid_binding(m[1], types):
+                raise ValueError(f"Line {number}: reserved or duplicate host binding")
             node = expression(m[2])
             types[m[1]] = type_of(node, types)
             steps.append(HostStep("let", m[1], node))
         elif m := re.fullmatch(r"read ([A-Za-z][A-Za-z0-9_]*) from (.+)", line):
             reads += 1
-            if reads > MAX_READS or m[1] in types:
+            if reads > MAX_READS or not _valid_binding(m[1], types):
                 raise ValueError(f"Line {number}: duplicate binding or read limit exceeded")
             node = expression(m[2], str)
             if isinstance(node, ast.Constant):
@@ -123,6 +136,8 @@ def parse_host(source):
 def _parse_args(spec, supplied):
     expected = dict(spec)
     values = {}
+    if len(supplied) > MAX_ARGS:
+        raise ValueError("Too many host arguments")
     for entry in supplied:
         if "=" not in entry:
             raise ValueError("Arguments require name=value")
@@ -137,7 +152,7 @@ def _parse_args(spec, supplied):
                 raise ValueError("Boolean host argument requires true or false")
             value = raw == "true"
         else:
-            if not re.fullmatch(r"-?(0|[1-9][0-9]*)", raw):
+            if len(raw) > 11 or not re.fullmatch(r"-?(0|[1-9][0-9]*)", raw):
                 raise ValueError("Integer host argument must be decimal int32")
             value = checked_int(int(raw))
         values[name] = value
@@ -148,7 +163,7 @@ def _parse_args(spec, supplied):
 
 def _segments(value):
     checked_text(value)
-    if not value or len(value) > 240 or "\\" in value or "\x00" in value:
+    if not value or len(value) > 240 or "\\" in value or any(ord(char) < 32 or ord(char) == 127 for char in value):
         raise ValueError("Invalid workspace-relative path")
     parts = value.split("/")
     if any(part in ("", ".", "..") for part in parts):
