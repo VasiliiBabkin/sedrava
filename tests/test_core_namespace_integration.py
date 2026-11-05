@@ -165,6 +165,13 @@ class Integration(unittest.TestCase):
         self.assertEqual(str(source),str(again));self.assertTrue(again.scoped)
         self.assertEqual(source.public_symbols,again.public_symbols);self.assertEqual(source.display_names,again.display_names)
         self.assertEqual(source.origins,again.origins)
+    def test_unscoped_legacy_expansion_keeps_existing_semantics(self):
+        from sedrava_records import plain
+        source=(ROOT/'tests/fixtures/namespace_legacy_macro.sdr').read_text()
+        document=parse_document(source);program=document.program
+        state,accepted=transition(program,program.states,'increment');self.assertTrue(accepted)
+        expected=[{'accepted':True,'state':{k:plain(v) for k,v in state.items()}}]
+        self.assertEqual(state['n'],1);self.assertEqual(expected,javascript(source,['increment'],program));self.assertEqual(expected,kotlin(source,['increment'],program))
     def test_module_action_cannot_capture_entry_state(self):
         self.put('m.sdr','module example.model\nexport action steal:\n    private_data = 9\n')
         source='app "Scope"\nimport "m.sdr" as m\nstate private_data = 0\n'

@@ -114,3 +114,8 @@ Output paths cannot replace imported inputs or contain source directories. Insta
 wheel/sdist include both this modular project and the locked package example.
 Tests run actual generated JS, compiled Kotlin, three browsers and API35 Compose;
 consult the evidence journal/PR for exact SHA and actual results, not assumptions.
+
+Scoped components and slots are UI-only and cannot inject domain statements.
+Unscoped legacy component expansion retains its 0.11 behaviour; the upgrade and
+rollback audit compiles the same action-macro fixture with the published stable
+package and candidate. This compatibility path does not weaken scoped isolation.

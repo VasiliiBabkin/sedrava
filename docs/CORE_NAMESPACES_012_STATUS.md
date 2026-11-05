@@ -90,3 +90,14 @@ origins. Reusing ExpandedSource preserves scope, public symbols and provenance.
 scenarios pass. Intermediate commit 9898592 completed all 23 applicable workflow
 runs successfully; the subsequent four source-position changes require their own
 exact-head rerun. No intermediate success is used as final-SHA evidence.
+
+## Legacy component compatibility checkpoint
+
+Scoped components/slots remain UI-only. The unscoped 0.11 expansion path retains
+action macros: a new regression executes its complete state in Python, generated
+JavaScript and compiled Kotlin. The real published 0.11.0 -> candidate -> 0.11.0
+clean-environment audit also checks and builds this unchanged WebApp in all phases.
+The first attempt correctly exposed the previous candidate restriction; rebuilt
+archives pass the audit without modifying the fixture or weakening scoped tests.
+31 integration regressions pass; final full suite and exact-head CI follow this
+checkpoint. The last previous full suite passed 358 tests.

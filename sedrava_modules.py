@@ -80,7 +80,7 @@ def _expand(source, source_path=None, _stack=(), _root=None, _files=None, *, wit
     if len(joined) > MAX_SOURCE_CHARS:
         raise ValueError('Expanded imports exceed source limit')
     if not _stack:
-        try:joined, origins = components(joined, origins)
+        try:joined, origins = components(joined, origins,scoped=scoped)
         except ValueError as exc:
             from sedrava_source_map import source_error
             mapped=source_error(exc,origins)
@@ -99,7 +99,8 @@ def expand(source,source_path=None,*args,**kwargs):
         raise mapped from exc
 
 
-def components(source, origins=None):
+def components(source, origins=None,*,scoped=None):
+    if scoped is None:scoped=getattr(source,"scoped",False)
     source_lines(source)
     traced = origins is not None
     if origins is None:
@@ -153,7 +154,7 @@ def components(source, origins=None):
             line = lines[i]; origin = origin_for(line,line_origins[i]); i += 1
             call = re.fullmatch(r'( *)use ([A-Za-z][A-Za-z0-9_]*)(.*)', line)
             if not call:
-                if stack:validate_ui_line(line,origin)
+                if stack and scoped:validate_ui_line(line,origin)
                 result.append(line); result_origins.append(origin); continue
             prefix, name, rest = call.groups()
             if name not in definitions or name in stack or len(stack) >= MAX_BLOCK_DEPTH:
