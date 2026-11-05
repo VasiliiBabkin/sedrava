@@ -59,6 +59,8 @@ jobs:
 
   browser-a2:
     runs-on: ubuntu-24.04
+    env:
+      SEDRAVA_BROWSER: ${{ matrix.engine }}
     strategy:
       fail-fast: false
       matrix:
@@ -75,8 +77,6 @@ jobs:
       - run: python -m playwright install --with-deps ${{ matrix.engine }}
       - run: python scripts/test_core_a2_browser.py
       - run: python scripts/test_namespace_core_browser.py
-        env:
-          SEDRAVA_BROWSER: ${{ matrix.engine }}
       - run: python scripts/core_a2_receipt.py
         if: always()
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

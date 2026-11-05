@@ -101,3 +101,17 @@ The first attempt correctly exposed the previous candidate restriction; rebuilt
 archives pass the audit without modifying the fixture or weakening scoped tests.
 31 integration regressions pass; final full suite and exact-head CI follow this
 checkpoint. The last previous full suite passed 358 tests.
+
+## Browser matrix audit
+
+The final local regression passed 359 tests without skips, real Chromium app/WebApp
+traces, clean wheel/sdist installation, payload reproducibility and actual stable
+upgrade/rollback. Android debug APK/JVM/Lint/instrumentation compilation and merged
+permissions/signature verification passed. During final CI inspection the original
+A2 browser step was found to default to Chromium even in other-engine jobs; both
+browser scripts now inherit the matrix engine. The imported-module script already
+selected its engine explicitly. This is a coverage correction, not weakened tests.
+The new CI-only checkpoint requires fresh exact-SHA workflows. One intermediate
+navigation run failed downloading an Android system-image ZIP before emulator
+startup; it did not execute/fail an application assertion. Final runs remain the
+authoritative evidence and their links/counts are maintained in draft PR #52.
