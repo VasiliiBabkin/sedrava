@@ -1,6 +1,7 @@
 """Shared collection backend metadata and portable Web runtime emission."""
 import json
 from sedrava_records import ListValue, fingerprint
+from sedrava_sequences import ValueList,ValueListType
 
 
 STRICT_JSON = r'''// Strict bounded JSON parser: duplicate keys and non-JSON numeric constants reject.
@@ -20,7 +21,11 @@ function strictJSON(raw) {
 '''
 
 def metadata(program):
-    return {k: {'capacity': v.kind.capacity, 'fields': {name: {int:'number', bool:'boolean', str:'string'}[kind] for name, kind in v.kind.record.fields}} for k, v in program.states.items() if isinstance(v, ListValue)}
+    result={}
+    for key,value in program.states.items():
+        if isinstance(value,ValueList):result[key]={'capacity':value.kind.capacity,'element':{int:'number',bool:'boolean',str:'string'}[value.kind.element]}
+        elif isinstance(value,ListValue):result[key]={'capacity':value.kind.capacity,'fields':{name:{int:'number',bool:'boolean',str:'string'}[kind] for name,kind in value.kind.record.fields}}
+    return result
 
 
 def js_runtime(program, quote):
@@ -31,6 +36,7 @@ function validRecord(row, fields, identity) {
   return Object.entries(fields).every(([k,t]) => typeof row[k] === t && (t === 'number' ? Number.isInteger(row[k]) && row[k] >= -2147483648 && row[k] <= 2147483647 : t === 'string' ? validText(row[k]) : true));
 }
 function validCollection(value, type) {
+  if(type.element)return validVector(value,type);
   if (!exactKeys(value,['next_id','items']) || !Number.isInteger(value.next_id) || value.next_id < 1 || value.next_id > 2147483647 || !Array.isArray(value.items) || value.items.length > type.capacity) return false;
   const ids = new Set();
   for (const row of value.items) {
@@ -41,6 +47,14 @@ function validCollection(value, type) {
 }
 function collectionOp(name, capacity, list, arg, record) {
   if (name === 'count') return list.items.length;
+  if (name === 'list_capacity') return capacity;
+  if (name === 'list_index') return list.items.findIndex(row=>Object.keys(arg).every(key=>row[key]===arg[key]));
+  if (name === 'list_identity'||name === 'list_remove_at'||name === 'list_replace_at') {
+    if(!Number.isInteger(arg)||arg<0||arg>=list.items.length)throw Error('Collection positional index out of bounds');
+    const id=list.items[arg].id;
+    if(name==='list_identity')return id;
+    return collectionOp(name==='list_remove_at'?'remove':'update',capacity,list,id,record);
+  }
   if (name === 'next_id') return list.next_id;
   if (name === 'list_at') {
     if (!Number.isInteger(arg) || arg < 0 || arg >= list.items.length) throw Error('Collection positional index out of bounds');
@@ -115,6 +129,13 @@ def kt_support(program, quoted):
         'internal fun <T: SdrRecord> sdr_remove(list: SdrList<T>, id: Int): SdrList<T> { sdr_get(list,id); return list.copy(items=list.items.filter { it.id!=id }) }',
     ]
     lines.append(KT_RUNTIME)
+    from sedrava_sequences import KT_RUNTIME as VECTOR_RUNTIME
+    lines.append(VECTOR_RUNTIME)
+    lines += ['internal fun <T:SdrRecord> sdr_list_capacity(v:SdrList<T>):Int=v.capacity',
+              'internal fun <T:SdrRecord> sdr_list_identity(v:SdrList<T>,i:Int):Int {sdr_list_at(v,i);return v.items[i].id}',
+              'internal fun <T:SdrRecord> sdr_list_remove_at(v:SdrList<T>,i:Int):SdrList<T> = sdr_remove(v,sdr_list_identity(v,i))',
+              'internal fun <T:SdrRecord> sdr_list_replace_at(v:SdrList<T>,i:Int,r:T):SdrList<T> = sdr_update(v,sdr_list_identity(v,i),r)',
+              'internal fun <T:SdrRecord> sdr_list_index(v:SdrList<T>,r:T):Int=v.items.indexOfFirst{it.record==r}']
     for name, record in program.records.items():
         lines += ['internal data class SdrRecord_' + name + '(' + ', '.join('val sdr_'+k+': '+kinds[t] for k,t in record.fields) + '): SdrRecord {', '  override fun check() {']
         lines += ['    checkedText(sdr_'+k+')' for k,t in record.fields if t is str]
@@ -163,6 +184,7 @@ internal fun sdrEncode(value: Any?): String = when(value) {
   is Boolean, is Int -> value.toString()
   is Map<*,*> -> value.entries.joinToString(",","{","}"){sdrEncode(it.key as String)+":"+sdrEncode(it.value)}
   is List<*> -> value.joinToString(",","[","]"){sdrEncode(it)}
+  is SdrVector<*> -> sdrEncode(value.items)
   is SdrList<*> -> sdrEncode(mapOf("next_id" to value.next_id,"items" to value.items.map { mapOf("id" to it.id) + it.record.fields() }))
   else -> throw IllegalArgumentException("Invalid JSON value")
 }
@@ -172,6 +194,13 @@ internal fun sdrEncode(value: Any?): String = when(value) {
 def kt_persistence(program, quoted, literal):
     lines = [KT_JSON]
     for k,v in program.states.items():
+        if isinstance(v,ValueList):
+            from sedrava_functions import kotlin_type
+            decoder={int:'sdrInt',bool:'sdrBool',str:'sdrString'}[v.kind.element]
+            lines += ['internal fun decode_'+k+'(value:Any?):SdrVector<'+kotlin_type(v.kind.element)+'> {',
+                      'require(value is List<*> && value.size<='+str(v.kind.capacity)+')',
+                      'return SdrVector('+str(v.kind.capacity)+',value.map{'+decoder+'(it)}).also{it.check()}', '}']
+            continue
         if not isinstance(v,ListValue): continue
         fields=v.kind.record.fields
         lines += ['internal fun decode_'+k+'(value: Any?): SdrList<SdrRecord_'+v.kind.record.name+'> {',
@@ -191,7 +220,7 @@ def kt_persistence(program, quoted, literal):
               '  require(sdrInt(envelope["schema"])==1 && envelope["signature"]=='+quoted(fingerprint(program))+')',
               '  val saved=sdrObject(envelope["state"],if(full) '+allkeys+' else '+persistent+')']
     for k,v in program.states.items():
-        decoder='decode_'+k if isinstance(v,ListValue) else {int:'sdrInt',bool:'sdrBool',str:'sdrString'}[type(v)]
+        decoder='decode_'+k if isinstance(v,(ListValue,ValueList)) else {int:'sdrInt',bool:'sdrBool',str:'sdrString'}[type(v)]
         condition='true' if k in program.persistent else 'full'
         lines.append('  val next_'+k+' = if('+condition+') '+decoder+'(saved['+quoted(k)+']) else '+literal(v))
     args=','.join('next_'+k for k in program.states)

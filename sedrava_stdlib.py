@@ -64,6 +64,8 @@ function sdrUnicodeChr(value){if(!Number.isInteger(value)||value<0||value>0x10ff
 '''
 
 KT_RUNTIME=r'''
+internal fun sdrScalars(value:String):List<String> {val out=mutableListOf<String>();var i=0;while(i<value.length){val cp=value.codePointAt(i);out.add(String(Character.toChars(cp)));i+=Character.charCount(cp)};return out}
+
 internal fun sdrTextLength(value:String):Int = value.codePointCount(0,value.length)
 internal fun sdrTextAt(value:String,index:Int):String {val count=value.codePointCount(0,value.length);require(index>=0&&index<count){"Text index outside Unicode scalar bounds"};val at=value.offsetByCodePoints(0,index);return String(Character.toChars(value.codePointAt(at)))}
 internal fun sdrTextSlice(value:String,start:Int,end:Int):String {val count=value.codePointCount(0,value.length);require(start>=0&&start<=end&&end<=count){"Invalid Unicode scalar slice bounds"};return value.substring(value.offsetByCodePoints(0,start),value.offsetByCodePoints(0,end))}

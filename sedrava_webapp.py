@@ -14,7 +14,7 @@ import re
 import tempfile
 
 from sedrava_core import parse as parse_app, run, type_of
-from sedrava_records import ListType, value_type
+from sedrava_records import ListType, value_type,structured
 from sedrava_syntax import source_lines, MAX_BLOCK_DEPTH
 from sedrava_site import (BREAKPOINTS, COMMON, COMPONENTS, THEME, Component,
                           Definition, Parameter, Property, Span, choice, fail,
@@ -630,7 +630,7 @@ def generate_webapp(document, source_dir=".", _inputs=None):
     if document.services:
         from sedrava_web_services import generate_services
         from sedrava_records_codegen import STRICT_JSON
-        ui_js='let remoteReady=false;\n'+('' if program.records or program.has_navigation else STRICT_JSON)+ui_js+generate_services(document.services, program)
+        ui_js='let remoteReady=false;\n'+('' if structured(program) else STRICT_JSON)+ui_js+generate_services(document.services, program)
     title = html.escape(document.name)
     index = ('<!doctype html>\n<html lang="en"><head><meta charset="utf-8">'
              '<meta name="viewport" content="width=device-width,initial-scale=1">'

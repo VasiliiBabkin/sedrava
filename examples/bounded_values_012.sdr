@@ -1,0 +1,59 @@
+app "Bounded values"
+record Row:
+    name: text
+fn doubled(x: int) -> int = x * 2
+fn raised(xs: list<int>(max=4)) -> list<int>(max=4) = append(xs, 9)
+state values: list<int>(max=4) = [3, 1, 2]
+state words: list<text>(max=4) = ["😀", "é", "Б", "𐀀"]
+state flags: list<bool>(max=3) = [true, false]
+state rows: list<Row>(max=3) = []
+state total = 0
+state found = -1
+state text = ""
+persist values
+persist words
+persist flags
+persist rows
+persist total
+action scan:
+    total = 0
+    for index, value in values:
+        total = total + value
+        values = list_replace_at(values, index, doubled(value))
+    for char in "A😀Б":
+        text = concat(text, char)
+action order:
+    values = list_sort(values)
+    words = list_sort(words)
+    found = list_index(words, "😀")
+    flags = list_replace_at(flags, 1, true)
+action remove:
+    values = list_remove_at(values, 1)
+    values = values[0:2]
+action add:
+    values = raised(values)
+action fail_bounds:
+    total = 100
+    values = list_remove_at(values, 99)
+action fail_sum:
+    values = [2147483647, 1]
+    total = list_sum(values)
+action seed_rows:
+    rows = append(rows, Row(name="same"))
+    rows = append(rows, Row(name="same"))
+    rows = list_replace_at(rows, 0, Row(name="new"))
+action delete_rows:
+    let snapshot = rows
+    for index, row in snapshot:
+        rows = remove(rows, list_identity(snapshot, index))
+action clear:
+    values = list_clear(values)
+    words = list_clear(words)
+test values: scan -> total == 6 and values[0] == 6
+test search: order -> found == 3
+test records: seed_rows, delete_rows -> count(rows) == 0 and next_id(rows) == 3
+screen main:
+    value total
+    value found
+    value text
+    button "Scan" -> scan

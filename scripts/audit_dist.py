@@ -14,7 +14,7 @@ EXPECTED_MODULES = {
 }
 EXPECTED_MODULES.update({name+'.py' for name in (
  'sedrava_webapp','sedrava_http','sedrava_http_parser','sedrava_http_codegen','sedrava_http_page','sedrava_http_embed','sedrava_http_inline','sedrava_http_display',
- 'sedrava_modules','sedrava_web_routes','sedrava_web_ui','sedrava_web_queries','sedrava_web_services','sedrava_web_assets','sedrava_functions','sedrava_stdlib','sedrava_queries','sedrava_diagnostics')})
+ 'sedrava_modules','sedrava_web_routes','sedrava_web_ui','sedrava_web_queries','sedrava_web_services','sedrava_web_assets','sedrava_functions','sedrava_stdlib','sedrava_queries','sedrava_diagnostics', 'sedrava_cost', 'sedrava_sequences')})
 LICENSE_MARKER = "Apache License"
 sys.path.insert(0, str(ROOT))
 from sedrava_version import VERSION

@@ -1,6 +1,11 @@
 """Internal, target-independent immutable record/list values and strict snapshots."""
 from dataclasses import dataclass
 import json
+from sedrava_sequences import ValueList,ValueListType,validate_list
+
+def structured(program):
+    return bool(program.records or program.has_navigation or any(isinstance(v,ValueList) for v in program.states.values()))
+
 
 @dataclass(frozen=True)
 class RecordType:
@@ -25,7 +30,7 @@ class ListValue:
 
 
 def value_type(value):
-    return value.kind if isinstance(value, (ListValue, RecordValue)) else type(value)
+    return value.kind if isinstance(value, (ListValue, RecordValue, ValueList)) else type(value)
 
 
 def validate(value, expected=None):
@@ -33,6 +38,7 @@ def validate(value, expected=None):
     kind = value_type(value)
     if expected is not None and kind != expected:
         raise ValueError('Value type mismatch')
+    if isinstance(value, ValueList):return validate_list(value,expected)
     if isinstance(value, RecordValue):
         if type(value.values) is not tuple or len(value.values) != len(kind.fields):
             raise ValueError('Invalid record')
@@ -55,6 +61,18 @@ def validate(value, expected=None):
 
 def operation(name, values):
     collection = values[0]
+    if isinstance(collection,ValueList):
+        from sedrava_sequences import operation as vector_operation
+        return vector_operation(name,values)
+    if name=='list_capacity':return collection.kind.capacity
+    if name=='list_identity':
+        operation('list_at',values)
+        return collection.items[values[1]][0]
+    if name=='list_index':return next((i for i,(_,record) in enumerate(collection.items) if record==values[1]),-1)
+    if name in ('list_replace_at','list_remove_at'):
+        operation('list_at',values)
+        identity=collection.items[values[1]][0]
+        return operation('update' if name=='list_replace_at' else 'remove',[collection,identity,*values[2:]])
     if name == 'count': return len(collection.items)
     if name == 'next_id': return collection.next_id
     if name == 'list_at':
@@ -85,11 +103,15 @@ def operation(name, values):
 
 def plain(value):
     if isinstance(value, RecordValue): return {key: field for (key, _), field in zip(value.kind.fields, value.values)}
+    if isinstance(value, ValueList):return list(value.items)
     if isinstance(value, ListValue): return {'next_id': value.next_id, 'items': [dict(id=key, **plain(record)) for key, record in value.items]}
     return value
 
 
 def decode(value, kind):
+    if isinstance(kind,ValueListType):
+        if type(value) is not list or len(value)>kind.capacity:raise ValueError('Invalid value-list snapshot')
+        return validate_list(ValueList(kind,tuple(value)))
     if isinstance(kind, ListType):
         if type(value) is not dict or set(value) != {'next_id', 'items'} or type(value['items']) is not list or len(value['items']) > kind.capacity:
             raise ValueError('Invalid collection snapshot')
@@ -105,6 +127,7 @@ def decode(value, kind):
 def fingerprint(program):
     def kind(value):
         t = value_type(value)
+        if isinstance(t,ValueListType):return ['value-list',t.element.__name__,t.capacity]
         if isinstance(t, ListType): return ['list', t.record.name, [[k, f.__name__] for k, f in t.record.fields], t.capacity]
         return t.__name__
     return json.dumps([[k, kind(v), k in program.persistent] for k, v in program.states.items()], separators=(',', ':'), ensure_ascii=True)

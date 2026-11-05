@@ -151,11 +151,11 @@ class BoundedTextCore(unittest.TestCase):
 
     def test_restricted_repeat_syntax_and_resource_cap(self):
         for loop in ('repeat i in range(0, 101):',
-                     'repeat i in range(1, 10):',
+                     'repeat i in range(1, 10, 0):',
                      'repeat i in range(0, sum):',
                      'repeat sum in range(0, 5):',
-                     'repeat i in range(0, -1):',
-                     'repeat i in range(0, 0):',
+                     'repeat i in range(0, -1, 0):',
+                     'repeat i in range(0, 2147483648):',
                      'repeat i in range(0, 999):',
                      'repeat i in range(0, 5):\n        let i = 3'):
             source=('app "Invalid"\nstate sum = 0\naction calc:\n    ' +
