@@ -1,0 +1,17 @@
+# Sedrava 0.13 A2 experimental local-only API. Not in released 0.11.
+server "Restricted Taskboard API"
+database sqlite env SEDRAVA_DB_PATH
+
+migration 1:
+    create table tasks:
+        title: text(160)
+        done: bool
+
+migration 2:
+    add column tasks.note: text(300) default ""
+
+endpoint GET "/api/tasks" -> list tasks
+endpoint POST "/api/tasks" -> create tasks
+endpoint GET "/api/tasks/{id}" -> read tasks
+endpoint PATCH "/api/tasks/{id}" -> update tasks
+endpoint DELETE "/api/tasks/{id}" -> delete tasks

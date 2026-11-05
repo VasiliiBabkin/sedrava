@@ -223,6 +223,7 @@ class HealthApp:
                 return
             raise ValueError("Unsupported ASGI scope")
         method, path = scope.get("method"), scope.get("path")
+        extra_headers = []
         if method == "GET" and path == "/health":
             try:
                 payload = self.status()
@@ -230,12 +231,14 @@ class HealthApp:
             except (MigrationError, sqlite3.DatabaseError, OSError, ValueError):
                 payload, status = {"status": "unavailable"}, 503
         else:
-            payload, status = {"error": "not_found"}, 404
+            from sedrava_server_api import handle_request
+            status, payload, extra_headers = await handle_request(self.directory, scope, receive)
         raw = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
         await send({"type": "http.response.start", "status": status,
                     "headers": [(b"content-type", b"application/json; charset=utf-8"),
                                 (b"cache-control", b"no-store"),
-                                (b"content-length", str(len(raw)).encode("ascii"))]})
+                                (b"content-length", str(len(raw)).encode("ascii")),
+                                (b"x-content-type-options", b"nosniff")] + extra_headers})
         await send({"type": "http.response.body", "body": raw})
 
 
