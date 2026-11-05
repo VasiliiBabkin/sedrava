@@ -181,3 +181,18 @@ The helper is restricted to disposable GitHub CI and sudo preserves only the
 public GITHUB_ACTIONS flag. Intermediate head 2b58c85 already passed the complete
 bounded-core push workflow with the new mirror. Final exact-head CI/archives/native
 checks are rerun after this checkpoint; definitive links/counts are in draft PR #52.
+
+## Expanded evaluation depth checkpoint
+
+A bounded 32-function/20-not-per-body reproducer passed earlier static work bounds
+but leaked RecursionError during Python transition. The common model now tracks
+cached function depth and callback frames, rejecting expanded paths above 128.
+AST size/depth checks also precede recursive transformers, with literal placeholders
+counted as eventual Constants to retain the existing 256-node boundary. No host
+recursion-limit override or backend-specific bypass was added.
+Negative imported chains fail compile with original module positions and no partial
+Web/Android output. Bounded multi-file calls, a 120-not function and the exact text
+literal node boundary execute/check correctly. 48 focused integration tests and
+the full 384-test local suite pass. This is a necessary conservative tightening of
+the experimental complexity contract, documented in both languages; normal legacy
+examples remain covered. Final exact-head CI is rerun after this checkpoint.

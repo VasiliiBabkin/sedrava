@@ -377,6 +377,50 @@ export action step:
         state,accepted=transition(program,program.states,actions(program,['step'])[0])
         self.assertTrue(accepted);self.assertEqual(next(value for key,value in state.items() if key.endswith('_n')),1)
 
+    def test_imported_function_depth_rejects_engine_recursion_and_executes_bounded_calls(self):
+        self.put('base.sdr','module example.base\nexport fn identity(x: bool) -> bool = x\n')
+        def module(count):
+            lines=['module example.depth','import "base.sdr" as base']
+            for index in range(1,count+1):
+                previous='base.identity' if index==1 else 'f'+str(index-1)
+                lines.append(('export ' if index==count else '')+'fn f'+str(index)+'(x: bool) -> bool = '+('not '*20)+previous+'(x)')
+            return '\n'.join(lines)+'\n'
+        imported=self.put('m.sdr',module(31))
+        source='app "Depth"\nimport "m.sdr" as m\nstate flag = false\nstate steps = 0\nstate values: list<int>(max=1) = []\naction step:\n    flag = not m.f31(flag)\n    steps = steps + 1\nscreen main:\n    value steps\n'
+        entry=self.put('main.sdr',source)
+        with self.assertRaisesRegex(ValueError,'nesting complexity limit') as error:
+            parse_document(source,entry)
+        self.assertEqual(error.exception.source,str(imported))
+        for target,output in [('web',self.root/'bad-web.html'),('android',self.root/'bad-android')]:
+            with contextlib.redirect_stderr(io.StringIO()):self.assertEqual(main(['build',target,str(entry),'--output',str(output)]),1)
+            self.assertFalse(output.exists())
+        imported.write_text(module(4));source=source.replace('m.f31','m.f4');entry.write_text(source)
+        lowered=expand(source,entry)[0];program=parse(lowered);expected=reference(lowered,['step','step'])
+        self.assertEqual(expected[-1]['state']['steps'],2);self.assertIs(expected[-1]['state']['flag'],False)
+        self.assertTrue(all(item['accepted'] for item in expected))
+        self.assertEqual(expected,javascript(lowered,['step','step']));self.assertEqual(expected,kotlin(lowered,['step','step']))
+
+    def test_deep_ast_is_rejected_before_recursive_transformers_with_json_diagnostic(self):
+        source='app "Depth"\nstate flag = true\naction step: flag = '+('not '*500)+'false\n'
+        entry=self.put('main.sdr',source);output=io.StringIO()
+        with contextlib.redirect_stderr(output):self.assertEqual(main(['--diagnostics=json','check',str(entry)]),1)
+        diagnostic=json.loads(output.getvalue());self.assertEqual(diagnostic['phase'],'compile')
+        self.assertEqual(diagnostic['location']['source'],str(entry))
+        self.assertRegex(diagnostic['message'],'complexity|nested')
+
+    def test_bounded_expression_depth_remains_executable_in_js_and_kotlin(self):
+        self.put('m.sdr','module example.boundary\nexport fn identity(x: bool) -> bool = '+('not '*120)+'x\n')
+        source='app "Boundary"\nimport "m.sdr" as m\nstate flag = false\nstate steps = 0\nstate values: list<int>(max=1) = []\naction step:\n    flag = not m.identity(flag)\n    steps = steps + 1\nscreen main:\n    value steps\n'
+        entry=self.put('main.sdr',source);lowered=expand(source,entry)[0]
+        expected=reference(lowered,['step','step']);self.assertTrue(all(item['accepted'] for item in expected))
+        self.assertEqual(expected[-1]['state']['steps'],2);self.assertIs(expected[-1]['state']['flag'],False)
+        self.assertEqual(expected,javascript(lowered,['step','step']));self.assertEqual(expected,kotlin(lowered,['step','step']))
+        from sedrava_core import parse_expr,evaluate
+        boundary=parse_expr(('not '*126)+'("a" == "b")',{})
+        self.assertIs(evaluate(boundary,{}),False)
+        boundary=parse_expr(('not '*127)+'flag',{'flag':bool})
+        self.assertIs(evaluate(boundary,{'flag':True}),False)
+
     def project(self):
         self.put('sedrava.toml','[package]\nname="example.app"\nversion="1.0.0"\n[dependencies]\n"example.lib"={path="vendor/example.lib",version="1.0.0"}\n')
         self.put('vendor/example.lib/sedrava.toml','[package]\nname="example.lib"\nversion="1.0.0"\n')

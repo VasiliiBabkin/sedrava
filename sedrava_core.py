@@ -4,7 +4,7 @@ import re
 from sedrava_records import RecordType, ListType, RecordValue, ListValue, value_type, validate, operation, structured
 from sedrava_sequences import ValueList,ValueListType,NAMES as VALUE_LIST_OPS
 from dataclasses import dataclass
-from sedrava_functions import FunctionType, expression_cost, signature_type, FUNCTION_DECLARATION, PARAMETER_DECLARATION, MAX_FUNCTION_PARAMETERS
+from sedrava_functions import FunctionType, expression_cost, expression_depth, signature_type, FUNCTION_DECLARATION, PARAMETER_DECLARATION, MAX_FUNCTION_PARAMETERS, MAX_EXPRESSION_DEPTH
 from sedrava_stdlib import SIGNATURES
 from sedrava_results import NAMES as RESULT_NAMES
 from sedrava_queries import NAMES as QUERY_NAMES, type_query
@@ -163,6 +163,13 @@ def parse_expr(source, types, expected=None):
         node = ast.parse(source, mode="eval").body
     except (SyntaxError, RecursionError) as exc:
         raise ValueError("Invalid or excessively nested expression") from exc
+    # Check before recursive NodeTransformer/type-checker visits, not after them.
+    raw_nodes=list(ast.walk(node))
+    # Literal placeholders become Constants; their Load nodes disappear.
+    if len(raw_nodes)-sum(isinstance(item,ast.Name) and item.id in literals for item in raw_nodes) > MAX_AST_NODES:
+        raise ValueError("Expression exceeds complexity limit")
+    if expression_depth(node,expanded=False)>MAX_EXPRESSION_DEPTH:
+        raise ValueError("Expression nesting complexity limit")
     class ReplaceLiterals(ast.NodeTransformer):
         def visit_Name(self, item):
             return ast.copy_location(ast.Constant(literals[item.id]), item) if item.id in literals else item
@@ -185,6 +192,7 @@ def parse_expr(source, types, expected=None):
             checked_value(item.value)
     try:
         type_of(node, types)
+        if expression_depth(node)>MAX_EXPRESSION_DEPTH:raise ValueError("Expression/function nesting complexity limit")
         if expression_cost(node)>MAX_DERIVED_NODES:raise ValueError("Expression/function exceeds complexity limit")
     except ValueError as exc:
         unknown = next((item.id for item in ast.walk(node)
@@ -500,7 +508,7 @@ def _parse(source):
             except ValueError as exc:raise ValueError(f'Line {number}: invalid function return type') from exc
             body=expression(m[4],{**records,**functions,**dict(params)},number,m.start(4)+1)
             if type_of(body,{**records,**functions,**dict(params)})!=result_type:raise ValueError(f'Line {number}: function return type mismatch')
-            function=FunctionType(m[1],tuple(params),result_type,body,expression_cost(body))
+            function=FunctionType(m[1],tuple(params),result_type,body,expression_cost(body),expression_depth(body))
             functions[m[1]]=function;types[m[1]]=function
         elif m := re.fullmatch(r"record ([A-Za-z_][A-Za-z_0-9]*):", line):
             if states or actions or len(records) >= 16 or m[1] in types or is_reserved_identifier(m[1]) or m[1] in ('append','update','remove','get','has','count','next_id','list_at','list_slice','list_clear','list_remove_at','list_replace_at','list_index','list_identity','list_capacity','list_sort','list_sum'): raise ValueError(f"Line {number}: column 1: invalid record declaration")

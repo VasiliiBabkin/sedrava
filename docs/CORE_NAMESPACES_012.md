@@ -156,3 +156,11 @@ escapes. Kotlin differential output is framed by LF, not Unicode splitlines.
 The executable modular fixture includes these values and an astral scalar slice
 in Python, browser UI and Android state/recreation scenarios. UI templates are
 checked on instantiation; unused core functions are still fully type checked.
+
+Expanded evaluation paths are limited to 128 core structural units, including
+callee bodies and callback frames, as well as the existing node/work limits. This
+conservative stack/memory bound is common to all targets. AST bounds are checked
+before recursive transforms; literal placeholders are counted as their eventual
+Constants. Some previously executable very deep experimental expressions can now
+reject. A 32-function chain that previously leaked Python RecursionError now gets
+a compile diagnostic before Web/Android output; bounded deep calls remain tested.
