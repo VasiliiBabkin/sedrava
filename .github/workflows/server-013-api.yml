@@ -31,6 +31,10 @@ jobs:
           python -m build
           python -m twine check dist/*
           python scripts/audit_dist.py
+      - name: Real loopback HTTP request/response and SQLite persistence
+        run: |
+          python -m pip install uvicorn==0.35.0
+          python scripts/test_server_api_network_013.py
       - name: Generate schema from A2 source and migrate a real SQLite DB
         run: |
           python -m pip install .
