@@ -53,7 +53,7 @@ def from_exception(exc, source, command, *, phase=None):
     column = int(match[2] or 1) if match else None
     message = match[3] if match else str(exc)
     if isinstance(exc, OSError):
-        return Diagnostic("SDR-E3001", "io", message, str(source), line, column)
+        return Diagnostic("SDR-E3001", "io", message, str(getattr(exc,"filename",None) or source), line, column)
     if isinstance(exc, AssertionError):
         return Diagnostic("SDR-E4001", "test", message, str(source), line, column)
     if phase == "execute" or (phase is None and command in ("run", "test")):

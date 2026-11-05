@@ -8,12 +8,12 @@ import re
 from sedrava_syntax import MAX_SOURCE_CHARS, MAX_BLOCK_DEPTH, source_lines
 
 
-def expand(source, source_path=None, _stack=(), _root=None, _files=None, *, with_origins=False, _verified=None, _scoped=False):
+def _expand(source, source_path=None, _stack=(), _root=None, _files=None, *, with_origins=False, _verified=None, _scoped=False):
     source_lines(source)
     from sedrava_source_map import locations, ExpandedSource, MappedLine, origin_for, mapped_lines, replace_span
-    scoped=_scoped
+    scoped=_scoped or getattr(source,"scoped",False)
     files = set() if _files is None else _files
-    source_map = locations(source, source_path)
+    source_map = getattr(source,"origins",None) or locations(source, source_path)
     if _stack and scoped:
         from sedrava_namespaces import _tokens,_RESERVED
         import tokenize
@@ -37,46 +37,66 @@ def expand(source, source_path=None, _stack=(), _root=None, _files=None, *, with
             files.update(namespaced_files)
     root = Path(source_path).resolve().parent if _root is None and source_path else _root
     output, origins = [], []
-    for number, line in enumerate(source.splitlines(), 1):
-        match = re.fullmatch(r'import "([^"\n]+\.sdr)"', line)
-        if not match:
-            output.append(line)
-            origins.append(source_map[number - 1])
-            continue
-        if source_path is None:
-            raise ValueError(f'Line {number}: column 1: imports require a source file path')
-        value = match[1]
-        if Path(value).is_absolute() or '..' in Path(value).parts or '\\' in value:
-            raise ValueError(f'Line {number}: column 1: import must stay within the source directory')
-        path = Path(source_path).resolve().parent / value
-        current = path
-        while current != root and current != current.parent:
-            if current.is_symlink():
-                raise ValueError(f'Line {number}: column 1: symlink modules are forbidden')
-            current = current.parent
-        path = path.resolve()
-        if not path.is_relative_to(root) or not path.is_file():
-            raise ValueError(f'Line {number}: column 1: missing or outside-root module {value}')
-        if path in _stack or len(_stack) >= 16:
-            raise ValueError(f'Line {number}: column 1: cyclic or excessive imports')
-        if path.stat().st_size > MAX_SOURCE_CHARS * 4 or len(files) >= 32:
-            raise ValueError(f'Line {number}: column 1: module resource limit')
-        files.add(path)
-        from sedrava_packages import read_module
-        text=read_module(path,root,_verified)
-        for depth, declaration, n in source_lines(text):
-            if depth == 0 and not declaration.startswith(('component ', 'style ', 'import ', 'fn ', 'record ')):
-                raise ValueError(f'Line {number}: column 1: module {value}:{n} may only export components/styles/records/functions/imports')
-        expanded, _, child_origins = expand(text, path, (*_stack, path), root, files, with_origins=True,_verified=_verified,_scoped=scoped)
-        output.extend(expanded.splitlines())
-        origins.extend(child_origins)
+    try:
+        for number, line in enumerate(source.splitlines(), 1):
+            match = re.fullmatch(r'import "([^"\n]+\.sdr)"', line)
+            if not match:
+                output.append(line)
+                origins.append(source_map[number - 1])
+                continue
+            if source_path is None:
+                raise ValueError(f'Line {number}: column 1: imports require a source file path')
+            value = match[1]
+            if Path(value).is_absolute() or '..' in Path(value).parts or '\\' in value:
+                raise ValueError(f'Line {number}: column 1: import must stay within the source directory')
+            path = Path(source_path).resolve().parent / value
+            current = path
+            while current != root and current != current.parent:
+                if current.is_symlink():
+                    raise ValueError(f'Line {number}: column 1: symlink modules are forbidden')
+                current = current.parent
+            path = path.resolve()
+            if not path.is_relative_to(root) or not path.is_file():
+                raise ValueError(f'Line {number}: column 1: missing or outside-root module {value}')
+            if path in _stack or len(_stack) >= 16:
+                raise ValueError(f'Line {number}: column 1: cyclic or excessive imports')
+            if path.stat().st_size > MAX_SOURCE_CHARS * 4 or len(files) >= 32:
+                raise ValueError(f'Line {number}: column 1: module resource limit')
+            files.add(path)
+            from sedrava_packages import read_module
+            text=read_module(path,root,_verified)
+            for depth, declaration, n in source_lines(text):
+                if depth == 0 and not declaration.startswith(('component ', 'style ', 'import ', 'fn ', 'record ')):
+                    raise ValueError(f'Line {number}: column 1: module {value}:{n} may only export components/styles/records/functions/imports')
+            expanded, _, child_origins = expand(text, path, (*_stack, path), root, files, with_origins=True,_verified=_verified,_scoped=scoped)
+            output.extend(expanded.splitlines())
+            origins.extend(child_origins)
+    except ValueError as exc:
+        from sedrava_source_map import source_error
+        mapped=source_error(exc,source_map)
+        if mapped is exc:raise
+        raise mapped from exc
     joined = '\n'.join(output)
     if len(joined) > MAX_SOURCE_CHARS:
         raise ValueError('Expanded imports exceed source limit')
     if not _stack:
-        joined, origins = components(joined, origins)
+        try:joined, origins = components(joined, origins)
+        except ValueError as exc:
+            from sedrava_source_map import source_error
+            mapped=source_error(exc,origins)
+            if mapped is exc:raise
+            raise mapped from exc
     joined=ExpandedSource(joined,origins,source);joined.scoped=scoped;joined.entry=Path(source_path).resolve() if source_path else None
     return (joined, files, tuple(origins)) if with_origins else (joined, files)
+
+
+def expand(source,source_path=None,*args,**kwargs):
+    from sedrava_source_map import source_error,locations
+    try:return _expand(source,source_path,*args,**kwargs)
+    except ValueError as exc:
+        mapped=source_error(exc,locations(source,source_path))
+        if mapped is exc:raise
+        raise mapped from exc
 
 
 def components(source, origins=None):

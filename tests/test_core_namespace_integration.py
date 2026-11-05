@@ -142,6 +142,29 @@ class Integration(unittest.TestCase):
             error=io.StringIO()
             with contextlib.redirect_stderr(error):self.assertEqual(main(['--diagnostics=json','verify',str(self.root)]),1)
             self.assertIn('install sedrava[packages]',json.loads(error.getvalue())['message'])
+    def test_nested_missing_import_reports_importing_file(self):
+        module=self.put('bridge.sdr','module example.bridge\nimport "missing.sdr" as missing\nexport fn safe(x: int) -> int = x\n')
+        entry=self.put('main.sdr','app "Paths"\nimport "bridge.sdr" as bridge\n');error=io.StringIO()
+        with contextlib.redirect_stderr(error):self.assertEqual(main(['--diagnostics=json','check',str(entry)]),1)
+        self.assertEqual(json.loads(error.getvalue())['location'],{'source':str(module),'line':2,'column':1})
+    def test_private_access_error_column_after_mangling(self):
+        self.put('hidden.sdr','module example.hidden\nfn private(xs: list<int>(max=4)) -> int = list_sum(xs)\nexport fn safe(x: int) -> int = x\n')
+        line='export fn longname(xs: list<int>(max=4)) -> int = hidden.private(xs)'
+        module=self.put('bridge.sdr','module example.bridge\nimport "hidden.sdr" as hidden\n'+line+'\n')
+        source='app "Paths"\nimport "bridge.sdr" as bridge\n'
+        with self.assertRaises(ValueError) as err:parse_document(source,self.put('main.sdr',source))
+        self.assertEqual(err.exception.source,str(module));self.assertEqual(err.exception.line,3);self.assertEqual(err.exception.column,line.index('hidden.private')+1)
+    def test_mixed_legacy_missing_import_keeps_entry_location(self):
+        self.put('m.sdr','module example.safe\nexport fn safe(x: int) -> int = x\n')
+        source='app "Paths"\nimport "m.sdr" as m\nimport "missing.sdr"\n'
+        entry=self.put('main.sdr',source)
+        with self.assertRaises(ValueError) as err:parse_document(source,entry)
+        self.assertEqual(err.exception.source,str(entry));self.assertEqual(err.exception.line,3)
+    def test_reusing_expanded_source_retains_scope_and_provenance(self):
+        source=expanded();again=expand(source,EXAMPLE)[0]
+        self.assertEqual(str(source),str(again));self.assertTrue(again.scoped)
+        self.assertEqual(source.public_symbols,again.public_symbols);self.assertEqual(source.display_names,again.display_names)
+        self.assertEqual(source.origins,again.origins)
     def test_module_action_cannot_capture_entry_state(self):
         self.put('m.sdr','module example.model\nexport action steal:\n    private_data = 9\n')
         source='app "Scope"\nimport "m.sdr" as m\nstate private_data = 0\n'

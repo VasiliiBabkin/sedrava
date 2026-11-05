@@ -79,3 +79,14 @@ installed locked-package example requires the declared packages extra in its
 isolated venv. Tests now exercise base commands first, install the extra, then
 verify locked packages. Missing-parser errors retain the actionable extra-install
 hint instead of being misreported as corrupt TOML. No dependency checks were bypassed.
+
+## Final source-position checkpoint
+
+The last compiler changes make structural import failures carry typed original
+locations (including nested missing files and private-export access after name
+lowering). Mixed legacy import failures map through the same checked character
+origins. Reusing ExpandedSource preserves scope, public symbols and provenance.
+30 focused integration tests and real Chromium app/WebApp/legacy navigation
+scenarios pass. Intermediate commit 9898592 completed all 23 applicable workflow
+runs successfully; the subsequent four source-position changes require their own
+exact-head rerun. No intermediate success is used as final-SHA evidence.

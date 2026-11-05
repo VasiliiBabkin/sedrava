@@ -82,7 +82,7 @@ def _rewrite(line, local=None, aliases=None, *, line_no=1, filename='<source>', 
             symbol_name = toks[i+2].string
             sym = aliases[alias].visible.get(symbol_name)
             if sym is None:
-                raise LocatedError(f'{alias}.{symbol_name} is not an exported symbol',filename,line_no,t.start[1]+1)
+                raise LocatedError(f'{alias}.{symbol_name} is not an exported symbol',*origin_for(line,(filename,line_no)).point(t.start[1]+1))
             ops.append((t.start[1], toks[i+2].end[1], sym.emitted))
             i += 3
             continue
@@ -99,18 +99,18 @@ def _rewrite(line, local=None, aliases=None, *, line_no=1, filename='<source>', 
 def _valid_import(source_path, value, root, line):
     path = Path(value)
     if path.is_absolute() or '..' in path.parts or '\\' in value or ':' in value or not value.endswith('.sdr'):
-        raise ValueError(f'{source_path}:{line}: import must stay within the source directory')
+        raise LocatedError(f'import must stay within the source directory',source_path,line,1)
     candidate = source_path.parent / path
     cursor = candidate
     while cursor != root and cursor != cursor.parent:
         if cursor.is_symlink():
-            raise ValueError(f'{source_path}:{line}: symlink modules are forbidden')
+            raise LocatedError(f'symlink modules are forbidden',source_path,line,1)
         cursor = cursor.parent
     path = candidate.resolve()
     if not path.is_relative_to(root) or not path.is_file():
-        raise ValueError(f'{source_path}:{line}: missing/outside-root module {value}')
+        raise LocatedError(f'missing/outside-root module {value}',source_path,line,1)
     if path.stat().st_size > MAX_SOURCE_CHARS * 4:
-        raise ValueError(f'{source_path}:{line}: module resource limit')
+        raise LocatedError(f'module resource limit',source_path,line,1)
     return path
 
 
@@ -141,14 +141,14 @@ def resolve_scoped(source, source_path, *, with_origins=False, verified=None):
     loading = []
     total_chars=len(source)
 
-    def load(path):
+    def load(path,at=None):
         nonlocal total_chars
         if path in cache:
             return cache[path]
         if path in loading or len(loading) >= 16:
-            raise ValueError(f'{path}: cyclic/excessive aliased module imports')
+            raise LocatedError('cyclic/excessive aliased module imports',*(at or (path,1)),1)
         if len(cache) + len(loading) >= 32:
-            raise ValueError('Aliased module resource limit')
+            raise LocatedError('Aliased module resource limit',*(at or (path,1)),1)
         loading.append(path)
         try:
             from sedrava_packages import read_module
@@ -159,10 +159,10 @@ def resolve_scoped(source, source_path, *, with_origins=False, verified=None):
             try:entries = source_lines(text)
             except ValueError as exc:raise source_error(exc,locations(text,path)) from exc
             if not entries or not (head := _MODULE.fullmatch(entries[0][1])) or entries[0][0] != 0:
-                raise ValueError(f'{path}: line 1: namespaced import requires module org.name')
+                raise LocatedError('namespaced import requires module org.name',path,entries[0][2] if entries else 1,1)
             module_id = head[1]
             if module_id in module_names and module_names[module_id] != path:
-                raise ValueError(f'{path}: duplicate module identity {module_id}')
+                raise LocatedError(f'duplicate module identity {module_id}',path,entries[0][2],1)
             module_names[module_id] = path
             lines = [MappedLine(line) for line in text.splitlines()]
             for no,raw in enumerate(lines,1):
@@ -180,23 +180,23 @@ def resolve_scoped(source, source_path, *, with_origins=False, verified=None):
                 if import_match:
                     value, alias = import_match.groups()
                     if alias in aliases or keyword.iskeyword(alias):
-                        raise ValueError(f'{path}:{no}: duplicate/reserved import alias {alias}')
+                        raise LocatedError(f'duplicate/reserved import alias {alias}',path,no,1)
                     dep = _valid_import(path, value, root, no)
-                    aliases[alias] = load(dep)
+                    aliases[alias] = load(dep,(path,no))
                     nested.append(dep)
                     continue
                 if re.fullmatch(r'persist '+_IDENT,raw) or raw.startswith('rule '):continue
                 if raw.startswith('import '):
-                    raise ValueError(f'{path}:{no}: namespaced modules require explicit import aliases')
+                    raise LocatedError(f'namespaced modules require explicit import aliases',path,no,1)
                 sym = _local_decl(raw, module_id, path, no)
                 if sym:
                     if sym.name in symbols or sym.name in aliases:
-                        raise ValueError(f'{path}:{no}: duplicate declaration {sym.name}')
+                        raise LocatedError(f'duplicate declaration {sym.name}',path,no,1)
                     symbols[sym.name] = sym
                     continue
-                raise ValueError(f'{path}:{no}: namespaces allow module/import and typed declarations only')
+                raise LocatedError(f'namespaces allow module/import and typed declarations only',path,no,1)
             if not symbols:
-                raise ValueError(f'{path}: module has no declarations')
+                raise LocatedError('module has no declarations',path,entries[0][2],1)
             for alias in aliases:
                 if alias in symbols:
                     raise ValueError(f'{path}: ambiguous local symbol/import alias {alias}')
@@ -220,7 +220,7 @@ def resolve_scoped(source, source_path, *, with_origins=False, verified=None):
                         signature = re.match(r'fn \w+\((.*?)\) ->', line)
                         bound = tuple(re.findall(rf'({_IDENT})\s*:', signature[1])) if signature else ()
                         if any(v in symbols or v in aliases for v in bound):
-                            raise ValueError(f'{path}:{no}: function parameter conflicts with module symbol/import alias')
+                            raise LocatedError(f'function parameter conflicts with module symbol/import alias',path,no,1)
                         parameters={name:Symbol(module_id,name,'binding','L_'+sha256((module_id+':'+sym.name).encode()).hexdigest()[:12]+'_'+name,False,path,no) for name in bound}
                         line = _rewrite(line, {**symbols,**parameters}, aliases, line_no=no, filename=str(path))
                     elif sym.kind in ('record','state','derive','action'):
@@ -232,7 +232,7 @@ def resolve_scoped(source, source_path, *, with_origins=False, verified=None):
                 if re.fullmatch(r'persist '+_IDENT,line) or line.startswith('rule '):
                     result.append(_rewrite(line,symbols,aliases,line_no=no,filename=str(path)));result_origins.append(origin_for(result[-1],(path,no)));continue
                 if not line.startswith(' '):
-                    raise ValueError(f'{path}:{no}: invalid top-level module construct')
+                    raise LocatedError(f'invalid top-level module construct',path,no,1)
                 owner=next((symbols[m[3]] for earlier in reversed(lines[:no-1]) if (m:=_DECL.match(earlier))),None)
                 if owner and owner.kind=='action':
                     depth=len(line)-len(line.lstrip(' '))
@@ -243,7 +243,7 @@ def resolve_scoped(source, source_path, *, with_origins=False, verified=None):
                     fresh={}
                     if bound:
                         names=[name for name in bound.groups()[1:] if name]
-                        if any(name in symbols or name in aliases for name in names):raise ValueError(f'{path}:{no}: action binding conflicts with module symbol/import alias')
+                        if any(name in symbols or name in aliases for name in names):raise LocatedError(f'action binding conflicts with module symbol/import alias',path,no,1)
                         fresh={name:Symbol(module_id,name,'binding','L_'+sha256((module_id+':'+owner.name).encode()).hexdigest()[:12]+'_'+name,False,path,no) for name in names}
                     line=_rewrite(line,{**symbols,**visible,**fresh},aliases,line_no=no,filename=str(path))
                     if bound:
@@ -276,9 +276,9 @@ def resolve_scoped(source, source_path, *, with_origins=False, verified=None):
             continue
         value, alias = m.groups()
         if alias in aliases or keyword.iskeyword(alias):
-            raise ValueError(f'{entry}:{no}: duplicate/reserved import alias {alias}')
+            raise LocatedError(f'duplicate/reserved import alias {alias}',entry,no,1)
         path = _valid_import(entry, value, root, no)
-        aliases[alias] = load(path)
+        aliases[alias] = load(path,(entry,no))
     if not aliases:
         if with_origins:
             from sedrava_source_map import locations
@@ -286,7 +286,7 @@ def resolve_scoped(source, source_path, *, with_origins=False, verified=None):
         return source, dependencies
     for depth, raw, no in source_lines(source):
         if any(t.type == tokenize.NAME and _RESERVED.fullmatch(t.string) for t in _tokens(raw)):
-            raise ValueError(f'{entry}:{no}: reserved generated symbol identifier')
+            raise LocatedError(f'reserved generated symbol identifier',entry,no,1)
     for alias in aliases:
         if re.search(rf'^(?:state|derive|fn|record|action|component|style|view|service) {re.escape(alias)}(?:\s|\(|:|=)', source, re.M):
             raise ValueError(f'{entry}: local declaration collides with import alias {alias}')
@@ -308,7 +308,7 @@ def resolve_scoped(source, source_path, *, with_origins=False, verified=None):
             path = _valid_import(entry, m[1], root, no)
             append_dependency(path, out, source_map)
         elif line.startswith('import "') and ' as ' in line and not m:
-            raise ValueError(f'{entry}:{no}: invalid namespaced import')
+            raise LocatedError(f'invalid namespaced import',entry,no,1)
         else:
             out.append(_rewrite(line, aliases=aliases, filename=str(entry), line_no=no))
             source_map.append(origin_for(out[-1],(entry,no)))
