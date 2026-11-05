@@ -9,6 +9,7 @@ SIGNATURES={
     'text_at':((str,int),str), 'text_slice':((str,int,int),str),
     'text_index':((str,str),int), 'unicode_ord':((str,),int),
     'unicode_chr':((int,),str),
+    **{name:((str,),str) for name in ('unicode_nfc','unicode_nfd','unicode_nfkc','unicode_nfkd','text_casefold')},
 }
 
 
@@ -19,6 +20,12 @@ def civil_date(value):
 
 
 def apply(name,args):
+    if name.startswith('unicode_nf'):
+        from sedrava_unicode import normalize,NORMALIZERS
+        return normalize(args[0],NORMALIZERS[name])
+    if name=='text_casefold':
+        from sedrava_unicode import casefold
+        return casefold(args[0])
     if name=='text_length':return len(args[0])
     if name=='trim':return args[0].strip(' \t\r\n')
     if name=='lower_ascii':return args[0].translate(str.maketrans('ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'))
@@ -64,6 +71,8 @@ function sdrUnicodeChr(value){if(!Number.isInteger(value)||value<0||value>0x10ff
 '''
 
 KT_RUNTIME=r'''
+internal fun sdrScalars(value:String):List<String> {val out=mutableListOf<String>();var i=0;while(i<value.length){val cp=value.codePointAt(i);out.add(String(Character.toChars(cp)));i+=Character.charCount(cp)};return out}
+
 internal fun sdrTextLength(value:String):Int = value.codePointCount(0,value.length)
 internal fun sdrTextAt(value:String,index:Int):String {val count=value.codePointCount(0,value.length);require(index>=0&&index<count){"Text index outside Unicode scalar bounds"};val at=value.offsetByCodePoints(0,index);return String(Character.toChars(value.codePointAt(at)))}
 internal fun sdrTextSlice(value:String,start:Int,end:Int):String {val count=value.codePointCount(0,value.length);require(start>=0&&start<=end&&end<=count){"Invalid Unicode scalar slice bounds"};return value.substring(value.offsetByCodePoints(0,start),value.offsetByCodePoints(0,end))}
@@ -81,6 +90,9 @@ internal fun sdrDateAdd(value:String,n:Int):String = try {val result=sdrDate(val
 
 
 def js_call(name,args):
+    from sedrava_unicode import NORMALIZERS
+    if name in NORMALIZERS:return 'sdrNormalize('+args[0]+',"'+NORMALIZERS[name]+'")'
+    if name=='text_casefold':return 'sdrCasefold('+args[0]+')'
     a=args[0]
     return {
       'text_length':lambda:'Array.from('+a+').length',
@@ -99,6 +111,9 @@ def js_call(name,args):
 
 
 def kt_call(name,args):
+    from sedrava_unicode import NORMALIZERS
+    if name in NORMALIZERS:return 'sdrNormalize('+args[0]+',"'+NORMALIZERS[name]+'")'
+    if name=='text_casefold':return 'sdrCasefold('+args[0]+')'
     a=args[0]
     return {
       'text_length':lambda:'sdrTextLength('+a+')',

@@ -1,0 +1,90 @@
+app "Bounded values"
+record Row:
+    name: text
+fn doubled(x: int) -> int = x * 2
+fn raised(xs: list<int>(max=4)) -> list<int>(max=4) = append(xs, 9)
+state values: list<int>(max=4) = [3, 1, 2]
+state words: list<text>(max=4) = ["😀", "é", "Б", "𐀀"]
+state flags: list<bool>(max=3) = [true, false]
+state rows: list<Row>(max=3) = []
+state total = 0
+state found = -1
+state text = ""
+state code = ""
+persist values
+persist words
+persist flags
+persist rows
+persist total
+persist text
+persist code
+persist found
+action scan:
+    total = 0
+    for index, value in values:
+        total = total + value
+        values = list_replace_at(values, index, doubled(value))
+    for char in "A😀Б":
+        text = concat(text, char)
+action order:
+    values = list_sort(values)
+    words = list_sort(words)
+    found = list_index(words, "😀")
+    flags = list_replace_at(flags, 1, true)
+action remove:
+    values = list_remove_at(values, 1)
+    values = values[0:2]
+action add:
+    values = raised(values)
+action fail_bounds:
+    total = 100
+    values = list_remove_at(values, 99)
+action fail_sum:
+    values = [2147483647, 1]
+    total = list_sum(values)
+action seed_rows:
+    rows = append(rows, Row(name="same"))
+    rows = append(rows, Row(name="same"))
+    rows = list_replace_at(rows, 0, Row(name="new"))
+action delete_rows:
+    let snapshot = rows
+    for index, row in snapshot:
+        rows = remove(rows, list_identity(snapshot, index))
+action clear:
+    values = list_clear(values)
+    words = list_clear(words)
+test values: scan -> total == 6 and values[0] == 6
+test search: order -> found == 3
+test records: seed_rows, delete_rows -> count(rows) == 0 and next_id(rows) == 3
+action audit_a1:
+    rows = rows[1:2]
+    text = "A😀éБ"
+    text = text[1:4]
+    total = unicode_ord(text[0])
+    repeat i in range(0, 3):
+        total = total + i
+action normalize:
+    text = unicode_nfc("é Straße 😀")
+action fold:
+    text = text_casefold(text)
+action expected_error:
+    let outcome = try_at(values, 99)
+    code = result_code(outcome)
+    total = result_or(outcome, 42)
+screen main:
+    value total
+    value found
+    value text
+    button "scan" -> scan
+    button "order" -> order
+    button "remove" -> remove
+    button "add" -> add
+    button "fail_bounds" -> fail_bounds
+    button "fail_sum" -> fail_sum
+    button "seed_rows" -> seed_rows
+    button "delete_rows" -> delete_rows
+    button "clear" -> clear
+    button "audit_a1" -> audit_a1
+    button "normalize" -> normalize
+    button "fold" -> fold
+    button "expected_error" -> expected_error

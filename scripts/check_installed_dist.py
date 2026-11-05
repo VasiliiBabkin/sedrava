@@ -23,7 +23,7 @@ def check(archive, folder):
     run(cli,'--version')
     result=subprocess.run([str(cli),'--version'],cwd=folder,env=env,capture_output=True,text=True,check=True)
     assert result.stdout.strip()=='sedrava '+VERSION
-    for name in ('reference_09','text_profile','task_manager','task_manager_navigation'):
+    for name in ('reference_09','text_profile','task_manager','task_manager_navigation','bounded_core_012','bounded_values_012'):
         source=folder/'share/sedrava/examples'/f'{name}.sdr'
         run(cli,'check',source);run(cli,'test',source);run(cli,'run',source)
         web=folder/'generated with spaces'/name/'index.html'
