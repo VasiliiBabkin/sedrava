@@ -1,12 +1,12 @@
-# Sedrava — stable 0.10.0, published 0.11 RC and stable 0.11 candidate
+# Sedrava — stable 0.11.0 published on GitHub and PyPI
 
 **Describe the application; get the application. / Описал — получил.**
 
 **[Dedication / Посвящение](DEDICATION.md):** Геннадию Ивановичу Смирных — учителю информатики, благодаря которому автор Sedrava понял и полюбил программирование.
 
-**Current stable release:** [Sedrava 0.10.0](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.10.0) (31 October 2026), also [published on PyPI](https://pypi.org/project/sedrava/0.10.0/). Android generator versionCode: **10003**. The older 0.9.0a1 and 0.10.0rc2 releases are historical baselines.
+**Current stable release:** [Sedrava 0.11.0](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0) ([PyPI](https://pypi.org/project/sedrava/0.11.0/)), Android versionCode **11002**. The previous stable [0.10.0](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.10.0) ([PyPI](https://pypi.org/project/sedrava/0.10.0/)) and historical RCs remain available.
 
-**Published prerelease:** [Sedrava 0.11.0rc1](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0rc1) ([PyPI](https://pypi.org/project/sedrava/0.11.0rc1/)). The `0.11.0` stable source candidate is in `release/011-stable-preparation`; it has **not** been published. Android candidate versionCode is 11002 (published RC: 11001).
+**Historical prerelease:** [0.11.0rc1](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0rc1) ([PyPI](https://pypi.org/project/sedrava/0.11.0rc1/)) preceded the stable 0.11.0 release. Verified 0.10 and RC upgrade/rollback, browsers and Android API35 are documented in [stable release notes](docs/RELEASE_NOTES_0_11_0.ru.md).
 
 Start with [Quick Start](docs/QUICKSTART.md), the [text reference](docs/LANGUAGE_0_10_TEXT.md), [text profile example](examples/text_profile.sdr), and [measured report](docs/TEXT_010_REPORT.md). The [task manager](examples/task_manager.sdr) now uses records and lists directly in `.sdr`; the [navigation example](docs/NAVIGATION_QUICKSTART.en.md) adds guarded screens and Back.
 
@@ -16,7 +16,7 @@ Start with [Quick Start](docs/QUICKSTART.md), the [text reference](docs/LANGUAGE
 
 Sedrava is an experimental declarative programming language for small applications: describe text/int32/boolean state, typed record collections, derived values, atomic actions, invariants and a simple UI; generate a standalone Web app or an Android/Compose project from the same source.
 
-**For learning and experimental development, not production.** The 0.10.0 package is public; historical Intent 0.7 packages belong to a separate project history.
+**For learning and experimental development, not production.** The 0.11.0 package is public; historical Intent 0.7 packages belong to a separate project history.
 
 [Quick Start / Быстрый старт](docs/QUICKSTART.md) · [Русский](docs/README.ru.md) · [English](docs/README.en.md)
 
@@ -25,7 +25,7 @@ Sedrava is an experimental declarative programming language for small applicatio
 Python 3.10+ is required; Git is optional for installation from PyPI. In a virtual environment:
 
 ```sh
-python -m pip install sedrava==0.10.0
+python -m pip install sedrava==0.11.0
 sedrava --version
 # Clone the source repository for checked-in example files:
 git clone https://github.com/VasiliiBabkin/sedrava.git
@@ -125,7 +125,7 @@ Historical rc1/rc2 artifacts remain unchanged.
 Tag **v0.10.0** resolves to commit `688a320025a0d38235eb90c780362ec26b0708e2`; wheel and sdist are published to PyPI. Android versionCode **10003**. Release workflow and CI succeeded; physical-device acceptance of the final 0.10 APK is **not documented**. See [release notes](docs/RELEASE_NOTES_0_10_0.md), [physical-device checklist](docs/PHYSICAL_DEVICE_010.md), [stable gates](docs/STABLE_RELEASE_GATES_010.md), and [owner's publishing checklist](docs/PUBLISH_0_10_0.md).
 
 
-**Development vs release:** Experimental Web UI / `sedrava build site` is in [draft PR #22](https://github.com/VasiliiBabkin/sedrava/pull/22), not in 0.10.0. The Astro/Starlight docs site is built separately from the language.
+**Version boundary:** Responsive site and WebApp generation are available in [stable 0.11.0](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0), not in 0.10.0. Official Astro/Starlight documentation and the separate Sedrava-generated site remain different build systems.
 
 ## Experimental Web UI 0.11 / Экспериментальный Web UI 0.11
 
@@ -142,12 +142,12 @@ python -m http.server 8000 --directory build/site
 
 ## Experimental 0.11 integration / Экспериментальная интеграция
 
-The integration preview adds shared composition, pure functions, bounded collection queries, forms/tables/dialogs, hash routes, local styling and typed public HTTP. It is not a published 0.11.0 or a backend/auth/database service.
+The released 0.11 integration adds shared composition, pure functions, bounded collection queries, forms/tables/dialogs, hash routes, local styling and typed public HTTP. It is included in published stable 0.11.0, but is not a generated backend/auth/database service.
 
 Реализованные возможности, сборка четырёх проектов и ограничения: [English guide](docs/011_WEB_PLATFORM.en.md), [руководство](docs/011_WEB_PLATFORM.ru.md), [actual status](docs/011_IMPLEMENTATION_STATUS.md). Existing published 0.10.0 instructions above remain applicable to their original targets.
 
 
-## Published 0.11.0rc1; preparing stable 0.11.0
+## Published stable 0.11.0 and historical 0.11.0rc1
 
 The [experimental RC](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0rc1) is available from [PyPI](https://pypi.org/project/sedrava/0.11.0rc1/) after exact-source CI, distribution checks and practical 0.10 upgrade/rollback testing. It provides responsive `site` generation, interactive `webapp`, typed Web state/components/functions, forms, routes, collection queries and validated public HTTP clients.
 
