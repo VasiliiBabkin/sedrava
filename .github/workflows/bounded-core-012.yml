@@ -74,7 +74,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install playwright==1.62.0
-      - run: python -m playwright install --with-deps ${{ matrix.engine }}
+      - run: sudo --preserve-env=GITHUB_ACTIONS python3 scripts/configure_ci_apt.py && python -m playwright install --with-deps ${{ matrix.engine }}
       - run: python scripts/test_core_a2_browser.py
       - run: python scripts/test_namespace_core_browser.py
       - run: python scripts/core_a2_receipt.py

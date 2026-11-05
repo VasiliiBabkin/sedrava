@@ -33,6 +33,7 @@ jobs:
       - name: Install browser and accessibility checker
         run: |
           python -m pip install playwright==1.62.0
+          sudo --preserve-env=GITHUB_ACTIONS python3 scripts/configure_ci_apt.py
           python -m playwright install --with-deps chromium ${{ matrix.engine }}
           npm install --prefix build/platform-a11y --no-audit --no-fund axe-core@4.10.3
       - name: Typed compiler regressions

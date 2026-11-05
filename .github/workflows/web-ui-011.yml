@@ -17,7 +17,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install playwright==1.62.0
-      - run: python -m playwright install --with-deps chromium
+      - run: sudo --preserve-env=GITHUB_ACTIONS python3 scripts/configure_ci_apt.py && python -m playwright install --with-deps chromium
       - name: Build independent static site
         run: python -m sedrava_cli build site examples/web_ui_011_landing.sdr --output build/site
       - name: Real Chromium responsive and keyboard scenarios
