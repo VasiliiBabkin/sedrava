@@ -1,8 +1,8 @@
 # Sedrava 0.12.0a1 — proposed alpha acceptance
 
-**Status:** separate experimental source candidate on `release/012-alpha1-preparation`. No publication, tag, merge to main or deployment.
+**Status:** unpublished experimental source candidate **reintegrated on top of published stable [0.11.0](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0)** ([PyPI](https://pypi.org/project/sedrava/0.11.0/)), on `integration/012-alpha1-stable-base`. No 0.12 tag, PyPI upload, merge into stable main or production deployment. Android alpha versionCode 12001 (stable 0.11: 11002).
 
-Parent: experimental 0.12 [packages PR #41](https://github.com/VasiliiBabkin/sedrava/pull/41), based on [provenance #40](https://github.com/VasiliiBabkin/sedrava/pull/40), [namespaces #39](https://github.com/VasiliiBabkin/sedrava/pull/39), and unmerged [0.11 Web integration #36](https://github.com/VasiliiBabkin/sedrava/pull/36). The planned 0.11 release candidate is handled independently by [PR #42](https://github.com/VasiliiBabkin/sedrava/pull/42).
+**Provenance:** the namespace/provenance/lockfile code is carried from original experimental [PR #39](https://github.com/VasiliiBabkin/sedrava/pull/39), [#40](https://github.com/VasiliiBabkin/sedrava/pull/40), [#41](https://github.com/VasiliiBabkin/sedrava/pull/41) and source-alpha [#43](https://github.com/VasiliiBabkin/sedrava/pull/43). The old stack was based on a pre-release Web branch; the new integration branch starts from the **published 0.11 stable tree**, preserves the 0.12-only code blobs, and reconciles version, tests and docs separately. Do not treat historical green checks on #43 as acceptance of this new SHA.
 
 ## Gates (all required before any alpha tag)
 
@@ -11,8 +11,8 @@ Parent: experimental 0.12 [packages PR #41](https://github.com/VasiliiBabkin/sed
 3. Report errors against original imported file and line; document missing full columns/typed IR.
 4. Exact local vendor package versions, SHA-256 lockfile and transitive dependency validations pass; no network fetch is introduced.
 5. Source and distribution packages, clean installs, deterministic regeneration and tamper rejection are verified.
-6. Final alpha is rebased or otherwise reconciled on the **approved 0.11 release baseline** and retested; do not silently substitute an unreleased 0.11 preview.
-7. RU/EN official docs and website show published 0.10/0.11 only when verifiably published and explicitly mark the alpha experimental.
+6. Alpha must be based on the **published stable 0.11.0** ([tag](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0)); that source integration has been prepared, but **fresh exact-head CI is still required**. Preserve tested stable 0.11 behavior and explicitly test 0.12 versionCode 12001.
+7. RU/EN docs and website must show the published stable [0.11.0](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0) and historic 0.10/0.11rc1 truthfully; mark alpha 0.12.0a1 unpublished until separately approved and released.
 8. Owner approves immutable SHA, build artifact digest, target and limitations before any GitHub release/tag/PyPI upload.
 
 The read-only candidate workflow never publishes. The historical PyPI publisher remains pinned to v0.10.0. A new reviewed, least-privilege publishing route is required for future versions.
