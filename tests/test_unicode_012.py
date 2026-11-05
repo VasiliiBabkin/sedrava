@@ -27,6 +27,12 @@ def vectors():
             line=line.split('#')[0].strip()
             if not line or line.startswith('@'):continue
             yield [''.join(chr(int(cp,16)) for cp in item.split()) for item in line.split(';')[:5]]
+def folding():
+    with gzip.open(ROOT/'unicode_data/15.0.0/CaseFolding.txt.gz','rt') as f:
+        for line in f:
+            fields=line.split('#')[0].split(';')
+            if len(fields)>=3 and fields[1].strip() in ('C','F'):
+                yield chr(int(fields[0],16)),''.join(chr(int(cp,16)) for cp in fields[2].split())
 def cases():
     for row in vectors():
         for i,value in enumerate(row):
@@ -43,8 +49,8 @@ class Unicode012(unittest.TestCase):
         js=generate(SOURCE,_domain_only=True)
         with tempfile.TemporaryDirectory() as tmp:
             path=Path(tmp)/'check.js'
-            path.write_text(js+'\nconst fs=require("node:fs");const rows=JSON.parse(fs.readFileSync(0,"utf8"));for(const [value,expected] of rows){const actual=["NFC","NFD","NFKC","NFKD"].map(f=>sdrNormalize(value,f));if(JSON.stringify(actual)!==JSON.stringify(expected))throw Error(JSON.stringify([value,expected,actual]));}console.log(rows.length);')
-            out=subprocess.check_output(['node',str(path)],input=json.dumps(list(cases())),text=True,timeout=90)
+            path.write_text(js+'\nconst fs=require("node:fs");const data=JSON.parse(fs.readFileSync(0,"utf8")),rows=data.norm;for(const [value,expected] of rows){const actual=["NFC","NFD","NFKC","NFKD"].map(f=>sdrNormalize(value,f));if(JSON.stringify(actual)!==JSON.stringify(expected))throw Error(JSON.stringify([value,expected,actual]));}for(const [value,expected] of data.fold){if(sdrCasefold(value)!==expected)throw Error("Casefold mismatch");}console.log(rows.length);')
+            out=subprocess.check_output(['node',str(path)],input=json.dumps({"norm":list(cases()),"fold":list(folding())}),text=True,timeout=90)
             self.assertGreater(int(out),90000)
     def test_official_kotlin_normalization(self):
         import base64
@@ -52,9 +58,9 @@ class Unicode012(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);path=generate(SOURCE,root/'app',_domain_only=True)
             code='\n'.join(line for line in path.read_text().splitlines() if not line.startswith(('package ','import ')))
-            code+='\nfun main(args:Array<String>){var count=0;java.io.File(args[0]).forEachLine{line->val p=line.split("\\t").map{String(java.util.Base64.getDecoder().decode(it),Charsets.UTF_8)};val actual=listOf("NFC","NFD","NFKC","NFKD").map{sdrNormalize(p[0],it)};check(actual==p.drop(1)){"Normalization mismatch at $count"};count++};println(count)}'
+            code+='\nfun main(args:Array<String>){var count=0;java.io.File(args[0]).forEachLine{line->val p=line.split("\\t").map{String(java.util.Base64.getDecoder().decode(it),Charsets.UTF_8)};val actual=if(p.size==2)listOf(sdrCasefold(p[0])) else listOf("NFC","NFD","NFKC","NFKD").map{sdrNormalize(p[0],it)};check(actual==p.drop(1)){"Normalization mismatch at $count"};count++};println(count)}'
             file=root/'Run.kt';file.write_text(code);jar=root/'run.jar';data=root/'cases.txt'
-            data.write_text('\n'.join('\t'.join(base64.b64encode(v.encode()).decode() for v in [value,*expected]) for value,expected in cases()))
+            data.write_text('\n'.join('\t'.join(base64.b64encode(v.encode()).decode() for v in [value,*expected]) for value,expected in cases())+'\n'+'\n'.join('\t'.join(base64.b64encode(v.encode()).decode() for v in pair) for pair in folding()))
             compiler=shutil.which('kotlinc') or '/workspace/toolchains/kotlinc/bin/kotlinc'
             result=subprocess.run([compiler,str(file),'-include-runtime','-d',str(jar)],capture_output=True,text=True,timeout=90)
             self.assertEqual(result.returncode,0,result.stderr)

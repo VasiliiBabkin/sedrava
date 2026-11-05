@@ -77,3 +77,37 @@ Namespace dry-run against a1c7200888da9aad103dd79210b2e3b70c3e6a4c found an
 actual packaging module-list conflict; CLI/source mapping and WebApp expansion also
 need reconciliation. This is NOT proof of a working namespace integration. Keep
 #47 independent until an explicitly reviewed integration branch passes both suites.
+
+## Verification gates / Критерии проверки
+
+- Implementation checkpoint: `581cb795e449a9851f20f469b8727cda155d9f41`;
+  final test/harness hardening follows on the same draft PR #51.
+- Official data: 19,074 normalization rows, 95,370 transformed inputs / 381,480
+  normalization assertions per target; 1,530 default-full case-fold vectors.
+  Tests execute generated Node and real compiled Kotlin, never host normalizers.
+- The new fixture passes its 3 embedded Sedrava tests. Chromium passes 14 real
+  button transitions, all state fields, atomic rejection, reload and corrupted /
+  incompatible storage retention. A seeded 64-action corpus broadens differential
+  coverage without unbounded fuzzing.
+- Local Android: generated debug APK assembled and one full-state JVM oracle
+  passed. APK v2 signature and permission allowlist verified (debug key, not a
+  production signing key). First instrumentation compilation exposed a nullable
+  test-harness parameter; fixed in the harness generator, no application patch.
+  Final APK/Lint/instrumentation build and hosted API35 execution must pass before
+  device support can be claimed. Local adb has no connected device; no /dev/kvm.
+- Initial wheel and sdist archive audit and both isolated installed-package checks
+  passed. Final workflow repeats clean builds and checks on the exact checkout.
+  Local inherited version labels remain 0.11.0: these archives are experimental
+  SHA-bound test artifacts and MUST NOT be uploaded as the stable package.
+- The first in-flight full run reported an unapproved emulator action pin while
+  the workflow was being corrected; the corrected pinned action matches existing
+  reviewed workflows and the security audit passes. No tests were disabled.
+
+The final SHA, each workflow outcome and artifact URLs are maintained in the PR
+body after CI finishes, rather than guessing future run IDs in this source file.
+`core_a2_receipt.py` emits actual checkout SHA/tool versions/output SHA-256 in CI.
+The final branch remains experimental. GO is limited to review of verified
+features; NO-GO for a release or automatic namespace integration. Remaining scope:
+Map/Set, nested value lists, persisted/custom-error Results, grapheme/locale text
+operations, Unicode versions beyond 15.0.0 and namespace reconciliation. No tests
+on physical Android hardware. No stable release/tag/package/site changes.

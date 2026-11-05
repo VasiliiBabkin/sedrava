@@ -21,7 +21,7 @@ lines=['package '+package,'import androidx.compose.ui.test.*','import androidx.c
 for action,outcome in zip(sequence,expected):
     lines+=['ui.onNodeWithText('+quoted(action)+',substring=false).performScrollTo().performClick()','ui.waitForIdle()']
     # Only successful actions write; after rejected actions the preceding snapshot remains.
-    lines+=['ui.runOnIdle {val prefs=ui.activity.getSharedPreferences("sedrava_state",0);val state=restoreSnapshot(prefs.getString("snapshot",null));assertEquals('+quoted(json.dumps(outcome['state'],ensure_ascii=False,separators=(',',':')))+',snapshotState(state,true).substringAfter("\\\"state\\\":").dropLast(1))}']
+    lines+=['ui.runOnIdle {val prefs=ui.activity.getSharedPreferences("sedrava_state",0);val state=restoreSnapshot(requireNotNull(prefs.getString("snapshot",null)));assertEquals('+quoted(json.dumps(outcome['state'],ensure_ascii=False,separators=(',',':')))+',snapshotState(state,true).substringAfter("\\\"state\\\":").dropLast(1))}']
 lines+=['ui.activityRule.scenario.recreate();ui.waitForIdle();ui.onNodeWithText("scan",substring=false).assertExists()','}}']
 test=kotlin_path(project,'androidTest','CoreA2UiTest.kt');test.parent.mkdir(parents=True,exist_ok=True);test.write_text('\n'.join(lines))
 print(project)

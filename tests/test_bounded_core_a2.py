@@ -46,6 +46,11 @@ screen main:
 '''
 SEQUENCE=['fail_index','seed','inspect','range_edges','fail_overflow','retain','reverse','empty','clear','retain']
 class BoundedAudit(unittest.TestCase):
+    def test_expanded_unicode_derived_work_is_bounded(self):
+        source='app "Cost"\nstate text = "é"\nderive a = unicode_nfc(text)\n'
+        for i in range(1,6):source+='derive a'+str(i)+' = concat('+('a' if i==1 else 'a'+str(i-1))+', '+('a' if i==1 else 'a'+str(i-1))+')\n'
+        source+='screen main:\n    value text\n'
+        with self.assertRaisesRegex(ValueError,'work limit'):parse(source)
     def test_actual_javascript_complete_state_trace(self):self.assertEqual(javascript(SOURCE,SEQUENCE),reference(SOURCE,SEQUENCE))
     def test_actual_kotlin_complete_state_trace(self):self.assertEqual(kotlin(SOURCE,SEQUENCE),reference(SOURCE,SEQUENCE))
     def test_weighted_calls_inside_nested_loops_are_rejected(self):

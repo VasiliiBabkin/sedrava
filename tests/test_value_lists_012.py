@@ -61,6 +61,13 @@ screen main:
 '''
 SEQUENCE=['scan','order','fail_bounds','fail_sum','remove','add','add','seed_rows','delete_rows','clear','scan']
 class ValueLists(unittest.TestCase):
+    def test_seeded_bounded_sequences_all_targets(self):
+        import random
+        rng=random.Random(1202)
+        seq=[rng.choice(SEQUENCE) for _ in range(64)]
+        expected=reference(SOURCE,seq)
+        self.assertEqual(expected,javascript(SOURCE,seq))
+        self.assertEqual(expected,kotlin(SOURCE,seq))
     def test_python_bounds_identity_snapshot_iteration_and_persistence(self):
         p=parse(SOURCE);states=reference(SOURCE,SEQUENCE)
         self.assertEqual(states[0]['state']['values'],[6,2,4]);self.assertEqual(states[0]['state']['total'],6)
