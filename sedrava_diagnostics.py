@@ -42,7 +42,7 @@ class SedravaError(ValueError):
         self.column = column
 
 
-def from_exception(exc, source, command):
+def from_exception(exc, source, command, *, phase=None):
     if isinstance(exc, SedravaError):
         return Diagnostic(exc.code, exc.phase, str(exc), str(source), exc.line, exc.column)
     match = re.match(r"^Line ([1-9][0-9]*): (?:column ([1-9][0-9]*): )?(.*)", str(exc), re.S)
@@ -53,6 +53,6 @@ def from_exception(exc, source, command):
         return Diagnostic("SDR-E3001", "io", message, str(source), line, column)
     if isinstance(exc, AssertionError):
         return Diagnostic("SDR-E4001", "test", message, str(source), line, column)
-    if command in ("run", "test") and line is None:
+    if phase == "execute" or (phase is None and command in ("run", "test")):
         return Diagnostic("SDR-E2001", "execute", message, str(source), line, column)
     return Diagnostic("SDR-E1001", "compile", message, str(source), line, column)

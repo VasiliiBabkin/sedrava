@@ -1,5 +1,6 @@
 """Experimental bounded core extensions with stable Python/Web/Kotlin contracts."""
 import json
+import shutil
 from pathlib import Path
 import subprocess
 import sys
@@ -124,6 +125,30 @@ class BoundedTextCore(unittest.TestCase):
         self.assertIn("sdrTextSlice", page)
         self.assertIn("for (let _sdr_repeat_i=0; _sdr_repeat_i<5;",page)
 
+    @unittest.skipUnless(shutil.which("node"), "Node.js needed for real JS runtime parity")
+    def test_python_and_javascript_scalar_differential(self):
+        commands = [
+            ("text_at",["A😀Б",1]),
+            ("text_slice",["e\u0301😀",1,3]),
+            ("text_index",["😀A😀","A"]),
+            ("unicode_ord",["😀"]),
+            ("unicode_chr",[128512]),
+        ]
+        py_values=[apply(name,args) for name,args in commands]
+        script=(JS_RUNTIME + '\nconst outputs = [' +
+                ','.join('('+{
+                    "text_at":"sdrTextAt",
+                    "text_slice":"sdrTextSlice",
+                    "text_index":"sdrTextIndex",
+                    "unicode_ord":"sdrUnicodeOrd",
+                    "unicode_chr":"sdrUnicodeChr",
+                }[name]+'('+','.join(json.dumps(arg,ensure_ascii=False) for arg in args)+'))'
+                for name,args in commands) + '];\n' +
+                "let bad=false;try{sdrTextAt('😀',1);}catch(e){bad=e instanceof RangeError;}outputs.push(bad);process.stdout.write(JSON.stringify(outputs));")
+        result=subprocess.run(["node","-e",script],capture_output=True,text=True,timeout=15)
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertEqual(json.loads(result.stdout),py_values+[True])
+
     def test_restricted_repeat_syntax_and_resource_cap(self):
         for loop in ('repeat i in range(0, 101):',
                      'repeat i in range(1, 10):',
@@ -214,6 +239,21 @@ class StructuredErrors(unittest.TestCase):
         self.assertEqual(from_exception(OSError("no file"),"x","check").code,"SDR-E3001")
         self.assertEqual(from_exception(AssertionError("failed"),"x","test").phase,"test")
         self.assertEqual(from_exception(ValueError("out of range"),"x","run").phase,"execute")
+
+    def test_runtime_json_diagnostic_phase_and_location(self):
+        cli=Path(__file__).resolve().parents[1] / "sedrava_cli.py"
+        with tempfile.TemporaryDirectory() as directory:
+            path=Path(directory)/"runtime.sdr"
+            path.write_text('app "Runtime"\nstate title = "😀"\n'
+                            'action fail:\n    title = title[1]\n',encoding="utf-8")
+            result=subprocess.run([sys.executable,str(cli),"--diagnostics=json","run",
+                                   str(path),"fail"],capture_output=True,text=True,timeout=15)
+            self.assertEqual(result.returncode,1,result.stderr)
+            info=json.loads(result.stderr)
+            self.assertEqual(info["phase"],"execute")
+            self.assertEqual(info["code"],"SDR-E2001")
+            self.assertEqual(info["location"]["line"],4)
+            self.assertNotIn("Traceback",result.stderr)
 
     def test_cli_json_diagnostics_and_default_human_output(self):
         cli=Path(__file__).resolve().parents[1] / "sedrava_cli.py"

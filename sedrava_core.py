@@ -449,7 +449,7 @@ def parse(source):
             function=FunctionType(m[1],tuple(params),result_type,body,expression_cost(body))
             functions[m[1]]=function;types[m[1]]=function
         elif m := re.fullmatch(r"record ([A-Za-z_][A-Za-z_0-9]*):", line):
-            if states or actions or len(records) >= 16 or m[1] in types or keyword.iskeyword(m[1]) or m[1] in ('true','false','append','update','remove','get','has','count','next_id'): raise ValueError(f"Line {number}: column 1: invalid record declaration")
+            if states or actions or len(records) >= 16 or m[1] in types or keyword.iskeyword(m[1]) or m[1] in ('true','false','append','update','remove','get','has','count','next_id','list_at','list_slice','list_clear'): raise ValueError(f"Line {number}: column 1: invalid record declaration")
             fields = []
             i += 1
             while i < len(lines) and lines[i][0] > 0:

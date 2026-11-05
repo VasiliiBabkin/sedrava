@@ -56,6 +56,7 @@ def main(argv=None):
         parser.error("--service is only supported for build web")
     if args.command == "build" and args.application_id is not None and args.target != "android":
         parser.error("--application-id is only supported for build android")
+    diagnostic_phase = "compile"
     try:
         if args.source.stat().st_size > MAX_SOURCE_CHARS * 4:
             raise ValueError("Source exceeds size limit")
@@ -101,6 +102,7 @@ def main(argv=None):
             print(f"OK: {args.source}")
         elif args.command == "run":
             program = parse(app_source)
+            diagnostic_phase = "execute"
             state = program.states.copy()
             if args.state_file and args.state_file.exists():
                 if args.state_file.stat().st_size > 800000: raise ValueError('Snapshot too large')
@@ -123,7 +125,9 @@ def main(argv=None):
             if program.has_navigation: result={"state":result,"stack":list(session.stack)}
             print(json.dumps(result,ensure_ascii=False,sort_keys=True))
         elif args.command == "test":
-            count = run(parse(app_source))
+            program = parse(app_source)
+            diagnostic_phase = "execute"
+            count = run(program)
             print(f"PASS: {count} Sedrava tests")
         elif args.command == "build" and args.target == "api-web":
             from sedrava_http_display import parse_display_service as parse_service
@@ -191,7 +195,7 @@ def main(argv=None):
         return 0
     except (OSError, ValueError, AssertionError, RecursionError) as exc:
         from sedrava_diagnostics import from_exception
-        diagnostic = from_exception(exc, args.source, args.command)
+        diagnostic = from_exception(exc, args.source, args.command, phase=diagnostic_phase)
         if args.diagnostics == "json":
             print(json.dumps(diagnostic.as_dict(), ensure_ascii=False, sort_keys=True), file=sys.stderr)
         elif diagnostic.line is not None:
