@@ -56,6 +56,13 @@ action clear:
 test values: scan -> total == 6 and values[0] == 6
 test search: order -> found == 3
 test records: seed_rows, delete_rows -> count(rows) == 0 and next_id(rows) == 3
+action audit_a1:
+    rows = rows[1:2]
+    text = "A😀éБ"
+    text = text[1:4]
+    total = unicode_ord(text[0])
+    repeat i in range(0, 3):
+        total = total + i
 action normalize:
     text = unicode_nfc("é Straße 😀")
 action fold:
@@ -77,6 +84,7 @@ screen main:
     button "seed_rows" -> seed_rows
     button "delete_rows" -> delete_rows
     button "clear" -> clear
+    button "audit_a1" -> audit_a1
     button "normalize" -> normalize
     button "fold" -> fold
     button "expected_error" -> expected_error

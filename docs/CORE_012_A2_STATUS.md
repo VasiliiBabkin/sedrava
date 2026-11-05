@@ -126,3 +126,8 @@ stdlib tomllib is unavailable). The matrix now installs `.[test]` before discove
 no test skip or parser workaround was introduced. On checkpoint 581cb79, Python
 3.12/3.13 and all three new browser jobs passed; these are intermediate results,
 not evidence for a later SHA. Final matrix results are linked in the PR.
+
+The generated UI fixture also exercises A1 scalar indexing/slicing, record-list
+slicing and literal repeat directly through the audit_a1 button (15 UI actions
+in the final scenario). Both real-browser and Compose-device harnesses compare
+the resulting complete snapshot with Python, including retained record IDs.

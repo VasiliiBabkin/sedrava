@@ -12,7 +12,7 @@ source=(ROOT/'examples/bounded_values_012.sdr').read_text();folder=ROOT/'build/c
 class Quiet(http.server.SimpleHTTPRequestHandler):
     def log_message(self,*args):pass
 server=http.server.ThreadingHTTPServer(('127.0.0.1',0),functools.partial(Quiet,directory=folder));threading.Thread(target=server.serve_forever,daemon=True).start()
-sequence=['scan','order','fail_bounds','fail_sum','remove','add','add','seed_rows','delete_rows','normalize','fold','expected_error','clear','scan']
+sequence=['scan','order','fail_bounds','fail_sum','remove','add','add','seed_rows','audit_a1','delete_rows','normalize','fold','expected_error','clear','scan']
 expected=reference(source,sequence);errors=[];engine=os.environ.get('SEDRAVA_BROWSER','chromium')
 try:
  with sync_playwright() as pw:
