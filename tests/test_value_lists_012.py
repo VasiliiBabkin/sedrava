@@ -68,6 +68,17 @@ class ValueLists(unittest.TestCase):
         expected=reference(SOURCE,seq)
         self.assertEqual(expected,javascript(SOURCE,seq))
         self.assertEqual(expected,kotlin(SOURCE,seq))
+    def test_invalid_input_state_cannot_be_repaired_by_action(self):
+        import subprocess,tempfile
+        from pathlib import Path
+        from sedrava_sequences import ValueList
+        from web_codegen import generate
+        p=parse(SOURCE);bad={**p.states,'values':ValueList(p.states['values'].kind,(1,2,3,4,5))}
+        with self.assertRaisesRegex(ValueError,'Invalid action input state'):transition(p,bad,'clear')
+        with tempfile.TemporaryDirectory() as tmp:
+            path=Path(tmp)/'invalid.js'
+            path.write_text(generate(SOURCE,_domain_only=True)+'\nconst bad={...initialState,values:[1,2,3,4,5]};if(actions.clear(bad)!==bad)throw Error("Invalid action input was repaired");')
+            subprocess.run(['node',str(path)],check=True,timeout=30)
     def test_python_bounds_identity_snapshot_iteration_and_persistence(self):
         p=parse(SOURCE);states=reference(SOURCE,SEQUENCE)
         self.assertEqual(states[0]['state']['values'],[6,2,4]);self.assertEqual(states[0]['state']['total'],6)

@@ -11,6 +11,7 @@ project=Path(sys.argv[1]);source=(ROOT/'examples/bounded_values_012.sdr').read_t
 sequence=['scan','order','fail_bounds','fail_sum','remove','add','add','seed_rows','audit_a1','delete_rows','normalize','fold','expected_error','clear','scan']
 expected=reference(source,sequence);package=project_identity(project)
 lines=['package '+package,'import org.junit.Test','import org.junit.Assert.*','class CoreA2Test { @Test fun completeStateTrace(){var state=SedravaState()']
+lines+=['run {val invalid=state.copy(sdr_values=SdrVector(4,listOf(1,2,3,4,5)));assertSame(invalid,transitionState(invalid,\"clear\"))}']
 for i,(action,outcome) in enumerate(zip(sequence,expected)):
     snapshot=json.dumps({'schema':1,'signature':fingerprint(parse(source)),'state':outcome['state']},ensure_ascii=False,separators=(',',':'))
     lines+=['run {val before=state;state=transitionState(state,'+quoted(action)+');assertEquals('+str(outcome['accepted']).lower()+',state!==before);assertEquals('+quoted(snapshot)+',snapshotState(state,true))}']

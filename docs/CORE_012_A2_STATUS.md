@@ -131,3 +131,11 @@ The generated UI fixture also exercises A1 scalar indexing/slicing, record-list
 slicing and literal repeat directly through the audit_a1 button (15 UI actions
 in the final scenario). Both real-browser and Compose-device harnesses compare
 the resulting complete snapshot with Python, including retained record IDs.
+
+### Invalid transition input consistency
+
+Independent adapter review found JS actions could repair an invalid input state
+(e.g. an over-capacity vector followed by clear), while Python/Kotlin reject at
+entry. Added the same entry validation to emitted JS actions. Regression tests
+exercise actual Node and Python, plus a generated Android JVM assertion. Browser
+restoration already validates input, but adapters must not silently differ.
