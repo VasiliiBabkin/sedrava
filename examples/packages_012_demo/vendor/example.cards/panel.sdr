@@ -1,0 +1,4 @@
+module example.cards
+export component Panel:
+    card:
+        heading "Hello from a locked Sedrava package"

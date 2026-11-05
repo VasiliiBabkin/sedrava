@@ -657,8 +657,15 @@ MARKER = "sedrava-webapp.json"
 
 def build_webapp(source, output, source_path):
     from sedrava_modules import expand
-    expanded, modules = (None, set()) if isinstance(source, WebApp) else expand(source, source_path)
-    document = source if isinstance(source, WebApp) else parse_webapp(expanded)
+    if isinstance(source, WebApp):
+        expanded, modules, origins = None, set(), ()
+    else:
+        expanded, modules, origins = expand(source, source_path, with_origins=True)
+    from sedrava_source_map import source_error
+    try:
+        document = source if isinstance(source, WebApp) else parse_webapp(expanded)
+    except ValueError as exc:
+        raise source_error(exc, origins) from exc
     source_path = Path(source_path).resolve()
     output = Path(output)
     resolved = output.resolve()
