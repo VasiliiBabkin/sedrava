@@ -46,6 +46,8 @@ jobs:
           python scripts/audit_dist.py
           python scripts/check_installed_dist.py
           python scripts/check_reproducible_dist.py
+      - name: Real published 0.11.0 to experimental 0.12.0a1 and back
+        run: python scripts/check_stable_to_alpha_012.py dist
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: sedrava-0.12.0a1-unpublished-source-${{ github.event.pull_request.head.sha || github.sha }}
