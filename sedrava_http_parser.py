@@ -11,6 +11,7 @@ service articles:
         title text
         id int32
 """
+from sedrava_syntax import physical_lines
 import re
 import shlex
 from sedrava_http import ApiService, JsonField, JsonResponse
@@ -19,7 +20,7 @@ from sedrava_http import ApiService, JsonField, JsonResponse
 def parse_service(source: str):
     if type(source) is not str or len(source) > 32768:
         raise ValueError("API declaration exceeds source limit")
-    lines = [(n, raw) for n, raw in enumerate(source.splitlines(), 1)
+    lines = [(n, raw) for n, raw in enumerate(physical_lines(source), 1)
              if raw.strip() and not raw.lstrip().startswith("#")]
     if not lines:
         raise ValueError("Missing service declaration")

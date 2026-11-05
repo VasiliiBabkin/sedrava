@@ -42,7 +42,7 @@ Shadowing a module declaration/import alias is rejected. Module import graphs ar
 acyclic, deduplicated and topologically ordered. Imported state/derive/action
 blocks are scheduled at the domain declaration boundary without legitimizing an
 invalid ordering in the entry file. Forward function calls/recursion remain
-unsupported. All definitions are checked, including private and unused ones.
+unsupported. All core definitions are checked, including private and unused functions.
 
 Every imported function uses the same types: exact-capacity scalar/record lists,
 nominal records, primitive types and ephemeral `Result<T, Error>`. The first-order
@@ -145,3 +145,14 @@ Scoped UI templates cannot be instantiated inside domain declarations, including
 record fields. Entry and module record labels stay labels. Parameter-substitution
 growth is checked before creating strings/maps; recursive expansion also checks
 cumulative output before extending its parent. Legacy unscoped macros remain.
+
+## Physical source lines and Unicode
+
+All current app/site/WebApp/module/service frontends and source maps share LF/CRLF
+physical line boundaries. NEL (U+0085), LINE SEPARATOR (U+2028) and PARAGRAPH
+SEPARATOR (U+2029) inside text literals are scalar data, not source line breaks.
+They may be written directly or escaped. CR/LF in literal values still require
+escapes. Kotlin differential output is framed by LF, not Unicode splitlines.
+The executable modular fixture includes these values and an astral scalar slice
+in Python, browser UI and Android state/recreation scenarios. UI templates are
+checked on instantiation; unused core functions are still fully type checked.

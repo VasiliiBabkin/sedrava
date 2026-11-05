@@ -14,7 +14,7 @@ def expanded():return expand(EXAMPLE.read_text(),EXAMPLE)[0]
 def actions(program,names):return [next(k for k in program.actions if k.endswith('_'+name)) for name in names]
 class Integration(unittest.TestCase):
     def test_full_python_js_kotlin_module_trace(self):
-        source=expanded();program=parse(source);seq=actions(program,['scan','add','add','expected','seed','audit','break_rule','reject'])
+        source=expanded();program=parse(source);seq=actions(program,['scan','add','add','expected','seed','audit','scalars','break_rule','reject'])
         expected=reference(source,seq)
         self.assertEqual(expected,javascript(source,seq));self.assertEqual(expected,kotlin(source,seq))
         self.assertFalse(expected[2]['accepted']);self.assertFalse(expected[-1]['accepted'])
@@ -343,6 +343,39 @@ export action step:
             with self.assertRaisesRegex(ValueError,'Expanded components exceed source limit'):
                 components(source,scoped=True)
             replacement.assert_not_called()
+
+    def test_unicode_separator_literals_and_slices_execute_on_all_targets(self):
+        marker='a\u0085\u2028\u2029😀z'
+        body='module example.scalars\nexport fn literal() -> text = "'+marker+'"\nexport state label = ""\nexport state size = 0\nexport state values: list<int>(max=1) = []\nexport action step:\n    label = literal()\n    size = text_length(label)\nexport action slice:\n    label = label[1:5]\n    size = text_length(label)\n'
+        self.put('m.sdr',body)
+        entry=self.put('main.sdr','app "Scalars"\nimport "m.sdr" as m\nscreen main:\n    value m.label\n')
+        lowered=expand(entry.read_text(),entry)[0];program=parse(lowered)
+        sequence=actions(program,['step','slice']);expected=reference(lowered,sequence)
+        self.assertTrue(all(item['accepted'] for item in expected))
+        self.assertEqual(next(value for key,value in expected[0]['state'].items() if key.endswith('_label')),marker)
+        self.assertEqual(next(value for key,value in expected[1]['state'].items() if key.endswith('_label')),marker[1:5])
+        self.assertEqual(next(value for key,value in expected[1]['state'].items() if key.endswith('_size')),4)
+        self.assertEqual(expected,javascript(lowered,sequence));self.assertEqual(expected,kotlin(lowered,sequence))
+
+    def test_unicode_separator_error_uses_physical_line_and_scalar_column(self):
+        line='export fn bad() -> text = concat("a\u2028😀", missing)'
+        module=self.put('m.sdr','module example.positions\n'+line+'\n')
+        source='app "Position"\nimport "m.sdr" as m\n'
+        with self.assertRaises(ValueError) as error:
+            parse_document(source,self.put('main.sdr',source))
+        self.assertEqual((error.exception.source,error.exception.line,error.exception.column),(str(module),2,line.index('missing')+1))
+
+    def test_crlf_imports_and_line_chunks_preserve_unicode_scalars(self):
+        from sedrava_syntax import physical_lines
+        marker='a\u0085\u2028\u2029z'
+        text='"'+marker+'"\r\nnext\r\n'
+        self.assertEqual(physical_lines(text),['"'+marker+'"','next'])
+        self.assertEqual(''.join(physical_lines(text,keepends=True)),text)
+        module=self.root/'m.sdr';module.write_bytes(b'module example.crlf\r\nexport state n = 0\r\nexport action step: n = n + 1\r\n')
+        entry=self.put('main.sdr','app "CRLF"\nimport "m.sdr" as m\n')
+        program=parse_document(entry.read_text(),entry)
+        state,accepted=transition(program,program.states,actions(program,['step'])[0])
+        self.assertTrue(accepted);self.assertEqual(next(value for key,value in state.items() if key.endswith('_n')),1)
 
     def project(self):
         self.put('sedrava.toml','[package]\nname="example.app"\nversion="1.0.0"\n[dependencies]\n"example.lib"={path="vendor/example.lib",version="1.0.0"}\n')

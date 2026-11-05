@@ -158,3 +158,26 @@ add domain record fields; root record labels never become alias substitutions.
 Substitution growth is checked before string/source-map materialization and parent
 output before concatenation. The shared bulk mapper retains caller positions.
 This is a checkpoint, not final-SHA CI evidence.
+
+## Physical-line Unicode correction checkpoint
+
+A raw U+2028 literal in an imported function/state reproduced an unterminated
+literal because generic splitlines treated scalar text as source boundaries.
+Current frontends/source maps now share LF/CRLF physical_lines, including client
+HTTP/source extraction. No runtime text normalization is introduced. The Kotlin
+conformance harness likewise preserves scalar data in generated code/JSON rows.
+Added NEL/LS/PS + astral-slice differential tests, exact scalar error columns and
+CRLF compatibility. The real example now has nine actions, including scalars,
+and the static contextual-style fixture contains literal separators.
+45 integration tests and the full 381-test local regression pass without skips;
+real Chromium app/WebApp/static-site/navigation also passes. One new fixture
+initially used the nonexistent text_len; corrected to the existing text_length,
+without adding an alias or weakening validation.
+
+CI dependency preparation now selects the official Ubuntu archive instead of
+the measured slow Azure mirror (43.3 MB / 21 min 47 sec). Only matching source URIs
+change; signing keys/settings remain unchanged and three regressions verify this.
+The helper is restricted to disposable GitHub CI and sudo preserves only the
+public GITHUB_ACTIONS flag. Intermediate head 2b58c85 already passed the complete
+bounded-core push workflow with the new mirror. Final exact-head CI/archives/native
+checks are rerun after this checkpoint; definitive links/counts are in draft PR #52.

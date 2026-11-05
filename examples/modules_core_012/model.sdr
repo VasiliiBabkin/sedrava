@@ -38,6 +38,9 @@ export action audit:
     label = label[0:1]
     repeat index in range(4, -1, -2):
         total = total + index
+export action scalars:
+    label = words.separators()[1:5]
+    total = text_length(label)
 export action reject:
     total = 99
     total = numbers[99]

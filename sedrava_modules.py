@@ -5,7 +5,7 @@ No Python/JavaScript execution or network loading. Included files are author cod
 import json
 from pathlib import Path
 import re
-from sedrava_syntax import MAX_SOURCE_CHARS, MAX_BLOCK_DEPTH, source_lines
+from sedrava_syntax import MAX_SOURCE_CHARS, MAX_BLOCK_DEPTH, source_lines, physical_lines
 
 
 def _expand(source, source_path=None, _stack=(), _root=None, _files=None, *, with_origins=False, _verified=None, _scoped=False):
@@ -18,7 +18,7 @@ def _expand(source, source_path=None, _stack=(), _root=None, _files=None, *, wit
         from sedrava_namespaces import _tokens,_RESERVED
         import tokenize
         from sedrava_source_map import LocatedError
-        for no,line in enumerate(source.splitlines(),1):
+        for no,line in enumerate(physical_lines(source),1):
             try:tokens=_tokens(line)
             except ValueError as exc:raise LocatedError(str(exc),source_path,no,1) from exc
             if any(t.type==tokenize.NAME and _RESERVED.fullmatch(t.string) for t in tokens):raise LocatedError("Reserved generated symbol in scoped legacy import",source_path,no,1)
@@ -38,7 +38,7 @@ def _expand(source, source_path=None, _stack=(), _root=None, _files=None, *, wit
     root = Path(source_path).resolve().parent if _root is None and source_path else _root
     output, origins = [], []
     try:
-        for number, line in enumerate(source.splitlines(), 1):
+        for number, line in enumerate(physical_lines(source), 1):
             match = re.fullmatch(r'import "([^"\n]+\.sdr)"', line)
             if not match:
                 output.append(line)
@@ -69,7 +69,7 @@ def _expand(source, source_path=None, _stack=(), _root=None, _files=None, *, wit
                 if depth == 0 and not declaration.startswith(('component ', 'style ', 'import ', 'fn ', 'record ')):
                     raise ValueError(f'Line {number}: column 1: module {value}:{n} may only export components/styles/records/functions/imports')
             expanded, _, child_origins = expand(text, path, (*_stack, path), root, files, with_origins=True,_verified=_verified,_scoped=scoped)
-            output.extend(expanded.splitlines())
+            output.extend(physical_lines(expanded))
             origins.extend(child_origins)
     except ValueError as exc:
         from sedrava_source_map import source_error
@@ -104,8 +104,8 @@ def components(source, origins=None,*,scoped=None):
     source_lines(source)
     traced = origins is not None
     if origins is None:
-        origins = [(None, i) for i in range(1, len(source.splitlines()) + 1)]
-    if len(origins) != len(source.splitlines()):
+        origins = [(None, i) for i in range(1, len(physical_lines(source)) + 1)]
+    if len(origins) != len(physical_lines(source)):
         raise ValueError('Source map does not match source lines')
     # Resolve definitions after imports. They are templates, never executable source.
     definitions = {}

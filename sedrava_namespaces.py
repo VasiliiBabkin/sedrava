@@ -12,7 +12,7 @@ import re
 import tokenize
 from io import StringIO
 
-from sedrava_syntax import MAX_SOURCE_CHARS, source_lines, is_reserved_identifier
+from sedrava_syntax import MAX_SOURCE_CHARS, source_lines, is_reserved_identifier, physical_lines
 from sedrava_source_map import MappedLine,Origin,replace_span,replace_spans,origin_for,LocatedError,ExpandedSource
 
 _IDENT = r'[A-Za-z][A-Za-z0-9_]*'
@@ -279,7 +279,7 @@ def resolve_scoped(source, source_path, *, with_origins=False, verified=None):
             if module_id in module_names and module_names[module_id] != path:
                 raise LocatedError(f'duplicate module identity {module_id}',path,entries[0][2],1)
             module_names[module_id] = path
-            lines = [MappedLine(line) for line in text.splitlines()]
+            lines = [MappedLine(line) for line in physical_lines(text)]
             for no,raw in enumerate(lines,1):
                 try:tokens_here=_tokens(raw)
                 except ValueError as exc:raise LocatedError(str(exc),path,no,1) from exc
@@ -415,13 +415,13 @@ def resolve_scoped(source, source_path, *, with_origins=False, verified=None):
         for child in cache[path].dependencies:
             append_dependency(child, out, source_map)
         emitted.add(path)
-        lines = cache[path].text.splitlines()
+        lines = physical_lines(cache[path].text)
         out.extend(lines)
         source_map.extend(cache[path].origins)
     out = []
     source_map = []
     entry_record=False
-    for no, line in enumerate(source.splitlines(), 1):
+    for no, line in enumerate(physical_lines(source), 1):
         line=MappedLine(line)
         if line.strip() and not line.startswith(' ') and not line.startswith('#'):
             entry_record=bool(re.fullmatch(r'record [A-Za-z_][A-Za-z_0-9]*:',line))
@@ -449,7 +449,7 @@ def resolve_scoped(source, source_path, *, with_origins=False, verified=None):
     output.display_names={symbol.emitted:symbol.name for module in cache.values() for symbol in module.symbols.values()}
     for public,emitted_name in reversed(list(output.public_symbols.items())):output.display_names[emitted_name]=public
     if with_origins:
-        assert len(source_map) == len(output.splitlines())
+        assert len(source_map) == len(physical_lines(output))
         return output, dependencies, tuple(source_map)
     return output, dependencies
 

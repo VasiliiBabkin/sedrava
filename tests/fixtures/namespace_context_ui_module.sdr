@@ -4,5 +4,6 @@ style style:
 component use:
     card style style:
         paragraph "Contextual UI"
+        paragraph "a  😀z"
 export component Panel:
     use use

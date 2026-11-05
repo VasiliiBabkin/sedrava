@@ -15,7 +15,7 @@ import tempfile
 
 from sedrava_core import parse as parse_app, run, type_of
 from sedrava_records import ListType, value_type,structured
-from sedrava_syntax import source_lines, MAX_BLOCK_DEPTH
+from sedrava_syntax import source_lines, MAX_BLOCK_DEPTH, physical_lines
 from sedrava_site import (BREAKPOINTS, COMMON, COMPONENTS, THEME, Component,
                           Definition, Parameter, Property, Span, choice, fail,
                           identifier, properties, text, tokens, walk)
@@ -92,7 +92,7 @@ def parse_webapp(source):
     from sedrava_web_assets import read_directives
     source, settings = read_directives(source)
     if any(key in settings for key in ("origin","robots","social-image")):raise ValueError("Static publishing metadata requires site mode")
-    raw=source.splitlines();kept=[];presentation=[];named_themes={};pos=0
+    raw=physical_lines(source);kept=[];presentation=[];named_themes={};pos=0
     while pos<len(raw):
         named=re.fullmatch(r'theme ([A-Za-z][A-Za-z0-9_-]*):',raw[pos])
         if named:
@@ -135,7 +135,7 @@ def parse_webapp(source):
         fail(Span(view_lineno, 1), "Empty view main")
     if not any(d > 0 for d, _, _ in lines[ix + 1:]):
         fail(Span(view_lineno, 1), "Empty view main")
-    raw = source.splitlines()
+    raw = physical_lines(source)
     head_no = lines[0][2] - 1
     raw[head_no] = re.sub(r"^(\s*)webapp\b", r"\1app", raw[head_no], count=1)
     domain = "\n".join(raw[:view_lineno - 1]) + '\nscreen main:\n    text "WebApp placeholder"\n'

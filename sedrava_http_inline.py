@@ -2,6 +2,7 @@
 
 The API declaration is kept out of the deterministic app parser and runtime.
 """
+from sedrava_syntax import physical_lines
 import re
 
 SERVICE_HEADER = re.compile(r"^service [A-Za-z][A-Za-z0-9_]{0,63}:$")
@@ -10,7 +11,7 @@ SERVICE_HEADER = re.compile(r"^service [A-Za-z][A-Za-z0-9_]{0,63}:$")
 def split_app_service(source: str):
     if type(source) is not str:
         raise ValueError("Expected Sedrava source text")
-    lines = source.splitlines(keepends=True)
+    lines = physical_lines(source,keepends=True)
     headers = [i for i, line in enumerate(lines)
                if SERVICE_HEADER.fullmatch(line.rstrip("\r\n"))]
     if not headers:

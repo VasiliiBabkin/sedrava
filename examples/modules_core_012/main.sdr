@@ -12,6 +12,7 @@ screen main:
     button "seed" -> model.seed
     button "audit" -> model.audit
     button "reject" -> model.reject
+    button "scalars" -> model.scalars
     button "break_rule" -> model.break_rule
 test snapshot: model.scan -> model.total == 6
 test expected: model.expected -> model.total == 42 and model.code == "INT_OVERFLOW"

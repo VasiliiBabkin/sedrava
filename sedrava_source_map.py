@@ -1,5 +1,6 @@
 """Character-level original-source provenance, retained through lexical lowering."""
 from pathlib import Path
+from sedrava_syntax import physical_lines
 import re
 _ERROR=re.compile(r'^Line ([1-9][0-9]*):(?: column ([1-9][0-9]*):)?[ ]*(.*)',re.S)
 class Origin(tuple):
@@ -60,7 +61,7 @@ class LocatedError(ValueError):
         super().__init__(f'{source}:{line}'+(f':{column}' if column else '')+f': {message}'+(f' (expanded line {expanded})' if expanded else ''))
 def locations(source,source_path):
     path=Path(source_path).resolve() if source_path else None
-    return tuple(Origin(path,i) for i,_ in enumerate(source.splitlines(),1))
+    return tuple(Origin(path,i) for i,_ in enumerate(physical_lines(source),1))
 def source_error(exc,source_map):
     if isinstance(exc,LocatedError):return exc
     match=_ERROR.match(str(exc))
@@ -71,4 +72,4 @@ def source_error(exc,source_map):
     if col is not None and isinstance(origin,Origin):path,line,col=origin.point(col)
     return LocatedError(match[3],path,line,col,number)
 def mapped_lines(source,origins):
-    return [MappedLine(line,getattr(origin,'columns',None),getattr(origin,'positions',None)) for line,origin in zip(source.splitlines(),origins)]
+    return [MappedLine(line,getattr(origin,'columns',None),getattr(origin,'positions',None)) for line,origin in zip(physical_lines(source),origins)]

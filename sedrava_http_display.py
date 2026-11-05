@@ -2,6 +2,7 @@
 
 The optional display block must be the final service section.
 """
+from sedrava_syntax import physical_lines
 import json
 import re
 
@@ -13,7 +14,7 @@ _OPTION = re.compile(r'        (heading|loading|empty|error) (".*")$')
 def _extract(source):
     if type(source) is not str:
         raise ValueError("Expected HTTP service source")
-    lines = source.splitlines(keepends=True)
+    lines = physical_lines(source,keepends=True)
     indices = [i for i, line in enumerate(lines)
                if _HEADER.fullmatch(line.rstrip("\r\n"))]
     if not indices:

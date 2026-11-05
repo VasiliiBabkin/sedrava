@@ -8,7 +8,7 @@ from sedrava_core import parse
 from core_conformance import reference
 folder=ROOT/'build/namespace-core';folder.mkdir(parents=True,exist_ok=True)
 source_path=ROOT/'examples/modules_core_012/main.sdr';source=expand(source_path.read_text(),source_path)[0];program=parse(source)
-labels=['scan','add','add','expected','seed','audit','break_rule','reject'];sequence=[next(k for k in program.actions if k.endswith('_'+label)) for label in labels];expected=reference(source,sequence)
+labels=['scan','add','add','expected','seed','audit','scalars','break_rule','reject'];sequence=[next(k for k in program.actions if k.endswith('_'+label)) for label in labels];expected=reference(source,sequence)
 subprocess.run([sys.executable,'-m','sedrava_cli','build','web',str(source_path),'--output',str(folder/'app/index.html')],check=True,cwd=ROOT)
 subprocess.run([sys.executable,'-m','sedrava_cli','build','webapp',str(source_path.with_name('site.sdr')),'--output',str(folder/'webapp')],check=True,cwd=ROOT)
 subprocess.run([sys.executable,'-m','sedrava_cli','build','web',str(ROOT/'tests/fixtures/namespace_legacy_navigation.sdr'),'--output',str(folder/'legacy/index.html')],check=True,cwd=ROOT)
@@ -46,6 +46,7 @@ try:
     page.goto('http://127.0.0.1:'+str(server.server_port)+'/context-ui/index.html')
     paragraph=page.get_by_text('Contextual UI',exact=True);assert paragraph.is_visible()
     assert paragraph.locator('..').evaluate('(node)=>getComputedStyle(node).paddingTop')=='37px'
+    assert 'a\u0085\u2028\u2029😀z' in page.locator('p').all_text_contents()
     page.reload();assert page.get_by_text('Contextual UI',exact=True).is_visible()
     page.screenshot(path=str(folder/(engine+'-context-ui.png')),full_page=True)
     assert not errors,errors;page.close();results.append({'mode':'contextual-site','private_use_style_names':True,'computed_padding':37,'pageerrors':errors})
