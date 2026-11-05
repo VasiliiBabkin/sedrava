@@ -124,7 +124,7 @@ class API013Tests(unittest.TestCase):
         self.assertEqual(self.request(
             "DELETE", "/api/tasks/1", headers=((b"if-match", newer_etag),))[0], 200)
         self.assertEqual(self.request("GET", "/api/tasks/1")[0], 404)
-        self.assertEqual(self.request("GET", "/api/tasks")[1]["items"], [])
+        self.assertEqual(self.request("GET", "/api/tasks")[:2], (200, {"items": []}))
         with sqlite3.connect(self.db) as conn:
             self.assertEqual(conn.execute('SELECT count(*) FROM tasks').fetchone()[0], 0)
             self.assertEqual(conn.execute(
@@ -152,14 +152,14 @@ class API013Tests(unittest.TestCase):
         self.assertEqual(self.request("GET", "/api/tasks", query=b"limit=1&limit=2")[0], 400)
         self.assertEqual(self.request("GET", "/api/tasks", query=b"limit=100000")[0], 400)
         self.assertEqual(self.request("GET", "/api/tasks", query=b"random=1")[0], 400)
-        self.assertEqual(self.request("GET", "/api/tasks")[1]["items"], [])
+        self.assertEqual(self.request("GET", "/api/tasks")[:2], (200, {"items": []}))
 
     def test_data_endpoints_fail_closed_without_a_user_identity(self):
         with patch.dict(os.environ, {"SEDRAVA_API_EXPERIMENTAL_ENABLE": "0"}):
             self.assertEqual(self.request("GET", "/api/tasks")[0], 404)
             self.assertEqual(self.request("GET", "/health")[0], 200)
         with patch.dict(os.environ, {"SEDRAVA_API_EXPERIMENTAL_TOKEN": "short"}):
-            self.assertEqual(self.request("GET", "/api/tasks")[0], 503)
+            self.assertEqual(self.request("GET", "/api/tasks")[:2], (503, {"error": "unavailable"}))
         self.assertEqual(self.request("GET", "/api/tasks", client="192.0.2.1")[0], 403)
         self.assertEqual(self.request("GET", "/api/tasks", server="0.0.0.0")[0], 403)
         self.assertEqual(self.request("GET", "/api/tasks", host=b"public.example")[0], 403)
