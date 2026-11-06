@@ -59,6 +59,12 @@ def main(argv=None):
     host_run.add_argument("--trusted", action="store_true", help="Confirm the host source is trusted")
     host_run.add_argument("--allow-read", action="store_true", help="Grant bounded local text file reads")
     host_run.add_argument("--allow-write", action="store_true", help="Grant one atomic local text file write")
+    host_run.add_argument("--allow-list", action="store_true", help="Grant bounded directory listing")
+    host_run.add_argument("--allow-mkdir", action="store_true", help="Grant one directory creation (also requires --allow-write)")
+    host_run.add_argument("--allow-rmdir", action="store_true", help="Grant one empty directory removal (also requires --allow-write)")
+    host_run.add_argument("--read-scope", default=".", help="Workspace-relative directory for reads")
+    host_run.add_argument("--write-scope", default=".", help="Workspace-relative directory for mutations")
+    host_run.add_argument("--list-scope", default=".", help="Workspace-relative directory for listing")
     host_run.add_argument("--arg", dest="host_args", action="append", default=[],
                           metavar="NAME=VALUE", help="Provide a declared typed host argument")
     args = parser.parse_args(argv)
@@ -79,7 +85,10 @@ def main(argv=None):
             else:
                 result = run_host(program, root=args.root, supplied=args.host_args,
                                   trusted=args.trusted, allow_read=args.allow_read,
-                                  allow_write=args.allow_write)
+                                  allow_write=args.allow_write, allow_list=args.allow_list,
+                                  allow_mkdir=args.allow_mkdir, allow_rmdir=args.allow_rmdir,
+                                  read_scope=args.read_scope, write_scope=args.write_scope,
+                                  list_scope=args.list_scope)
                 print(json.dumps(result, ensure_ascii=False, sort_keys=True))
             return 0
         if args.source.stat().st_size > MAX_SOURCE_CHARS * 4:
