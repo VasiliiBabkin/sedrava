@@ -17,7 +17,7 @@ error open ReadTextError:
 ```
 
 `error closed|open Name [id "stable.identifier"]:` precedes functions/state.
-Each type has 1..16 variants, each has 0..16 distinct int/text/bool fields; at most
+Names use `[A-Za-z][A-Za-z0-9_]*`. Each type has 1..16 variants, each has 0..16 distinct int/text/bool fields; at most
 16 types. Variant/field names are at most 64 ASCII identifier characters; IDs at most
 128. Empty variants use `Name:` without a body. Constructors require exact
 named fields: `ArithmeticError.IntOverflow(left=x, right=y)`. No coercion,
@@ -68,3 +68,18 @@ candidate-state transition. Static work takes the maximum branch; runtime reserv
 selection plus expression cost and then charges executed statements. Imported
 functions, payload construction and Unicode operations retain existing limits.
 No file/network/Host/Server operation or Android permission is introduced.
+
+Compiler JSON diagnostics retain the existing envelope and original locations.
+New passes use SDR-E1201 (error type/constructor), SDR-E1202 (typed Result),
+SDR-E1203 (match); message prefixes are E_ERROR_TYPE / E_RESULT / E_MATCH.
+Other preexisting diagnostics keep their existing codes. Engine execution faults
+remain execution diagnostics rather than Result payloads.
+
+For Host A3, introduce separately reviewed typed adapters that translate only
+registered expected faults; validate untrusted payloads and preserve the fatal
+budget/policy/capability boundary. Server requires its own adapters, transport
+codec and security tests. Stable IDs alone neither grant authority nor implement
+a wire format. No Host/Server PR is integrated by this slice.
+
+In A1 every wildcard Err arm is final, including closed errors. Constructors
+evaluate named payload expressions in declaration-field order on all targets.

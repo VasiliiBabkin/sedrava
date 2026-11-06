@@ -73,6 +73,9 @@ jobs:
           python-version: '3.12'
       - run: python -m pip install playwright==1.62.0
       - run: sudo --preserve-env=GITHUB_ACTIONS python3 scripts/configure_ci_apt.py && python -m playwright install --with-deps ${{ matrix.engine }}
+      - name: Existing real HTTP browser regression
+        if: matrix.engine == 'chromium'
+        run: python -m unittest discover -s tests -p test_http_browser_e2e.py -v
       - run: python scripts/test_typed_errors_browser.py
       - run: python scripts/test_core_a2_browser.py
       - run: python scripts/test_namespace_core_browser.py

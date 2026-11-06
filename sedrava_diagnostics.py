@@ -42,10 +42,17 @@ class SedravaError(ValueError):
         self.column = column
 
 
+def compile_code(message):
+    """Stable codes for the new typed-error passes; old diagnostics retain theirs."""
+    for prefix,code in [('E_ERROR_TYPE:', 'SDR-E1201'), ('E_RESULT:', 'SDR-E1202'), ('E_MATCH:', 'SDR-E1203')]:
+        if message.startswith(prefix):return code
+    return 'SDR-E1001'
+
+
 def from_exception(exc, source, command, *, phase=None):
     from sedrava_source_map import LocatedError
     if isinstance(exc,LocatedError):
-        return Diagnostic("SDR-E2001" if phase=="execute" else "SDR-E1001",phase or "compile",exc.message,exc.source,exc.line,exc.column)
+        return Diagnostic("SDR-E2001" if phase=="execute" else compile_code(exc.message),phase or "compile",exc.message,exc.source,exc.line,exc.column)
     if isinstance(exc, SedravaError):
         return Diagnostic(exc.code, exc.phase, str(exc), str(source), exc.line, exc.column)
     match = re.match(r"^Line ([1-9][0-9]*): (?:column ([1-9][0-9]*): )?(.*)", str(exc), re.S)
@@ -58,4 +65,4 @@ def from_exception(exc, source, command, *, phase=None):
         return Diagnostic("SDR-E4001", "test", message, str(source), line, column)
     if phase == "execute" or (phase is None and command in ("run", "test")):
         return Diagnostic("SDR-E2001", "execute", message, str(source), line, column)
-    return Diagnostic("SDR-E1001", "compile", message, str(source), line, column)
+    return Diagnostic(compile_code(message), "compile", message, str(source), line, column)

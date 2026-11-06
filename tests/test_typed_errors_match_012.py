@@ -156,6 +156,13 @@ class TypedErrors(unittest.TestCase):
             (root/'main.sdr').write_text(source)
             with self.assertRaisesRegex(ValueError,r'errors.sdr:16:[0-9]+:.*limit_bytes'):
                 parse_document(source,root/'main.sdr')
+            (root/'errors.sdr').write_text((path.parent/'errors.sdr').read_text().replace('Err(ArithmeticError.IntOverflow(', 'Err(ArithmeticError.Unknown('))
+            result=subprocess.run([sys.executable,str(ROOT/'sedrava_cli.py'),'--diagnostics','json','check',str(root/'main.sdr')],capture_output=True,text=True,timeout=20)
+            self.assertEqual(result.returncode,1);diagnostic=json.loads(result.stderr)
+            self.assertEqual(diagnostic['code'],'SDR-E1201')
+            self.assertEqual(diagnostic['location']['source'],str(root/'errors.sdr'))
+            self.assertEqual(diagnostic['location']['line'],8)
+            self.assertGreater(diagnostic['location']['column'],1)
 
     def test_module_kotlin_full_states(self):
         path=ROOT/'examples/typed_errors_modules_012/main.sdr';source,_=expand(path.read_text(),path)
@@ -171,7 +178,9 @@ class TypedErrors(unittest.TestCase):
                 p=parse_document(source,root/'main.sdr');self.assertEqual(next(iter(p.errors.values())).identity,'stable.errors.E')
 
     def test_engine_overflow_in_error_payload_is_not_caught(self):
-        source=BASE.replace('E.First(n=x)','E.First(n=x + 1)').replace('match outcome(2)','match outcome(2147483647)')
+        source=BASE.replace('E.First(n=x)','E.First(n=x + 1)').replace('match outcome(2)','match outcome(2147483647)').replace('test result: go -> total == 2','test initial: -> total == 0')
+        p=parse(source)
+        with self.assertRaisesRegex(ValueError,'overflow'):transition(p,p.states,'go')
         rows=reference(source,['go']);self.assertEqual(rows,[{'accepted':False,'state':{'total':0}}])
         self.assertEqual(javascript(source,['go']),rows)
         self.assertEqual(kotlin(source,['go']),rows)
@@ -214,6 +223,79 @@ class TypedErrors(unittest.TestCase):
             body='match outcome(2):\n    Ok(value'+str(i)+'):\n'+''.join('        '+line+'\n' for line in body.splitlines())+'    Err(error'+str(i)+'):\n        total = 0'
         start=BASE.index('    match outcome(2):');end=BASE.index('screen main:')
         self.reject(BASE[:start]+''.join('    '+line+'\n' for line in body.splitlines())+BASE[end:],'nesting limit')
+
+    def test_json_codes_and_imported_source_positions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            source=BASE.replace('Err(Second { value }):\n            total = text_length(value)','Err(Unknown {}):\n            total = 0')
+            path=root/'main.sdr';path.write_text(source)
+            result=subprocess.run([sys.executable,str(ROOT/'sedrava_cli.py'),'--diagnostics','json','check',str(path)],capture_output=True,text=True,timeout=20)
+            self.assertEqual(result.returncode,1);data=json.loads(result.stderr)
+            self.assertEqual(data['code'],'SDR-E1203');self.assertEqual(data['phase'],'compile')
+            self.assertEqual(data['location']['source'],str(path));self.assertIsInstance(data['location']['line'],int)
+            source=BASE.replace('E.First(n=x)','E.First(n=true)');path.write_text(source)
+            result=subprocess.run([sys.executable,str(ROOT/'sedrava_cli.py'),'--diagnostics','json','check',str(path)],capture_output=True,text=True,timeout=20)
+            self.assertEqual(json.loads(result.stderr)['code'],'SDR-E1201')
+            source=BASE.replace('Ok(x)','Ok(true)');path.write_text(source)
+            result=subprocess.run([sys.executable,str(ROOT/'sedrava_cli.py'),'--diagnostics','json','check',str(path)],capture_output=True,text=True,timeout=20)
+            self.assertEqual(json.loads(result.stderr)['code'],'SDR-E1202')
+            # The independent path/column checks for imports run above as well.
+
+    def test_invalid_match_leaves_no_partial_projects(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);path=root/'main.sdr';path.write_text(BASE.replace('Err(First { n })','Err(Missing { n })'))
+            for target in ('web','android'):
+                output=root/target
+                result=subprocess.run([sys.executable,str(ROOT/'sedrava_cli.py'),'build',target,str(path),'--output',str(output)],capture_output=True,text=True,timeout=20)
+                self.assertNotEqual(result.returncode,0);self.assertFalse(output.exists())
+
+    def test_int32_minimum_and_scalar_payloads_cross_targets(self):
+        for expr,value in [('E.First(n=-2147483648)',-2147483648),('E.Second(value="a😀z"[1:2])',1)]:
+            source=BASE.replace('E.First(n=x)',expr).replace('total == 2','total == '+str(value))
+            self.assertEqual(run(parse(source)),1)
+            rows=reference(source,['go']);self.assertEqual(rows[0]['state']['total'],value)
+            self.assertEqual(javascript(source,['go']),rows)
+            self.assertEqual(kotlin(source,['go']),rows)
+
+    def test_values_are_not_dynamic_constructor_type_symbols(self):
+        self.reject(BASE.replace('    match outcome(2):','    let instance = E.First(n=1)\n    let invalid = instance.First(n=2)\n    match outcome(2):'),'type symbol')
+        self.reject(BASE.replace('fn outcome','fn invalid(e: E) -> E effects pure = e.First(n=2)\nfn outcome'),'type symbol')
+
+    def test_untyped_effect_metadata_cannot_claim_an_error_constructor(self):
+        import ast
+        from sedrava_effects import infer_function_effects
+        from sedrava_functions import FunctionType
+        kind=parse(BASE).errors['E']
+        call=ast.Call(func=ast.Name(id='open',ctx=ast.Load()),args=[],keywords=[])
+        call.error_type=kind;call.error_variant='First';call.error_fields=(('n',int),)
+        with self.assertRaisesRegex(ValueError,'constructor metadata'):
+            infer_function_effects({'forged':FunctionType('forged',(),int,call,1)})
+
+    def test_legacy_record_result_keeps_record_identity(self):
+        source="""app "Legacy record Result"
+record Entry:
+    title: text
+state entries: list<Entry>(max=2) = []
+state message = ""
+action add:
+    entries = append(entries, Entry(title="😀"))
+action inspect:
+    match try_at(entries, 0):
+        Ok(record):
+            message = record.title
+        Err(error):
+            message = "empty"
+action remove_first:
+    entries = list_remove_at(entries, 0)
+screen main:
+    value message
+test scalar: inspect -> message == "empty"
+"""
+        sequence=['inspect','add','inspect','remove_first','inspect','add','inspect']
+        expected=reference(source,sequence)
+        self.assertEqual(expected[-1]['state']['entries']['items'][0]['id'],2)
+        self.assertEqual(javascript(source,sequence),expected)
+        self.assertEqual(kotlin(source,sequence),expected)
 
     def test_nested_budget_and_scope_remain_checked(self):
         # 100 iterations, each match selects a 100-iteration branch: above 10k steps.

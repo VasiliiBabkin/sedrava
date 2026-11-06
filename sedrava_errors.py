@@ -166,8 +166,8 @@ def constructor(node, types, type_of):
     if not isinstance(node.func, ast.Attribute) or not isinstance(node.func.value, ast.Name):
         raise ValueError('E_ERROR_TYPE: expected named error variant constructor')
     kind = types.get(node.func.value.id)
-    if not isinstance(kind, ErrorType):
-        raise ValueError('E_ERROR_TYPE: unknown error type')
+    if not isinstance(kind, ErrorType) or node.func.value.id != kind.name:
+        raise ValueError('E_ERROR_TYPE: constructor requires an error type symbol')
     fields = dict(kind.variants).get(node.func.attr)
     if fields is None:
         raise ValueError('E_ERROR_TYPE: unknown error variant '+node.func.attr)
@@ -177,3 +177,18 @@ def constructor(node, types, type_of):
         raise ValueError('E_ERROR_TYPE: variant field type mismatch')
     node.error_type, node.error_variant, node.error_fields = kind, node.func.attr, fields
     return kind
+
+
+def checked_constructor_metadata(node):
+    """Effects sees only actual typed constructors, never an arbitrary marker."""
+    import ast
+    kind=getattr(node,'error_type',None)
+    if (not isinstance(kind,ErrorType) or not isinstance(node.func,ast.Attribute)
+            or not isinstance(node.func.value,ast.Name) or node.func.value.id!=kind.name
+            or getattr(node,'error_variant',None)!=node.func.attr
+            or node.func.attr not in dict(kind.variants)
+            or not isinstance(getattr(node,'error_fields',None),tuple)
+            or dict(kind.variants).get(node.func.attr)!=node.error_fields
+            or node.args or len(node.keywords)!=len(node.error_fields)
+            or {kw.arg for kw in node.keywords}!=set(dict(node.error_fields))):
+        raise ValueError('Error constructor metadata does not match typed IR')
