@@ -94,6 +94,8 @@ def infer_function_effects(functions, *, primitive_effects=None, contracts=None)
             count += 1
             if count > MAX_CALLS:
                 raise ValueError("Function call graph exceeds resource limit")
+            if hasattr(node,'error_type'):
+                continue  # Typed closed constructor, not an external call edge.
             if not isinstance(node.func, ast.Name):
                 raise ValueError("Indirect/dynamic effectful calls are unsupported")
             target = node.func.id

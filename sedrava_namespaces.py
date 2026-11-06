@@ -18,7 +18,7 @@ from sedrava_source_map import MappedLine,Origin,replace_span,replace_spans,orig
 _IDENT = r'[A-Za-z][A-Za-z0-9_]*'
 _MODULE = re.compile(rf'module ({_IDENT}(?:\.{_IDENT})*)\Z')
 _IMPORT = re.compile(rf'import "([^"\n]+\.sdr)" as ({_IDENT})\Z')
-_DECL = re.compile(rf'(export )?(component|style|record|fn|state|derive|action) ({_IDENT})(?=[(: \t])')
+_DECL = re.compile(rf'(export )?(component|style|record|fn|state|derive|action|error (?:closed|open)) ({_IDENT})(?=[(: \t])')
 _RESERVED = re.compile(r'(?:M|L)_[0-9a-f]{12}_[A-Za-z][A-Za-z0-9_]*')
 
 
@@ -127,7 +127,7 @@ def _lower_function(line, symbols, aliases, module, name, path, number):
     if not declaration:
         return line  # The common parser diagnoses malformed declarations.
     parameters, regions, cursor = {}, [], declaration.start(2)
-    records = {key:value for key,value in symbols.items() if value.kind=='record'}
+    records = {key:value for key,value in symbols.items() if value.kind in ('record','error')}
     try:
         parameter_sources=split_parameters(declaration[2])
     except ValueError as exc:
@@ -172,7 +172,7 @@ def _lower_value_declaration(line, symbols, aliases, path, number):
     regions = [(equal+1,len(line),_rewrite(line[equal+1:],symbols,aliases,line_no=number,filename=str(path)))]
     colon = line.find(':',0,equal)
     if colon>=0:
-        records={key:value for key,value in symbols.items() if value.kind=='record'}
+        records={key:value for key,value in symbols.items() if value.kind in ('record','error')}
         regions.append((colon+1,equal,_rewrite(line[colon+1:equal],records,aliases,line_no=number,filename=str(path),type_context=True)))
     return _replace_regions(line,regions)
 
@@ -181,6 +181,24 @@ def _lower_action_line(line, symbols, aliases, scopes, module, action, path, num
     depth=len(line)-len(line.lstrip(' '))
     while len(scopes)>1 and scopes[-1][0]>depth:scopes.pop()
     if scopes[-1][0]<depth:scopes.append((depth,{}))
+    # Match patterns carry both field labels and scoped value binders. Lower only
+    # binder spans, preserving variant/field identities for the common checker.
+    stripped=line.lstrip(' ')
+    if stripped.startswith(('Ok(', 'Err(')):
+        from sedrava_errors import pattern,valid_name
+        try:tag,entries=pattern(stripped)
+        except ValueError:return line  # The core reports malformed patterns.
+        fresh={};edits=[]
+        for field,key,start,end in entries:
+            start+=depth;end+=depth
+            if not valid_name(key) or key in symbols or key in aliases:
+                raise LocatedError('invalid/shadowing match binding '+key,*origin_for(line,(path,number)).point(start+1))
+            emitted='L_'+sha256((module+':'+action+':'+str(number)).encode()).hexdigest()[:12]+'_'+key
+            fresh[key]=Symbol(module,key,'binding',emitted,False,path,number)
+            shorthand=bool(field) and line[:start].rstrip().endswith(('{',','))
+            edits.append((start,end,field+': '+emitted if shorthand else emitted))
+        scopes.append((depth+4,fresh))
+        return replace_spans(line,edits)
     bound=re.match(r'\s*(let|repeat|for) ([A-Za-z][A-Za-z0-9_]*)(?:, ([A-Za-z][A-Za-z0-9_]*))?',line)
     fresh={}
     if bound:
@@ -212,6 +230,10 @@ def _local_decl(line, module, path, n):
     if not m:
         return None
     _, kind, name = m.groups()
+    if kind.startswith('error '):
+        from sedrava_errors import valid_name
+        if not valid_name(name) or name=='Error':raise LocatedError('invalid/reserved error type '+name,path,n,m.start(3)+1)
+        kind='error'
     if is_reserved_identifier(name) or name.startswith(('M_','L_')):
         raise LocatedError(f'reserved declaration name {name}',path,n,m.start(3)+1)
     digest = sha256(module.encode('utf-8')).hexdigest()[:12]
@@ -230,6 +252,14 @@ def _check_entry_binders(line, aliases, path, number):
             parameter=PARAMETER_DECLARATION.fullmatch(raw)
             if parameter and parameter[1] in aliases:
                 raise LocatedError('function parameter conflicts with import alias',*origin_for(line,(path,number)).point(start+parameter.start(1)+1))
+    stripped=line.lstrip(' ')
+    if stripped.startswith(('Ok(', 'Err(')):
+        from sedrava_errors import pattern
+        try:_,entries=pattern(stripped)
+        except ValueError:return
+        for _,key,start,_ in entries:
+            if key in aliases:raise LocatedError('match binding conflicts with import alias',*origin_for(line,(path,number)).point(len(line)-len(stripped)+start+1))
+        return
     offset=0
     action=re.match(r'action [A-Za-z][A-Za-z0-9_]*:\s*',line)
     if action:offset=action.end()
@@ -333,6 +363,8 @@ def resolve_scoped(source, source_path, *, with_origins=False, verified=None):
                     owner = sym
                     line=replace_span(line,m.start(3),m.end(3),sym.emitted)
                     if m[1]:line=replace_span(line,0,len('export '),'')
+                    if sym.kind=='error' and ' id ' not in line:
+                        colon=line.rfind(':');line=replace_span(line,colon,colon,' id '+__import__('json').dumps(module_id+'.'+sym.name))
                     if sym.kind == 'fn':
                         line = _lower_function(line, symbols, aliases, module_id, sym.name, path, no)
                     elif sym.kind in ('state','derive'):
@@ -354,13 +386,15 @@ def resolve_scoped(source, source_path, *, with_origins=False, verified=None):
                     result.append(line[:prefix]+_rewrite(line[prefix:],symbols,aliases,line_no=no,filename=str(path)));result_origins.append(origin_for(result[-1],(path,no)));continue
                 if not line.startswith(' '):
                     raise LocatedError(f'invalid top-level module construct',path,no,1)
+                if owner and owner.kind=='error':
+                    result.append(line);result_origins.append(origin_for(line,(path,no)));continue
                 if owner and owner.kind=='record':
                     colon=line.find(':')
                     if colon<0:
                         use=re.match(r'\s*use\s+',line)
                         if use:line=line[:use.end()]+_rewrite(line[use.end():],{key:value for key,value in symbols.items() if value.kind=='component'},aliases,line_no=no,filename=str(path))
                     else:
-                        records={key:value for key,value in symbols.items() if value.kind=='record'}
+                        records={key:value for key,value in symbols.items() if value.kind in ('record','error')}
                         line=line[:colon+1]+_rewrite(line[colon+1:],records,aliases,line_no=no,filename=str(path),type_context=True)
                     result.append(line)
                     result_origins.append(origin_for(line,(path,no)))
@@ -406,7 +440,7 @@ def resolve_scoped(source, source_path, *, with_origins=False, verified=None):
         if any(t.type == tokenize.NAME and _RESERVED.fullmatch(t.string) for t in _tokens(raw)):
             raise LocatedError(f'reserved generated symbol identifier',entry,no,1)
     for alias in aliases:
-        if re.search(rf'^(?:state|derive|fn|record|action|component|style|view|service) {re.escape(alias)}(?:\s|\(|:|=)', source, re.M):
+        if re.search(rf'^(?:state|derive|fn|record|error (?:closed|open)|action|component|style|view|service) {re.escape(alias)}(?:\s|\(|:|=)', source, re.M):
             raise ValueError(f'{entry}: local declaration collides with import alias {alias}')
     emitted = set()
     def append_dependency(path, out, source_map):
@@ -424,7 +458,7 @@ def resolve_scoped(source, source_path, *, with_origins=False, verified=None):
     for no, line in enumerate(physical_lines(source), 1):
         line=MappedLine(line)
         if line.strip() and not line.startswith(' ') and not line.startswith('#'):
-            entry_record=bool(re.fullmatch(r'record [A-Za-z_][A-Za-z_0-9]*:',line))
+            entry_record=bool(re.match(r'(?:record |error (?:closed|open) )',line))
         m = _IMPORT.fullmatch(line)
         if m:
             path = _valid_import(entry, m[1], root, no)

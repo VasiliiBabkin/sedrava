@@ -66,8 +66,8 @@ def _expand(source, source_path=None, _stack=(), _root=None, _files=None, *, wit
             from sedrava_packages import read_module
             text=read_module(path,root,_verified)
             for depth, declaration, n in source_lines(text):
-                if depth == 0 and not declaration.startswith(('component ', 'style ', 'import ', 'fn ', 'record ')):
-                    raise ValueError(f'Line {number}: column 1: module {value}:{n} may only export components/styles/records/functions/imports')
+                if depth == 0 and not declaration.startswith(('component ', 'style ', 'import ', 'fn ', 'record ', 'error ')):
+                    raise ValueError(f'Line {number}: column 1: module {value}:{n} may only export components/styles/records/errors/functions/imports')
             expanded, _, child_origins = expand(text, path, (*_stack, path), root, files, with_origins=True,_verified=_verified,_scoped=scoped)
             output.extend(physical_lines(expanded))
             origins.extend(child_origins)
@@ -144,7 +144,7 @@ def components(source, origins=None,*,scoped=None):
         first=line.lstrip().split(maxsplit=1)
         if not first:return
         word=first[0].rstrip(':')
-        if word in {"app","site","webapp","module","import","export","state","derive","action","record","fn","persist","rule","test","screen","view","navigation","require","for","repeat","if","else","while","return","let"} or re.match(r"\s*[A-Za-z_][A-Za-z_0-9]*\s*=(?!=)",line):
+        if word in {"app","site","webapp","module","import","export","state","derive","action","record","error","match","Ok","Err","fn","persist","rule","test","screen","view","navigation","require","for","repeat","if","else","while","return","let"} or re.match(r"\s*[A-Za-z_][A-Za-z_0-9]*\s*=(?!=)",line):
             fail_component("UI components cannot emit domain declarations or action statements",origin,len(line)-len(line.lstrip())+1)
 
     def instantiate(lines, line_origins, stack=()):
@@ -212,7 +212,7 @@ def components(source, origins=None,*,scoped=None):
                     expanded.append(prefix+text)
                     expanded_origins.append(template_origin)
             child_lines, child_locations = instantiate(expanded, expanded_origins, (*stack, name))
-            if scoped and owner in {'fn','state','derive','record','action','persist','rule','test','navigation','service','api','theme','style'}:
+            if scoped and owner in {'fn','state','derive','record','error','action','persist','rule','test','navigation','service','api','theme','style'}:
                 fail_component('UI components cannot be instantiated in domain declarations',origin,len(prefix)+1)
             size+=sum(len(child)+1 for child in child_lines)
             if size>MAX_SOURCE_CHARS:fail_component('Expanded components exceed source limit',origin,len(prefix)+1)

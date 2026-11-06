@@ -6,6 +6,7 @@ from sedrava_sequences import ValueList,ValueListType,NAMES as VALUE_LIST_OPS
 from dataclasses import dataclass
 from sedrava_functions import FunctionType, expression_cost, expression_depth, signature_type, FUNCTION_DECLARATION, PARAMETER_DECLARATION, MAX_FUNCTION_PARAMETERS, MAX_EXPRESSION_DEPTH
 from sedrava_stdlib import SIGNATURES
+from sedrava_errors import ErrorType, ErrorValue, Match, MatchArm
 from sedrava_results import NAMES as RESULT_NAMES
 from sedrava_queries import NAMES as QUERY_NAMES, type_query
 from sedrava_navigation import Span, Widget, Screen, Navigation, MAX_SCREENS, MAX_NAV_COMMANDS
@@ -156,6 +157,7 @@ class Program:
     has_navigation: bool = False
     functions: dict = None
     display_names: dict = None
+    errors: dict = None
 
 def parse_expr(source, types, expected=None):
     source, literals = literal_expression(source)
@@ -177,6 +179,12 @@ def parse_expr(source, types, expected=None):
     if sum(1 for _ in ast.walk(node)) > MAX_AST_NODES:
         raise ValueError("Expression exceeds complexity limit")
     if isinstance(node,ast.List) and isinstance(expected,ValueListType):node.literal_kind=expected
+    from sedrava_results import ResultType
+    def contextual(item, kind):
+        if isinstance(kind,ResultType):
+            item.expected_result=kind
+            if isinstance(item,ast.IfExp):contextual(item.body,kind);contextual(item.orelse,kind)
+    contextual(node,expected)
     # The signed minimum must fold in every AST position, including list-valued
     # fields (call arguments and comparison operands), before range validation.
     class SignedMinimum(ast.NodeTransformer):
@@ -225,10 +233,20 @@ def type_of(node, types):
         kind = type_of(node.value, types)
         if isinstance(kind, RecordType) and node.attr in dict(kind.fields): return dict(kind.fields)[node.attr]
         raise ValueError("Unknown record field")
+    if isinstance(node,ast.Call) and isinstance(node.func,ast.Attribute):
+        from sedrava_errors import constructor
+        return constructor(node,types,type_of)
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
         name = node.func.id
         if isinstance(types.get(name), FunctionType):
             function=types[name]
+            if not node.keywords and len(node.args)==len(function.parameters):
+                from sedrava_results import ResultType
+                def contextual_argument(item,kind):
+                    if isinstance(kind,ResultType):
+                        item.expected_result=kind
+                        if isinstance(item,ast.IfExp):contextual_argument(item.body,kind);contextual_argument(item.orelse,kind)
+                for arg,(_,kind) in zip(node.args,function.parameters):contextual_argument(arg,kind)
             if node.keywords or len(node.args)!=len(function.parameters) or any(type_of(arg,types)!=kind for arg,(_,kind) in zip(node.args,function.parameters)):
                 raise ValueError('Function argument type/count mismatch')
             node.pure_function=function
@@ -270,6 +288,7 @@ def type_of(node, types):
     if isinstance(node, ast.Constant) and type(node.value) in (int, bool, str):
         return type(node.value)
     if isinstance(node, ast.Name) and node.id in types:
+        if isinstance(types[node.id],ErrorType) and node.id==types[node.id].name:raise ValueError("Error type requires a variant constructor")
         if isinstance(types[node.id],FunctionType):raise ValueError("Function requires a call")
         if isinstance(types[node.id],RecordType) and node.id==types[node.id].name:raise ValueError("Record constructor requires a call")
         return types[node.id]
@@ -322,6 +341,10 @@ def _evaluate(node, state):
         record = evaluate(node.value, state)
         return record.values[[k for k, _ in record.kind.fields].index(node.attr)]
     if isinstance(node, ast.Call):
+        if hasattr(node,'error_type'):
+            fields={kw.arg:kw.value for kw in node.keywords}
+            from sedrava_errors import validate as check_error
+            return check_error(ErrorValue(node.error_type,node.error_variant,tuple(evaluate(fields[key],state) for key,_ in node.error_fields)))
         if hasattr(node,"result_operation"):
             from sedrava_results import evaluate as result_evaluate
             return result_evaluate(node,[evaluate(arg,state) for arg in node.args])
@@ -374,6 +397,7 @@ def _parse(source):
     states, actions, rules, tests, widgets, derived = {}, {}, [], [], [], {}
     persistent = []
     records = {}
+    errors = {}
     functions = {}
     action_lines={}
     types = {}
@@ -412,7 +436,9 @@ def _parse(source):
     def statement_count(body):
         total=0
         for stmt in body:
-            if isinstance(stmt, If):
+            if isinstance(stmt, Match):
+                weight=1+max(statement_count(arm.body) for arm in stmt.arms)
+            elif isinstance(stmt, If):
                 weight=1+max(statement_count(stmt.yes),statement_count(stmt.no))
             elif isinstance(stmt,ForEach):
                 weight=1+stmt.capacity*statement_count(stmt.body)
@@ -433,6 +459,28 @@ def _parse(source):
             depth, line, number = lines[pos]
             if depth < indent or line == "else:": break
             if depth != indent: raise ValueError(f"Line {number}: indentation")
+            if line.startswith('match ') and line.endswith(':'):
+                from sedrava_results import ResultType
+                from sedrava_errors import pattern,check_arm,exhaustive
+                expr=expression(line[6:-1],known,number,depth+7)
+                kind=type_of(expr,known)
+                if not isinstance(kind,ResultType):raise ValueError(f'Line {number}: E_MATCH: match requires Result')
+                arms=[];seen=set();pos+=1
+                while pos<len(lines) and lines[pos][0]>indent:
+                    arm_depth,arm_text,arm_line=lines[pos]
+                    if arm_depth!=indent+4:raise ValueError(f'Line {arm_line}: E_MATCH: arm indentation')
+                    try:
+                        tag,entries=pattern(arm_text)
+                        scope,bindings=check_arm(kind,tag,entries,known,seen)
+                    except ValueError as exc:raise ValueError(f'Line {arm_line}: column {arm_depth+1}: {exc}') from exc
+                    seen.add(tag)
+                    if pos+1>=len(lines) or lines[pos+1][0]!=arm_depth+4:raise ValueError(f'Line {arm_line}: E_MATCH: empty/invalid arm body')
+                    body,pos=block(pos+1,arm_depth+4,nesting+1,scope)
+                    arms.append(MatchArm(tag,bindings,tuple(body)))
+                try:exhaustive(kind,seen)
+                except ValueError as exc:raise ValueError(f'Line {number}: column {depth+1}: {exc}') from exc
+                result.append(Match(expr,kind,tuple(arms)))
+                continue
             if line.startswith('for '):
                 match=re.fullmatch(r'for (?:([A-Za-z][A-Za-z0-9_]*), )?([A-Za-z][A-Za-z0-9_]*) in (.+):',line)
                 if not match:raise ValueError(f'Line {number}: invalid bounded for')
@@ -494,6 +542,12 @@ def _parse(source):
         if m := re.fullmatch(r'app (.+)', line):
             if name is not None: raise ValueError(f"Line {number}: duplicate app")
             name = label(m[1], number, 5)
+        elif line.startswith('error '):
+            from sedrava_errors import parse_declaration
+            if states or actions:raise ValueError(f'Line {number}: error declarations must precede state/actions')
+            kind,i=parse_declaration(lines,i,types,errors)
+            errors[kind.name]=types[kind.name]=kind
+            continue
         elif m := FUNCTION_DECLARATION.fullmatch(line):
             if states or actions or m[1] in types or is_reserved_identifier(m[1]) or len(functions)>=32 or m[1] in SIGNATURES or m[1] in QUERY_NAMES or m[1] in RESULT_NAMES or m[1] in ('append','update','remove','get','has','count','next_id','list_at','list_slice','list_clear','list_remove_at','list_replace_at','list_index','list_identity','list_capacity','list_sort','list_sum'):raise ValueError(f'Line {number}: invalid pure function declaration')
             params=[]
@@ -501,13 +555,13 @@ def _parse(source):
             for param in split_parameters(m[2]):
                 spec=PARAMETER_DECLARATION.fullmatch(param)
                 if not spec or spec[1] in types or spec[1] in dict(params) or is_reserved_identifier(spec[1]):raise ValueError(f'Line {number}: invalid function parameter')
-                try:params.append((spec[1],signature_type(spec[2],records)))
+                try:params.append((spec[1],signature_type(spec[2],{**records,**errors})))
                 except ValueError as exc:raise ValueError(f'Line {number}: invalid function parameter type') from exc
             if len(params)>MAX_FUNCTION_PARAMETERS:raise ValueError(f'Line {number}: invalid function signature')
-            try:result_type=signature_type(m[3],records)
+            try:result_type=signature_type(m[3],{**records,**errors})
             except ValueError as exc:raise ValueError(f'Line {number}: invalid function return type') from exc
-            body=expression(m[4],{**records,**functions,**dict(params)},number,m.start(4)+1)
-            if type_of(body,{**records,**functions,**dict(params)})!=result_type:raise ValueError(f'Line {number}: function return type mismatch')
+            body=expression(m[4],{**records,**errors,**functions,**dict(params)},number,m.start(4)+1,result_type)
+            if type_of(body,{**records,**errors,**functions,**dict(params)})!=result_type:raise ValueError(f'Line {number}: function return type mismatch')
             # Existing function bodies are pure. An explicit public-facing
             # 'effects pure' annotation is checked by the same typed parser.
             annotation = frozenset() if " effects pure = " in line else None
@@ -696,6 +750,8 @@ def _parse(source):
     for action,body in actions.items():
         if action_work(body,derived,rules)>MAX_ACTION_WORK:raise ValueError(f"Line {action_lines[action]}: action exceeds weighted work limit")
     program = Program(name, states, actions, tuple(rules), tuple(tests), tuple(widgets), derived, tuple(persistent), records, screens, navigation, initial_screen, has_navigation, functions)
+    from dataclasses import replace
+    program=replace(program,errors=errors)
     _check_module_scope(program,source)
     values = resolve(states, derived)
     for rule in rules:
@@ -775,6 +831,16 @@ def transition(program, state, action):
             elif isinstance(stmt, Assign):
                 candidate[stmt.name] = evaluate(stmt.expr, values)
                 resolve(candidate, program.derived)
+            elif isinstance(stmt,Match):
+                result=evaluate(stmt.expr,values)
+                success=not result.code and result.error is None
+                for arm in stmt.arms:
+                    if (arm.tag=='Ok' and success) or (not success and (arm.tag=='Err' or result.error is not None and arm.tag==result.error.variant)):
+                        payload=result.value if success else result.error if result.error is not None else result.code
+                        fields=dict(zip((key for key,_ in dict(payload.kind.variants)[payload.variant]),payload.values)) if isinstance(payload,ErrorValue) else {}
+                        execute(arm.body,{**local,**{key:fields[field] if field else payload for key,field in arm.bindings}})
+                        break
+                else:raise ValueError('Invalid Result match dispatch')
             elif isinstance(stmt,ForEach):
                 collection=evaluate(stmt.collection,values)
                 snapshot=tuple(collection) if type(collection) is str else tuple(record for _,record in collection.items) if isinstance(collection,ListValue) else collection.items
@@ -864,7 +930,9 @@ def _check_module_scope(program,source):
             if isinstance(stmt,Assign) and not stmt.name.startswith('M_'):fail(stmt.expr)
             for key in ('expr','condition','collection'):
                 if hasattr(stmt,key):check_expr(getattr(stmt,key))
-            if isinstance(stmt,If):check_body(stmt.yes);check_body(stmt.no)
+            if isinstance(stmt,Match):
+                for arm in stmt.arms:check_body(arm.body)
+            elif isinstance(stmt,If):check_body(stmt.yes);check_body(stmt.no)
             elif isinstance(stmt,(Repeat,ForEach)):check_body(stmt.body)
     for name,body in program.actions.items():
         if getattr(source,'scoped',False) and name.startswith('M_'):check_body(body)

@@ -70,13 +70,15 @@ def casefold(value):
     return checked_text(casefold_raw(value))
 
 def required(program):
-    from sedrava_core import If,Repeat,ForEach
+    from sedrava_core import If,Repeat,ForEach,Match
     expressions=[f.body for f in (program.functions or {}).values()]+list((program.derived or {}).values())+list(program.rules)
     def visit(body):
         for stmt in body:
             for key in ('expr','condition','collection'):
                 if hasattr(stmt,key):expressions.append(getattr(stmt,key))
-            if isinstance(stmt,If):visit(stmt.yes);visit(stmt.no)
+            if isinstance(stmt,Match):
+                for arm in stmt.arms:visit(arm.body)
+            elif isinstance(stmt,If):visit(stmt.yes);visit(stmt.no)
             elif isinstance(stmt,(Repeat,ForEach)):visit(stmt.body)
     for body in program.actions.values():visit(body)
     return any(isinstance(n,ast.Call) and (getattr(n,'pure_builtin','') in (*NORMALIZERS,'text_casefold') or getattr(n,'result_operation','')=='try_normalize') for expr in expressions for n in ast.walk(expr))

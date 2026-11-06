@@ -1,0 +1,19 @@
+app "Imported typed errors"
+import "errors.sdr" as arithmetic
+fn local(x: int) -> Result<int, arithmetic.ArithmeticError> = arithmetic.checked(x)
+state total = 0
+action inspect:
+    match local(100):
+        Ok(value):
+            total = value
+        Err(IntOverflow { left, right }):
+            total = left + right
+        Err(InvalidScalar { scalar }):
+            total = scalar
+screen main:
+    value total
+    value arithmetic.total
+    button "Local match" -> inspect
+    button "Imported match" -> arithmetic.inspect
+test matched: inspect -> total == 101
+test imported: arithmetic.inspect -> arithmetic.total == 101

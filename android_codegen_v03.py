@@ -6,6 +6,7 @@ from sedrava_android_identity import application_id as resolve_id, prepare_ident
 from sedrava_records import ListValue,structured
 from sedrava_sequences import ValueList,ValueListType
 from sedrava_records_codegen import kt_support, kt_persistence
+from sedrava_errors import Match
 from sedrava_core import parse, run, Assign, If, Require, Let, Repeat, ForEach
 from android_codegen import generate as scaffold
 
@@ -24,6 +25,9 @@ def kt(node, names):
         return ('sdrTextAt' if kind is str else 'sdrVector_list_at' if isinstance(kind,ValueListType) else 'sdr_list_at')+'('+','.join((base,index))+')'
     if isinstance(node, ast.Attribute): return '(' + kt(node.value, names) + ').sdr_' + node.attr
     if isinstance(node, ast.Call):
+        if hasattr(node,'error_type'):
+            fields={kw.arg:kw.value for kw in node.keywords}
+            return 'SdrTypedError('+quoted(node.error_type.identity+'.'+node.error_variant)+','+quoted(node.error_variant)+',mapOf<String,Any>('+','.join(quoted(key)+' to '+kt(fields[key],names) for key,_ in node.error_fields)+'))'
         if hasattr(node,"result_operation"):
             from sedrava_results import kt as result_emit
             return result_emit(node,[kt(arg,names) for arg in node.args])
@@ -213,6 +217,21 @@ def generate(source, output, _program=None, _domain_only=False, application_id=N
             elif isinstance(stmt, Assign):
                 lines.append(" " * depth + scope[stmt.name] + " = " + kt(stmt.expr, scope))
                 lines.append(" " * depth + "checkDerivedState(" + next_args + ")")
+            elif isinstance(stmt,Match):
+                from sedrava_functions import kotlin_type
+                lines.extend([' '*depth+'run {',' '*(depth+2)+'val _sdr_match='+kt(stmt.expr,scope)])
+                for index,arm in enumerate(stmt.arms):
+                    cond='sdrResultOk(_sdr_match)' if arm.tag=='Ok' else '!sdrResultOk(_sdr_match)' if arm.tag=='Err' else '(!sdrResultOk(_sdr_match)&&_sdr_match.error?.variant=='+quoted(arm.tag)+')'
+                    lines.append(' '*(depth+2)+('if' if index==0 else 'else if')+' ('+cond+') {')
+                    payload='requireNotNull(_sdr_match.value)' if arm.tag=='Ok' else 'requireNotNull(_sdr_match.error)' if stmt.kind.error is not None else '_sdr_match.code'
+                    inner=dict(scope)
+                    fields=dict(dict(stmt.kind.error.variants).get(arm.tag,())) if stmt.kind.error else {}
+                    for key,field in arm.bindings:
+                        local='_sdr_pattern_'+key
+                        value='('+payload+'.fields.getValue('+quoted(field)+') as '+kotlin_type(fields[field])+')' if field else payload
+                        lines.append(' '*(depth+4)+'val '+local+'='+value);inner[key]=local
+                    emit(arm.body,depth+4,inner);lines.append(' '*(depth+2)+'}')
+                lines.append(' '*depth+'}')
             elif isinstance(stmt,ForEach):
                 source=kt(stmt.collection,scope)
                 snapshot='sdrScalars('+source+')' if stmt.kind is str else '('+source+').items.toList()'

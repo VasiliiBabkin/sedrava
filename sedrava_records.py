@@ -31,6 +31,8 @@ class ListValue:
 
 def value_type(value):
     from sedrava_results import ResultValue
+    from sedrava_errors import ErrorValue
+    if isinstance(value,ErrorValue):return value.kind
     if isinstance(value,ResultValue):return value.kind
     return value.kind if isinstance(value, (ListValue, RecordValue, ValueList)) else type(value)
 
@@ -38,6 +40,8 @@ def value_type(value):
 def validate(value, expected=None):
     from sedrava_core import checked_value
     from sedrava_results import ResultValue,validate as validate_result
+    from sedrava_errors import ErrorValue,validate as validate_error
+    if isinstance(value,ErrorValue):return validate_error(value,expected)
     if isinstance(value,ResultValue):return validate_result(value,expected)
     kind = value_type(value)
     if expected is not None and kind != expected:

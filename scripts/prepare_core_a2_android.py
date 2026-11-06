@@ -12,8 +12,10 @@ from sedrava_modules import expand
 source=expand(source_path.read_text(),source_path)[0];program=parse(source);generate(source,project,_program=program)
 sequence=['scan','order','fail_bounds','fail_sum','remove','add','add','seed_rows','audit_a1','delete_rows','normalize','fold','expected_error','clear','scan']
 if len(sys.argv)>2:sequence=['scan','add','add','expected','seed','audit','scalars','break_rule','reject']
+if len(sys.argv)>3:sequence=json.loads(sys.argv[3])
 labels=sequence.copy()
 sequence=[label if label in program.actions else next(k for k in program.actions if k.endswith('_'+label)) for label in labels]
+labels=[next(w[1] for w in program.widgets if w[0]=='button' and w[2]==action) for action in sequence]
 expected=reference(source,sequence);package=project_identity(project)
 lines=['package '+package,'import org.junit.Test','import org.junit.Assert.*','class CoreA2Test { @Test fun completeStateTrace(){var state=SedravaState()']
 from sedrava_sequences import ValueList
@@ -32,7 +34,7 @@ for action,label,outcome in zip(sequence,labels,expected):
     lines+=['ui.onNodeWithText('+quoted(label)+',substring=false).performScrollTo().performClick()','ui.waitForIdle()']
     # Only successful actions write; after rejected actions the preceding snapshot remains.
     lines+=['ui.runOnIdle {val prefs=ui.activity.getSharedPreferences("sedrava_state",0);val state=restoreSnapshot(requireNotNull(prefs.getString("snapshot",null)));assertEquals('+quoted(json.dumps(outcome['state'],ensure_ascii=False,separators=(',',':')))+',snapshotState(state,true).substringAfter("\\\"state\\\":").dropLast(1))}']
-lines+=['ui.activityRule.scenario.recreate();ui.waitForIdle();ui.onNodeWithText("scan",substring=false).assertExists()']
+lines+=['ui.activityRule.scenario.recreate();ui.waitForIdle();ui.onNodeWithText('+quoted(labels[0])+',substring=false).assertExists()']
 for widget in program.widgets:
     if widget[0]=='value' and widget[1] in expected[-1]['state']:
         key=widget[1];value=expected[-1]['state'][key]
