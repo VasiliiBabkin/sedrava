@@ -3,6 +3,7 @@ from pathlib import Path
 import tempfile
 import unittest
 from sedrava_core import parse, run
+from sedrava_host import HostProgram, run_host
 from sedrava_frontend import parse_document
 from sedrava_site import Site
 from sedrava_webapp import WebApp, generate_webapp
@@ -18,6 +19,17 @@ class ExamplesAlpha(unittest.TestCase):
             with self.subTest(example=path.name):
                 source = path.read_text(encoding='utf-8')
                 program = parse_document(source,path)
+                if isinstance(program, HostProgram):
+                    again = parse_document(source,path)
+                    self.assertEqual(program.name, again.name)
+                    self.assertEqual(program.arguments, again.arguments)
+                    self.assertEqual([s.operation for s in program.steps],
+                                     [s.operation for s in again.steps])
+                    self.assertGreater(len(program.steps), 0)
+                    with tempfile.TemporaryDirectory() as root:
+                        with self.assertRaisesRegex(ValueError, "explicit --trusted"):
+                            run_host(program, root=root)
+                    continue
                 if isinstance(program,WebApp):
                     first=generate_webapp(program)
                     second=generate_webapp(parse_document(source,path))

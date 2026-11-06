@@ -14,7 +14,7 @@ EXPECTED_MODULES = {
 }
 EXPECTED_MODULES.update({name+'.py' for name in (
  'sedrava_webapp','sedrava_http','sedrava_http_parser','sedrava_http_codegen','sedrava_http_page','sedrava_http_embed','sedrava_http_inline','sedrava_http_display',
- 'sedrava_modules','sedrava_web_routes','sedrava_web_ui','sedrava_web_queries','sedrava_web_services','sedrava_web_assets','sedrava_functions','sedrava_stdlib','sedrava_queries')})
+ 'sedrava_modules','sedrava_web_routes','sedrava_web_ui','sedrava_web_queries','sedrava_web_services','sedrava_web_assets','sedrava_functions','sedrava_stdlib','sedrava_queries','sedrava_host')})
 LICENSE_MARKER = "Apache License"
 sys.path.insert(0, str(ROOT))
 from sedrava_version import VERSION
@@ -37,7 +37,7 @@ def main():
     with zipfile.ZipFile(wheel_files[0]) as archive:
         names = archive.namelist()
         assert EXPECTED_MODULES.issubset(set(names)), "wheel missing Python modules"
-        for required in ('share/sedrava/LICENSE','share/sedrava/docs/BUILD.md','share/sedrava/docs/RELEASE_READINESS_010_CONTRACT.md','share/sedrava/examples/task_manager.sdr','share/sedrava/examples/task_manager_navigation.sdr'):
+        for required in ('share/sedrava/LICENSE','share/sedrava/docs/BUILD.md','share/sedrava/docs/RELEASE_READINESS_010_CONTRACT.md','share/sedrava/examples/task_manager.sdr','share/sedrava/examples/task_manager_navigation.sdr','share/sedrava/examples/host_report_013.sdr','share/sedrava/docs/HOST_013_A1.ru.md'):
             assert any(name.endswith('/'+required) for name in names), f'wheel missing {required}'
         licenses = [name for name in names if name.endswith("/LICENSE") or "/licenses/" in name and name.endswith("LICENSE")]
         assert licenses, "wheel missing LICENSE"
