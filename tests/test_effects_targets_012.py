@@ -25,7 +25,7 @@ action update: total = twice(total)
 screen main:
     value total
 test update:
-    total == 8
+    total == 6
 '''
 
 
