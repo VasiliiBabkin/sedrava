@@ -52,6 +52,9 @@ def main(argv=None):
     execute.add_argument("source", type=Path)
     execute.add_argument("--state-file", type=Path, help="Restore and atomically save accepted persistent state")
     execute.add_argument("actions", nargs="*", help="Actions to execute in order; no wall-clock or UI loop")
+    effects = commands.add_parser("effects", help="Check and print an inferred app-domain effect manifest")
+    effects.add_argument("source", type=Path)
+    effects.add_argument("--target", choices=("app","web","android"), default="app")
     test = commands.add_parser("test", help="Run embedded Sedrava tests")
     test.add_argument("source", type=Path)
     build = commands.add_parser("build", help="Generate an application")
@@ -126,7 +129,13 @@ def main(argv=None):
         if not source.lstrip().startswith("service "):
             app_source,modules,_=expand(app_source,args.source,with_origins=True)
             app_inputs.update(modules)
-        if args.command == "check":
+        if args.command == "effects":
+            if source.lstrip().startswith("service ") or inline_service is not None:
+                raise ValueError("A1 effect manifests cover typed app-domain source only, not HTTP services")
+            from sedrava_effects import canonical_manifest_json, manifest_for_program
+            program = parse(app_source)
+            print(canonical_manifest_json(manifest_for_program(program, app_source, target=args.target)))
+        elif args.command == "check":
             if source.lstrip().startswith("service "):
                 from sedrava_http_display import parse_display_service as parse_service
                 parse_service(source)
