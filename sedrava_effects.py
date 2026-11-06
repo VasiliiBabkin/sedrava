@@ -98,6 +98,10 @@ def infer_function_effects(functions, *, primitive_effects=None, contracts=None)
                 from sedrava_errors import checked_constructor_metadata
                 checked_constructor_metadata(node)
                 continue  # Typed closed constructor, not an external call edge.
+            if hasattr(node,'result_operation'):
+                from sedrava_results import checked_binding_metadata
+                checked_binding_metadata(node)
+                continue
             if not isinstance(node.func, ast.Name):
                 raise ValueError("Indirect/dynamic effectful calls are unsupported")
             target = node.func.id

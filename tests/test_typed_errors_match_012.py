@@ -320,6 +320,27 @@ test result: go -> total == 3
         self.reject(BASE.replace('fn outcome','fn bad(Ok: int) -> Result<int, E> = Ok(1)\nfn outcome'),'not callable')
         self.reject(BASE.replace('fn outcome','fn Ok(x: int) -> Result<int, E> = Ok(x)\nfn outcome'),'not callable')
 
+    def test_effects_honors_intrinsic_binding_before_later_legacy_names(self):
+        source=BASE.replace('state total = 0',
+            'fn describe(e: E) -> text effects pure = error_id(e)\n'
+            'fn Ok(x: int) -> int = x + 1\n'
+            'fn Err(x: int) -> int = x + 1\n'
+            'fn error_id(x: int) -> int = x + 1\nstate total = 0')
+        p=parse(source);self.assertEqual(run(p),1)
+        self.assertEqual(manifest_for_program(p,source,'web')['effective'],[])
+        expected=reference(source,['go'])
+        self.assertEqual(javascript(source,['go']),expected)
+        self.assertEqual(kotlin(source,['go']),expected)
+
+    def test_fake_result_binding_cannot_hide_effectful_calls(self):
+        import ast
+        from sedrava_effects import infer_function_effects
+        from sedrava_functions import FunctionType
+        node=ast.Call(func=ast.Name(id='read_file',ctx=ast.Load()),args=[],keywords=[])
+        node.result_operation='result_ok';node.result_type=bool
+        with self.assertRaisesRegex(ValueError,'Result intrinsic metadata'):
+            infer_function_effects({'f':FunctionType('f',(),bool,node,1)},primitive_effects={'read_file':('host.fs.read',)})
+
     def test_nested_budget_and_scope_remain_checked(self):
         # 100 iterations, each match selects a 100-iteration branch: above 10k steps.
         body='    repeat i in range(0, 100):\n        match outcome(2):\n            Ok(value):\n                total = value\n            Err(error):\n                repeat j in range(0, 100):\n                    total = total + 1\n'

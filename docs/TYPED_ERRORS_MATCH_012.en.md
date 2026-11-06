@@ -90,3 +90,7 @@ or error_id retain lexical priority. New intrinsic calls require those names not
 to be shadowed; a non-callable value/parameter binding is never silently ignored.
 Pattern Ok/Err tags are grammar, not function calls. Existing primitive/value/
 record naming rules are otherwise unchanged.
+
+Effects resolves checked operation metadata before comparing user-function names;
+a later legacy Ok/Err/error_id declaration cannot retroactively change an earlier
+builtin binding. Malformed operation metadata is rejected, not assumed pure.

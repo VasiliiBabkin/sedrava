@@ -90,3 +90,18 @@ lexical priority over the new intrinsics, with real Python/JS/Kotlin regression.
 A noncallable value/parameter cannot silently turn into an intrinsic call; pattern
 tags remain syntax independent of function names. This avoids a compatibility
 regression without expanding the old grammar or weakening Result typing.
+
+
+Effects binding regression: a later legacy function Ok made the effect graph
+misclassify an earlier correctly typed builtin Ok as an unchecked user edge.
+The checker now validates the explicit Result operation binding before textual
+function-name lookup (as for typed constructors); malformed markers cannot hide
+an effectful call. Pure manifest + actual Python/JS/Kotlin regression covers all
+three shadowable names. This is a real Effects/Core consistency repair, not a
+relaxation of allowed effects or a new runtime capability.
+
+39 focused tests passed after the checked-intrinsic binding repair; the separate
+8-test Effects suite passed as well. Checkpoint 58ca3b1 passed 429 local tests
+without skips and the full dedicated cross-platform workflow (three Python
+versions, three browsers, APK/JVM/Lint and two actual API35 instrumented tests).
+That evidence is historical: the next exact SHA reruns all applicable checks.

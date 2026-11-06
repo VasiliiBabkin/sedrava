@@ -46,7 +46,7 @@ def type_result(node,types,type_of):
     if name=='error_id':
         from sedrava_errors import ErrorType
         if node.keywords or len(node.args)!=1 or not isinstance(type_of(node.args[0],types),ErrorType):raise ValueError('E_ERROR_TYPE: error_id requires a typed error')
-        node.result_operation=name;node.result_type=str
+        node.result_operation=name;node.result_type=str;node.result_error_type=type_of(node.args[0],types)
         return str
     if node.keywords:raise ValueError('Result operations use positional arguments')
     args=[type_of(arg,types) for arg in node.args]
@@ -118,3 +118,30 @@ internal fun <T:Any> sdrResultOk(r:SdrResult<T>):Boolean = r.code.isEmpty() && r
 internal fun <T:Any> sdrResultCode(r:SdrResult<T>):String = r.code
 internal fun <T:Any> sdrResultOr(r:SdrResult<T>,fallback:T):T = if(r.code.isEmpty() && r.error==null)requireNotNull(r.value) else fallback
 '''
+
+
+def checked_binding_metadata(node):
+    """Validate a statically bound Result intrinsic, independent of later names.
+
+    Checked operation identity wins over a same-spelled later user function;
+    this does not permit dynamic calls or infer purity from a bare identifier.
+    """
+    import ast
+    from sedrava_errors import ErrorType
+    operation=getattr(node,'result_operation',None)
+    arities={'Ok':1,'Err':1,'error_id':1,'try_add':2,'try_chr':1,'try_at':2,'result_ok':1,'result_code':1,'result_or':2}
+    if (operation not in arities or not isinstance(node.func,ast.Name)
+            or node.func.id!=operation or node.keywords or len(node.args)!=arities[operation]
+            or hasattr(node,'pure_function')):
+        raise ValueError('Result intrinsic metadata does not match typed IR')
+    kind=getattr(node,'result_type',None)
+    if operation in ('Ok','Err'):
+        valid=isinstance(kind,ResultType) and isinstance(kind.error,ErrorType) and kind.value in (int,str,bool) and getattr(node,'expected_result',None)==kind
+    elif operation=='error_id':valid=kind is str and isinstance(getattr(node,'result_error_type',None),ErrorType)
+    elif operation=='try_add':valid=kind==ResultType(int)
+    elif operation=='try_chr':valid=kind==ResultType(str)
+    elif operation=='try_at':valid=isinstance(kind,ResultType) and kind.error is None and hasattr(node,'result_base')
+    elif operation=='result_ok':valid=kind is bool
+    elif operation=='result_code':valid=kind is str
+    else:valid=kind is not None
+    if not valid:raise ValueError('Result intrinsic metadata does not match typed IR')
