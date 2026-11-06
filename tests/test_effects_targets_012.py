@@ -99,6 +99,7 @@ class EffectContracts(unittest.TestCase):
             args=[], keywords=[]))
         with self.assertRaisesRegex(ValueError, "Indirect/dynamic"):
             infer_function_effects({"dynamic": dynamic})
+        self.assertEqual(normalize_effects(x for x in ("host.fs.read",)), frozenset({"host.fs.read"}))
         with self.assertRaisesRegex(ValueError, "Unknown or duplicate"):
             normalize_effects(("host.fs.read", "host.fs.read"))
         with self.assertRaisesRegex(ValueError, "Unknown or duplicate"):
