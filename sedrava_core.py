@@ -508,7 +508,11 @@ def _parse(source):
             except ValueError as exc:raise ValueError(f'Line {number}: invalid function return type') from exc
             body=expression(m[4],{**records,**functions,**dict(params)},number,m.start(4)+1)
             if type_of(body,{**records,**functions,**dict(params)})!=result_type:raise ValueError(f'Line {number}: function return type mismatch')
-            function=FunctionType(m[1],tuple(params),result_type,body,expression_cost(body),expression_depth(body))
+            # Existing function bodies are pure. An explicit public-facing
+            # 'effects pure' annotation is checked by the same typed parser.
+            annotation = frozenset() if " effects pure = " in line else None
+            function=FunctionType(m[1],tuple(params),result_type,body,
+                                  expression_cost(body),expression_depth(body),annotation)
             functions[m[1]]=function;types[m[1]]=function
         elif m := re.fullmatch(r"record ([A-Za-z_][A-Za-z_0-9]*):", line):
             if states or actions or len(records) >= 16 or m[1] in types or is_reserved_identifier(m[1]) or m[1] in ('append','update','remove','get','has','count','next_id','list_at','list_slice','list_clear','list_remove_at','list_replace_at','list_index','list_identity','list_capacity','list_sort','list_sum'): raise ValueError(f"Line {number}: column 1: invalid record declaration")
