@@ -386,8 +386,8 @@ screen main:
         for path in sorted((ROOT / 'examples').glob('*.sdr')):
             source = path.read_text()
             document=parse_document(source,path)
-            if isinstance(document,(Site,WebApp)):
-                continue # Dedicated site/WebApp Chromium suites exercise these modes.
+            if isinstance(document,(Site,WebApp)) or not hasattr(document, 'widgets'):
+                continue # Site, WebApp and host documents have dedicated suites.
             if document.widgets:
                 self.open(source)
                 self.assertTrue(self.page.locator('body').is_visible())
