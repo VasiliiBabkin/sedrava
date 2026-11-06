@@ -23,7 +23,7 @@ def check(archive, folder):
     run(cli,'--version')
     result=subprocess.run([str(cli),'--version'],cwd=folder,env=env,capture_output=True,text=True,check=True)
     assert result.stdout.strip()=='sedrava '+VERSION
-    for name in ('reference_09','text_profile','task_manager','task_manager_navigation','bounded_core_012','bounded_values_012'):
+    for name in ('reference_09','text_profile','task_manager','task_manager_navigation','bounded_core_012','bounded_values_012','effects_pure_012','typed_errors_012'):
         source=folder/'share/sedrava/examples'/f'{name}.sdr'
         run(cli,'check',source);run(cli,'test',source);run(cli,'run',source)
         web=folder/'generated with spaces'/name/'index.html'
@@ -55,6 +55,13 @@ def check(archive, folder):
     run(cli,'build','web',source,'--output',folder/'modular app/index.html')
     run(cli,'build','android',source,'--output',folder/'modular android')
     run(cli,'build','webapp',source.with_name('site.sdr'),'--output',folder/'modular webapp')
+    source=folder/'share/sedrava/examples/typed_errors_modules_012/main.sdr'
+    run(cli,'check',source);run(cli,'test',source);run(cli,'run',source,'arithmetic.inspect')
+    run(cli,'effects',source,'--target','web')
+    run(cli,'build','web',source,'--output',folder/'typed modules/index.html')
+    run(cli,'build','android',source,'--output',folder/'typed modules android')
+    run(cli,'build','webapp',source.with_name('site.sdr'),'--output',folder/'typed modules webapp')
+    run(python,'-c',"import pathlib,sys,sedrava_errors;assert pathlib.Path(sedrava_errors.__file__).is_relative_to(sys.prefix);assert (pathlib.Path(sys.prefix)/'share/sedrava/docs/TYPED_ERRORS_MATCH_012.ru.md').is_file()")
     # Base install was exercised above; package locking on 3.10 uses its declared extra.
     run(python,'-m','pip','install',str(archive)+'[packages]')
     locked=folder/'share/sedrava/examples/packages_012_demo'

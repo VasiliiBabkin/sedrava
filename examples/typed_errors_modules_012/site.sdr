@@ -1,0 +1,22 @@
+webapp "Imported typed errors WebApp"
+import "errors.sdr" as arithmetic
+fn local(x: int) -> Result<int, arithmetic.ArithmeticError> = arithmetic.checked(x)
+state total = 0
+derive label = error_id(arithmetic.ArithmeticError.IntOverflow(left=1, right=2))
+action inspect:
+    match local(100):
+        Ok(value):
+            total = value
+        Err(IntOverflow { left, right }):
+            total = left + right
+        Err(InvalidScalar { scalar }):
+            total = scalar
+test matched: inspect -> total == 101
+test imported: arithmetic.inspect -> arithmetic.total == 101
+view main:
+    heading "Typed errors WebApp"
+    value total
+    value arithmetic.total
+    value label
+    button "Local match" action inspect
+    button "Imported match" action arithmetic.inspect

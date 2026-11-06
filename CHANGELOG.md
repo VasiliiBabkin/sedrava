@@ -135,3 +135,12 @@ This is Sedrava's first candidate; historical Intent 0.7 and abandoned Sedrava 0
 - Add isolated module-owned state/actions, shared budgets and original columns.
 - Harden lock schemas/vendor imports and protect imported sources from outputs.
 - RU/EN contract: docs/CORE_NAMESPACES_012.md / CORE_NAMESPACES_012.ru.md.
+
+### Unpublished Core 0.12 typed-errors A1 (dependent experiment)
+
+- Repair Effects A1 fixtures to the existing initializer/test grammar.
+- Closed/open immutable error variants, stable external IDs and contextual Ok/Err.
+- Exhaustive action match with scoped payload bindings and shared resource costs.
+- Python, browser JavaScript, Kotlin and checked namespace import integration.
+- Legacy Result<T, Error> kept as an explicit opaque compatibility boundary.
+- Experimental only; no release, Host/Server capability or data migration added.

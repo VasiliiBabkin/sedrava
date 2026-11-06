@@ -165,3 +165,11 @@ Namespaced A1/A2 integration (unpublished 0.12 experiment):
 [EN contract](docs/CORE_NAMESPACES_012.md) · [RU](docs/CORE_NAMESPACES_012.ru.md) ·
 [actual status](docs/CORE_NAMESPACES_012_STATUS.md). Modules can own bounded typed
 state/actions; imported code shares the core budgets, Unicode and Result semantics.
+
+Typed errors and exhaustive action match (dependent **unpublished 0.12 experiment**):
+[English](docs/TYPED_ERRORS_MATCH_012.en.md) ·
+[Русский](docs/TYPED_ERRORS_MATCH_012.ru.md) ·
+[Evidence](docs/TYPED_ERRORS_MATCH_012_STATUS.md).
+Closed/open error variants carry immutable scalar fields; typed Result pairs and
+match share the Python/Web/Kotlin core. Legacy Result operations remain available.
+This does not add Host/Server access, general generics or persisted error values.

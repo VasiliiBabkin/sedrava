@@ -1,0 +1,18 @@
+module example.errors
+export error closed ArithmeticError id "example.ArithmeticError":
+    IntOverflow:
+        left: int
+        right: int
+    InvalidScalar:
+        scalar: int
+export fn checked(x: int) -> Result<int, ArithmeticError> effects pure = Ok(x) if x < 100 else Err(ArithmeticError.IntOverflow(left=x, right=1))
+export state total = 0
+persist total
+export action inspect:
+    match checked(100):
+        Ok(value):
+            total = value
+        Err(IntOverflow { left, right: addend }):
+            total = left + addend
+        Err(InvalidScalar { scalar }):
+            total = scalar

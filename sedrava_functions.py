@@ -54,17 +54,23 @@ def signature_type(source, records):
     from sedrava_records import ListType
     from sedrava_sequences import ValueListType
     from sedrava_results import ResultType
-    result=re.fullmatch(r'Result<(.+),\s*Error>',source)
+    result=re.fullmatch(r'Result<(.+),\s*([A-Za-z][A-Za-z0-9_]*)>',source)
     if result:
         inner=signature_type(result[1].strip(),records)
-        if isinstance(inner,ResultType):raise ValueError('Nested Result is unsupported')
-        return ResultType(inner)
+        from sedrava_errors import ErrorType
+        if isinstance(inner,(ResultType,ErrorType)):raise ValueError('Nested Result/error success is unsupported')
+        from sedrava_errors import ErrorType
+        error=None if result[2]=='Error' else records.get(result[2])
+        if result[2]!='Error' and not isinstance(error,ErrorType):raise ValueError('Unknown Result error type')
+        if error is not None and inner not in (int,str,bool):raise ValueError('Typed error Results currently require scalar success values')
+        return ResultType(inner,error)
     kinds={'int':int,'text':str,'bool':bool,**records}
     if source in kinds:return kinds[source]
     match=re.fullmatch(r'list<([A-Za-z][A-Za-z0-9_]*)>\(max=([0-9]{1,3})\)',source)
     if match and 1<=int(match[2])<=100:
-        if match[1] in records:return ListType(records[match[1]],int(match[2]))
-        if match[1] in kinds:return ValueListType(kinds[match[1]],int(match[2]))
+        from sedrava_records import RecordType
+        if isinstance(records.get(match[1]),RecordType):return ListType(records[match[1]],int(match[2]))
+        if kinds.get(match[1]) in (int,str,bool):return ValueListType(kinds[match[1]],int(match[2]))
     raise ValueError('Unknown or unbounded function type')
 
 
@@ -72,6 +78,8 @@ def kotlin_type(kind):
     from sedrava_records import ListType
     from sedrava_sequences import ValueListType
     from sedrava_results import ResultType
+    from sedrava_errors import ErrorType
+    if isinstance(kind,ErrorType):return 'SdrTypedError'
     if isinstance(kind,ResultType):return 'SdrResult<'+kotlin_type(kind.value)+'>'
     if isinstance(kind,ValueListType):return 'SdrVector<'+kotlin_type(kind.element)+'>'
     if isinstance(kind,ListType):return 'SdrList<'+kotlin_type(kind.record)+'>'

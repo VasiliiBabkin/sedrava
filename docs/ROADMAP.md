@@ -33,3 +33,13 @@ hygienic bindings, shared limits, original character provenance and strict locke
 imports. [EN](CORE_NAMESPACES_012.md) / [RU](CORE_NAMESPACES_012.ru.md). This
 supersedes the earlier pure-declarations-only module restriction on this branch;
 no server, release or publication is implied. Final evidence is in the draft PR.
+
+## Core 0.12 typed-errors dependent experiment
+
+Closed/open errors, scalar Result<T,E> pairs and exhaustive action match are
+implemented on the corrected Effects A1 branch; see
+[TYPED_ERRORS_MATCH_012.en.md](TYPED_ERRORS_MATCH_012.en.md) and
+[TYPED_ERRORS_MATCH_012.ru.md](TYPED_ERRORS_MATCH_012.ru.md).
+Integration remains gated by exact-head cross-platform CI and review. This is not
+a stable release. Host A3 / Server bridges, persisted errors, wire codecs and
+public generics remain future separately audited work.

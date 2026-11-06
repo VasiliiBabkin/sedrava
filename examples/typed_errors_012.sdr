@@ -1,0 +1,134 @@
+app "Typed errors and exhaustive match"
+error closed ArithmeticError id "example.ArithmeticError":
+    IntOverflow:
+        left: int
+        right: int
+    InvalidScalar:
+        scalar: int
+error open ReadTextError id "example.ReadTextError":
+    FileNotFound:
+        path: text
+    InvalidEncoding:
+        path: text
+        encoding: text
+    ResourceTooLarge:
+        path: text
+        limit_bytes: int
+record Entry:
+    title: text
+fn checked(x: int) -> Result<int, ArithmeticError> effects pure = Ok(x) if x < 100 else Err(ArithmeticError.IntOverflow(left=x, right=1))
+fn title(x: text) -> Result<text, ReadTextError> effects pure = Ok(x)
+fn flag(x: bool) -> Result<bool, ArithmeticError> = Ok(x)
+fn missing(x: text) -> Result<text, ReadTextError> = Err(ReadTextError.FileNotFound(path=x))
+fn add_checked(left: int, right: int) -> Result<int, ArithmeticError> effects pure = Ok(result_or(try_add(left, right), 0)) if result_ok(try_add(left, right)) else Err(ArithmeticError.IntOverflow(left=left, right=right))
+fn problem(mode: int) -> Result<text, ReadTextError> = Err(ReadTextError.InvalidEncoding(path="/bad", encoding="UTF-8")) if mode == 0 else Err(ReadTextError.ResourceTooLarge(path="/large", limit_bytes=12))
+fn scalar_problem(cp: int) -> Result<bool, ArithmeticError> = Err(ArithmeticError.InvalidScalar(scalar=cp))
+state entries: list<Entry>(max=2) = []
+state total = 0
+state message = ""
+state ready = false
+persist entries
+persist total
+persist message
+persist ready
+action success:
+    match checked(4):
+        Ok(value):
+            total = value
+        Err(IntOverflow { left, right }):
+            total = left + right
+        Err(InvalidScalar { scalar }):
+            total = scalar
+    match title("😀 café"):
+        Ok(value):
+            message = value
+        Err(error):
+            message = error_id(error)
+    match flag(true):
+        Ok(value):
+            ready = value
+        Err(error):
+            ready = false
+    entries = list_clear(entries)
+    entries = append(entries, Entry(title=message))
+action failure:
+    match checked(100):
+        Ok(value):
+            total = value
+        Err(IntOverflow { left, right: addend }):
+            total = left + addend
+        Err(InvalidScalar { scalar }):
+            total = scalar
+    match missing("/offline.txt"):
+        Ok(value):
+            message = value
+        Err(FileNotFound { path }):
+            message = path
+        Err(error):
+            message = error_id(error)
+    entries = append(entries, Entry(title=message))
+action details:
+    match problem(0):
+        Ok(value):
+            message = value
+        Err(InvalidEncoding { path, encoding }):
+            message = encoding
+            total = text_length(path)
+        Err(error):
+            message = error_id(error)
+    match problem(1):
+        Ok(value):
+            message = value
+        Err(ResourceTooLarge { path, limit_bytes }):
+            message = path
+            total = limit_bytes
+        Err(error):
+            message = error_id(error)
+    match scalar_problem(128512):
+        Ok(value):
+            ready = value
+        Err(InvalidScalar { scalar }):
+            total = scalar
+            ready = false
+        Err(error):
+            message = error_id(error)
+action adapt:
+    match add_checked(2147483647, 1):
+        Ok(value):
+            total = value
+        Err(IntOverflow { left, right }):
+            total = left
+        Err(error):
+            message = error_id(error)
+    match try_chr(-1):
+        Ok(value):
+            message = value
+        Err(error):
+            message = result_code(try_chr(-1))
+    match try_at("😀", 1):
+        Ok(value):
+            message = value
+        Err(error):
+            message = result_code(try_at("😀", 1))
+action rejected:
+    total = 7
+    match checked(100):
+        Ok(value):
+            total = value
+        Err(error):
+            total = 2147483647 + 1
+rule total >= 0
+screen main:
+    text "Typed portable results"
+    value total
+    value message
+    value ready
+    button "Success" -> success
+    button "Expected error" -> failure
+    button "Fields" -> details
+    button "Legacy adapter" -> adapt
+    button "Rollback" -> rejected
+test accepted: success -> total == 4 and ready == true and message == "😀 café"
+test expected: failure -> total == 101 and message == "/offline.txt"
+test fields: details -> total == 128512 and message == "/large" and ready == false
+test adapted: adapt -> total == 2147483647 and message == "INDEX_BOUNDS"

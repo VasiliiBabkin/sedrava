@@ -30,10 +30,11 @@ def statement_work(stmt,derived):
     from sedrava_core import Assign,Let,Require,If,Repeat
     costs=derived_work(derived)
     total=1+sum(costs.values())
-    node=stmt.expr if isinstance(stmt,(Assign,Let)) else stmt.condition if isinstance(stmt,(Require,If)) else getattr(stmt,'collection',None)
+    node=stmt.expr if isinstance(stmt,(Assign,Let)) else stmt.condition if isinstance(stmt,(Require,If)) else getattr(stmt,'collection',getattr(stmt,'expr',None))
     if node is not None:total+=expression_work(node,costs)
     # Assignments revalidate derived values before any next statement.
     if isinstance(stmt,Assign):total+=sum(costs.values())
+    if hasattr(stmt,"arms"):total+=len(stmt.arms)
     return total
 
 def block_work(body,derived):
@@ -41,7 +42,8 @@ def block_work(body,derived):
     total=0
     for stmt in body:
         total+=statement_work(stmt,derived)
-        if isinstance(stmt,If):total+=max(block_work(stmt.yes,derived),block_work(stmt.no,derived))
+        if hasattr(stmt,"arms"):total+=max(block_work(arm.body,derived) for arm in stmt.arms)
+        elif isinstance(stmt,If):total+=max(block_work(stmt.yes,derived),block_work(stmt.no,derived))
         elif isinstance(stmt,Repeat):total+=stmt.count*block_work(stmt.body,derived)
         elif hasattr(stmt,'collection'):total+=stmt.capacity*block_work(stmt.body,derived)
     return total

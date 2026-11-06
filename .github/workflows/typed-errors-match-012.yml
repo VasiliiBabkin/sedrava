@@ -1,0 +1,143 @@
+name: Core 0.12 typed errors and exhaustive match
+on:
+  push:
+    branches: [feature/012-typed-errors-match-a1]
+  pull_request:
+    branches: [feature/012-effects-targets-a1]
+permissions:
+  contents: read
+jobs:
+  typed-errors:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.10', '3.12', '3.13']
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install declared test dependencies (tomli on Python 3.10)
+        run: python -m pip install '.[test]'
+      - name: Full Python regression and generated Node/JVM differential checks
+        run: python -m unittest discover -s tests -v
+      - name: Check pinned Unicode table regeneration
+        run: python scripts/generate_unicode_tables.py --check
+      - name: Typed errors, exhaustive matching and legacy Effects A1 regression
+        run: |
+          python -m unittest discover -s tests -p test_typed_errors_match_012.py -v
+          python sedrava_cli.py test examples/typed_errors_012.sdr
+          python sedrava_cli.py test examples/typed_errors_modules_012/main.sdr
+          python sedrava_cli.py effects examples/typed_errors_modules_012/main.sdr --target web
+      - name: Verify experimental wheel and sdist include diagnostics
+        run: |
+          python -m pip install build==1.3.0 twine==6.2.0
+          python -m build
+          python -m twine check dist/*
+          python scripts/audit_dist.py
+          python scripts/check_installed_dist.py
+          python scripts/typed_errors_receipt.py
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: typed-errors-distributions-${{ matrix.python }}
+          path: |
+            dist/
+            build/typed-errors-receipt.json
+
+  browsers:
+    runs-on: ubuntu-24.04
+    env:
+      SEDRAVA_BROWSER: ${{ matrix.engine }}
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [chromium, firefox, webkit]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - run: python -m pip install playwright==1.62.0
+      - run: sudo --preserve-env=GITHUB_ACTIONS python3 scripts/configure_ci_apt.py && python -m playwright install --with-deps ${{ matrix.engine }}
+      - name: Existing real HTTP browser regression
+        if: matrix.engine == 'chromium'
+        run: python -m unittest discover -s tests -p test_http_browser_e2e.py -v
+      - run: python scripts/test_typed_errors_browser.py
+      - run: python scripts/test_core_a2_browser.py
+      - run: python scripts/test_namespace_core_browser.py
+      - run: python scripts/typed_errors_receipt.py
+        if: always()
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: typed-errors-browser-${{ matrix.engine }}
+          path: |
+            build/typed-errors-receipt.json
+            build/core-a2
+            build/namespace-core
+            build/typed-errors-browser
+  android:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
+        with:
+          gradle-version: '8.11.1'
+      - run: python scripts/prepare_core_a2_android.py build/typed-errors-android examples/typed_errors_012.sdr '["success","failure","details","adapt","rejected","success"]'
+      - run: python scripts/prepare_core_a2_android.py build/namespace-core-android examples/modules_core_012/main.sdr
+      - run: gradle -p build/typed-errors-android --no-daemon :app:assembleDebug :app:testDebugUnitTest :app:lintDebug :app:assembleDebugAndroidTest
+      - run: gradle -p build/namespace-core-android --no-daemon :app:assembleDebug :app:testDebugUnitTest :app:lintDebug :app:assembleDebugAndroidTest
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: |
+            gradle -p build/typed-errors-android --no-daemon :app:connectedDebugAndroidTest
+            gradle -p build/namespace-core-android --no-daemon :app:connectedDebugAndroidTest
+      - run: python scripts/verify_apk.py build/typed-errors-android/app/build/outputs/apk/debug/app-debug.apk
+      - run: python scripts/verify_apk.py build/namespace-core-android/app/build/outputs/apk/debug/app-debug.apk
+      - run: python scripts/typed_errors_receipt.py
+        if: always()
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: typed-errors-android-evidence
+          path: |
+            build/typed-errors-receipt.json
+            build/typed-errors-android/app/build/outputs/
+            build/typed-errors-android/app/build/reports/
+            build/typed-errors-android/app/build/test-results/
+            build/namespace-core-android/app/build/outputs/
+            build/namespace-core-android/app/build/reports/
+            build/namespace-core-android/app/build/test-results/

@@ -7,6 +7,7 @@ from pathlib import Path
 from sedrava_records import plain,structured
 from sedrava_sequences import ValueListType,JS_RUNTIME as VECTOR_RUNTIME
 from sedrava_records_codegen import js_runtime
+from sedrava_errors import Match
 from sedrava_core import Assign, If, Require, Let, Repeat, ForEach, parse, run
 
 def json_script(value, **kwargs):
@@ -30,6 +31,9 @@ def js_expr(node, names):
         return ('vectorOp' if isinstance(kind,ValueListType) else 'collectionOp')+'("list_at",'+str(kind.capacity)+','+','.join((base,index))+')'
     if isinstance(node, ast.Attribute): return '(' + js_expr(node.value, names) + ')[' + json_script(node.attr) + ']'
     if isinstance(node, ast.Call):
+        if hasattr(node,'error_type'):
+            fields={kw.arg:kw.value for kw in node.keywords}
+            return '({id:'+json_script(node.error_type.identity+'.'+node.error_variant)+',variant:'+json_script(node.error_variant)+',fields:{'+','.join('['+json_script(key)+']:'+js_expr(fields[key],names) for key,_ in node.error_fields)+'}})'
         if hasattr(node,"result_operation"):
             from sedrava_results import js as result_emit
             return result_emit(node,[js_expr(arg,names) for arg in node.args])
@@ -84,6 +88,19 @@ def statements(body, names, depth=4, derived=None):
         elif isinstance(stmt, Assign):
             result.append(f"{pad}{names[stmt.name]} = {js_expr(stmt.expr, names)};")
             result.append(f"{pad}checkDerivedState(nextState);")
+        elif isinstance(stmt,Match):
+            result.extend([pad+'{',pad+'  const _sdr_match='+js_expr(stmt.expr,names)+';'])
+            for index,arm in enumerate(stmt.arms):
+                cond='sdrResultOk(_sdr_match)' if arm.tag=='Ok' else '!sdrResultOk(_sdr_match)' if arm.tag=='Err' else '(!sdrResultOk(_sdr_match)&&_sdr_match.error.variant==='+json_script(arm.tag)+')'
+                result.append(pad+'  '+('if' if index==0 else 'else if')+' ('+cond+') {')
+                payload='_sdr_match.value' if arm.tag=='Ok' else '(_sdr_match.error||_sdr_match.code)'
+                scope=dict(names)
+                for key,field in arm.bindings:
+                    local='_sdr_pattern_'+key
+                    value=payload+'.fields['+json_script(field)+']' if field else payload
+                    result.append(pad+'    const '+local+'='+value+';');scope[key]=local
+                result.extend(statements(arm.body,scope,depth+4,derived));result.append(pad+'  }')
+            result.append(pad+'}')
         elif isinstance(stmt,ForEach):
             source=js_expr(stmt.collection,names)
             snapshot='Array.from('+source+')' if stmt.kind is str else '('+source+').slice()' if isinstance(stmt.kind,ValueListType) else '('+source+').items.slice()'
