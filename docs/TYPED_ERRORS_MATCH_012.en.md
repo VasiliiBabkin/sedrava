@@ -94,3 +94,14 @@ record naming rules are otherwise unchanged.
 Effects resolves checked operation metadata before comparing user-function names;
 a later legacy Ok/Err/error_id declaration cannot retroactively change an earlier
 builtin binding. Malformed operation metadata is rejected, not assumed pure.
+
+Core records the checked root type of each expression. WebApp consumes those value
+types without re-resolving earlier bindings against later declarations. See the
+real modular WebApp at examples/typed_errors_modules_012/site.sdr.
+
+CLI `run` can print ephemeral derived Error/Result values as diagnostic JSON:
+errors use `{id, variant, fields}`, typed success uses `{value, code:"", error:null}`,
+typed failure `{code:"", error:{...}}`; legacy errors retain `{code:"INT_OVERFLOW"}`.
+This projection mirrors the generated JS value carriers, not Python class names.
+It is not a persistent/transport schema or a decoder: snapshots still contain only
+declared persistent state, and Result/error state declarations remain unsupported.

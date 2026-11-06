@@ -110,6 +110,19 @@ def operation(name, values):
 
 
 def plain(value):
+    from sedrava_errors import ErrorValue,validate as validate_error
+    from sedrava_results import ResultValue,validate as validate_result
+    if isinstance(value,ErrorValue):
+        validate_error(value)
+        return {'id':value.kind.identity+'.'+value.variant,'variant':value.variant,
+                'fields':{key:item for (key,_),item in zip(dict(value.kind.variants)[value.variant],value.values)}}
+    if isinstance(value,ResultValue):
+        validate_result(value)
+        if value.code:return {'code':value.code}
+        if value.error is not None:return {'code':'','error':plain(value.error)}
+        result={'value':plain(value.value),'code':''}
+        if value.kind.error is not None:result['error']=None
+        return result
     if isinstance(value, RecordValue): return {key: field for (key, _), field in zip(value.kind.fields, value.values)}
     if isinstance(value, ValueList):return list(value.items)
     if isinstance(value, ListValue): return {'next_id': value.next_id, 'items': [dict(id=key, **plain(record)) for key, record in value.items]}

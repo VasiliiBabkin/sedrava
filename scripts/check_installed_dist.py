@@ -60,6 +60,7 @@ def check(archive, folder):
     run(cli,'effects',source,'--target','web')
     run(cli,'build','web',source,'--output',folder/'typed modules/index.html')
     run(cli,'build','android',source,'--output',folder/'typed modules android')
+    run(cli,'build','webapp',source.with_name('site.sdr'),'--output',folder/'typed modules webapp')
     run(python,'-c',"import pathlib,sys,sedrava_errors;assert pathlib.Path(sedrava_errors.__file__).is_relative_to(sys.prefix);assert (pathlib.Path(sys.prefix)/'share/sedrava/docs/TYPED_ERRORS_MATCH_012.ru.md').is_file()")
     # Base install was exercised above; package locking on 3.10 uses its declared extra.
     run(python,'-m','pip','install',str(archive)+'[packages]')

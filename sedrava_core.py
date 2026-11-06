@@ -159,6 +159,16 @@ class Program:
     display_names: dict = None
     errors: dict = None
 
+    @property
+    def value_types(self):
+        """Consumer-facing types of checked values, without rebinding typed IR."""
+        values={key:value_type(value) for key,value in self.states.items()}
+        symbols={**(self.records or {}),**(self.errors or {}),**(self.functions or {})}
+        for key,expr in (self.derived or {}).items():
+            kind=getattr(expr,'inferred_type',None)
+            values[key]=kind if kind is not None else type_of(expr,{**symbols,**values})
+        return values
+
 def parse_expr(source, types, expected=None):
     source, literals = literal_expression(source)
     try:
@@ -199,7 +209,7 @@ def parse_expr(source, types, expected=None):
         if isinstance(item, ast.Constant):
             checked_value(item.value)
     try:
-        type_of(node, types)
+        inferred_type=type_of(node, types)
         if expression_depth(node)>MAX_EXPRESSION_DEPTH:raise ValueError("Expression/function nesting complexity limit")
         if expression_cost(node)>MAX_DERIVED_NODES:raise ValueError("Expression/function exceeds complexity limit")
     except ValueError as exc:
@@ -208,6 +218,7 @@ def parse_expr(source, types, expected=None):
         if unknown is not None:
             raise ValueError(f"Unknown identifier: {unknown}") from exc
         raise
+    node.inferred_type=inferred_type
     return node
 
 def type_of(node, types):

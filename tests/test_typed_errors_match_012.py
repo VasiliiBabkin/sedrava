@@ -341,6 +341,46 @@ test result: go -> total == 3
         with self.assertRaisesRegex(ValueError,'Result intrinsic metadata'):
             infer_function_effects({'f':FunctionType('f',(),bool,node,1)},primitive_effects={'read_file':('host.fs.read',)})
 
+    def test_checked_derived_types_do_not_rebind_later_function_names(self):
+        source=BASE.replace('state total = 0','derive label = error_id(E.First(n=1))\nfn error_id(x: int) -> int = x + 1\nstate total = 0')
+        p=parse(source);self.assertIs(p.value_types['label'],str)
+        from sedrava_core import resolve
+        self.assertEqual(resolve(p.states,p.derived)['label'],'entry.E.First')
+        web_source=source[:source.index('screen main:')].replace('app "Errors"','webapp "Errors"')+'view main:\n    heading "Derived error"\n    value label\n'
+        doc=parse_document(web_source);self.assertIs(doc.types['label'],str)
+        self.assertIs(doc.program.derived['label'].inferred_type,str)
+
+    def test_cli_projects_ephemeral_values_without_persisting_or_class_names(self):
+        source=BASE.replace('state total = 0','state total = 0\nderive error = E.First(n=1)\nderive failed = outcome(2)\nderive accepted = outcome(1)\nderive legacy = try_add(2147483647, 1)')
+        from sedrava_core import resolve
+        from sedrava_records import plain
+        p=parse(source);expected={key:plain(value) for key,value in resolve(p.states,p.derived).items()}
+        self.assertEqual(expected['error'],{'id':'entry.E.First','variant':'First','fields':{'n':1}})
+        self.assertEqual(expected['failed'],{'code':'','error':{'id':'entry.E.First','variant':'First','fields':{'n':2}}})
+        self.assertEqual(expected['accepted'],{'code':'','error':None,'value':1})
+        self.assertEqual(expected['legacy'],{'code':'INT_OVERFLOW'})
+        with tempfile.TemporaryDirectory() as tmp:
+            path=Path(tmp)/'main.sdr';path.write_text(source);state=Path(tmp)/'state.json'
+            result=subprocess.run([sys.executable,str(ROOT/'sedrava_cli.py'),'run',str(path),'--state-file',str(state)],capture_output=True,text=True,timeout=20)
+            self.assertEqual(result.returncode,0,result.stderr);self.assertEqual(json.loads(result.stdout),expected)
+            snapshot=json.loads(state.read_text());self.assertEqual(snapshot['state'],{})
+        self.assertEqual(kotlin(source,['go']),reference(source,['go']))
+        # Compare the diagnostic projection to actual generated JS carriers.
+        from web_codegen import generate,js_expr,json_script
+        names={key:'initialState['+json_script(key)+']' for key in p.states}
+        for key,node in p.derived.items():names[key]=js_expr(node,names)
+        expression='({'+','.join('['+json_script(k)+']:'+v for k,v in names.items())+'})'
+        code='const vm=require("node:vm"),ctx=vm.createContext({});vm.runInContext('+json.dumps(generate(source,_program=p,_domain_only=True))+',ctx);console.log(JSON.stringify(vm.runInContext('+json.dumps(expression)+',ctx)));'
+        observed=json.loads(subprocess.check_output(['node','-e',code],text=True,timeout=30));self.assertEqual(observed,expected)
+
+    def test_webapp_imported_error_derive_uses_checked_core_types(self):
+        path=ROOT/'examples/typed_errors_modules_012/site.sdr'
+        doc=parse_document(path.read_text(),path);self.assertEqual(run(doc.program),2)
+        self.assertIs(doc.types['label'],str)
+        from sedrava_webapp import generate_webapp
+        assets=generate_webapp(doc);self.assertIn('app.js',assets)
+        self.assertEqual(assets,generate_webapp(parse_document(path.read_text(),path)))
+
     def test_nested_budget_and_scope_remain_checked(self):
         # 100 iterations, each match selects a 100-iteration branch: above 10k steps.
         body='    repeat i in range(0, 100):\n        match outcome(2):\n            Ok(value):\n                total = value\n            Err(error):\n                repeat j in range(0, 100):\n                    total = total + 1\n'

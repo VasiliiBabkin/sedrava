@@ -145,9 +145,9 @@ def parse_webapp(source):
     run(program)
     if program.has_navigation:
         fail(Span(view_lineno, 1), "WebApp B1 does not support multi-view navigation")
-    declared = {key: value_type(value) for key, value in program.states.items()}
-    for key, expr in program.derived.items():
-        declared[key] = type_of(expr, {**(program.records or {}),**(program.functions or {}),**declared})
+    # Core already resolved lexical bindings and types, including error symbols.
+    # Re-resolving AST against a later global table can change intrinsic bindings.
+    declared = program.value_types
     from sedrava_web_routes import route_parameters
     for name,spec in views.items():
         for key in route_parameters(spec['path']):

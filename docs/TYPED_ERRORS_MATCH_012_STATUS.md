@@ -105,3 +105,21 @@ relaxation of allowed effects or a new runtime capability.
 without skips and the full dedicated cross-platform workflow (three Python
 versions, three browsers, APK/JVM/Lint and two actual API35 instrumented tests).
 That evidence is historical: the next exact SHA reruns all applicable checks.
+
+
+Additional valid-program reproductions: WebApp retyped a scalar error_id derive
+without error symbols; CLI JSON printing leaked TypeError for an ephemeral Result
+derive (including the preexisting legacy family). Core now records checked root
+expression types and exposes value_types; WebApp consumes those bindings rather
+than re-resolving symbols. plain() projects all immutable Error/Result values to
+JS-equivalent diagnostic data. No snapshot schema, decoder or Result state support
+was added. Tests compare actual CLI output/JS values and compiled Kotlin state,
+assert snapshots omit derives, and cover the real imported WebApp in browsers.
+Test output paths are mode-specific; the CLI unmanaged-directory guard is intact.
+
+42 focused tests passed after the derive/CLI integration repair. Real Chromium
+also passed four fixtures: standalone app, imported app, imported WebApp and an
+HTML-like payload. New WebApp test initially lacked the mandatory h1; the fixture
+was corrected, not the accessibility gate. Existing unmanaged output protection
+refused a stale directory from another mode; test paths now include the mode.
+All next/final results must come from the next committed SHA and clean CI checkout.

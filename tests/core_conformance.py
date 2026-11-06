@@ -5,8 +5,8 @@ from sedrava_core import parse,transition
 from sedrava_syntax import physical_lines
 from sedrava_records import plain
 
-def reference(source,sequence):
-    p=parse(source);state=p.states.copy();out=[]
+def reference(source,sequence,program=None):
+    p=program or parse(source);state=p.states.copy();out=[]
     for action in sequence:
         try:state,accepted=transition(p,state,action)
         except ValueError:accepted=False
