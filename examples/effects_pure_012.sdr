@@ -6,5 +6,4 @@ state count = 0
 action advance: count = double_step(count)
 screen main:
     value count
-test advance:
-    count == 2
+test advanced: advance -> count == 2

@@ -20,12 +20,11 @@ CLI = ROOT / "sedrava_cli.py"
 EXAMPLE = '''app "Effect A1"
 fn increase(x: int) -> int effects pure = x + 1
 fn twice(y: int) -> int = increase(increase(y))
-state total = twice(2)
+state total = 4
 action update: total = twice(total)
 screen main:
     value total
-test update:
-    total == 6
+test updated: update -> total == 6
 '''
 
 
@@ -51,6 +50,14 @@ class EffectContracts(unittest.TestCase):
         self.assertEqual(data["kind"], "app-domain")
         self.assertEqual(data["source_sha256"], hashlib.sha256(EXAMPLE.encode()).hexdigest())
         self.assertEqual(canonical_manifest_json(data), canonical_manifest_json(data))
+
+    def test_function_initializers_and_block_tests_remain_rejected(self):
+        for contract in ("", " effects pure"):
+            with self.subTest(contract=contract), self.assertRaisesRegex(ValueError, "Unknown identifier"):
+                parse('app "No initializer calls"\nfn twice(x: int) -> int' + contract +
+                      ' = x + x\nstate n = twice(2)\nscreen main:\n    value n\n')
+        with self.assertRaisesRegex(ValueError, "invalid declaration"):
+            parse(EXAMPLE.replace('test updated: update -> total == 6', 'test updated:\n    total == 6'))
 
     def test_unsupported_effect_annotation_is_compile_error(self):
         for declaration in (
@@ -146,7 +153,7 @@ class EffectContracts(unittest.TestCase):
                 encoding="utf-8")
             (ws / "main.sdr").write_text(
                 'app "Modular effects"\nimport "functions.sdr" as util\n'
-                'state n = util.duplicate(2)\nscreen main:\n    value n\n',
+                'state n = 0\naction update: n = util.duplicate(2)\nscreen main:\n    value n\n',
                 encoding="utf-8")
             command = [sys.executable, str(CLI), "effects", str(ws / "main.sdr"), "--target", "web"]
             first = subprocess.run(command, capture_output=True, text=True, timeout=15)
