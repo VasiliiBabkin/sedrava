@@ -7,6 +7,7 @@ HEADER = re.compile(r'error (closed|open) ('+IDENT+r')(?: id "([A-Za-z][A-Za-z0-
 MAX_ERROR_TYPES = 16
 MAX_VARIANTS = 16
 MAX_FIELDS = 16
+TYPE_NAMES = frozenset({'int','text','bool','list','Result','Error'})
 ENGINE_FAULTS = frozenset({'BudgetExceeded', 'PolicyViolation', 'CapabilityDenied', 'CompilerError', 'InternalError'})
 
 @dataclass(frozen=True)
@@ -44,12 +45,16 @@ def valid_name(name):
     return bool(re.fullmatch(IDENT, name)) and not is_reserved_identifier(name) and name not in ENGINE_FAULTS and name not in ('Ok','Err')
 
 
+def valid_error_name(name):
+    return valid_name(name) and name not in TYPE_NAMES
+
+
 def parse_declaration(lines, pos, symbols, errors):
     _, line, number = lines[pos]
     match = HEADER.fullmatch(line)
     def fail(message, n=number, col=1):
         raise ValueError(f'Line {n}: column {col}: E_ERROR_TYPE: {message}')
-    if not match or not valid_name(match[2]) or match[2] in symbols or match[2] == 'Error':
+    if not match or not valid_error_name(match[2]) or match[2] in symbols:
         fail('invalid/duplicate error type')
     if len(errors) >= MAX_ERROR_TYPES:
         fail('error type resource limit')

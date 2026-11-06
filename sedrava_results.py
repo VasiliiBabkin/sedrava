@@ -10,6 +10,7 @@ class ResultValue:
     value: object = None
     code: str = ''
     error: object = None
+SHADOWABLE_NAMES=frozenset({'Ok','Err','error_id'})
 NAMES={'Ok','Err','error_id','try_add','try_chr','try_at','result_ok','result_code','result_or'}
 CODES={'INT_OVERFLOW','INVALID_SCALAR','INDEX_BOUNDS'}
 def validate(value,expected=None):

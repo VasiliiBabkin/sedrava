@@ -76,3 +76,17 @@ regression separately passed with source errors.sdr:8 and SDR-E1201. The dedicat
 Chromium job also runs both existing HTTP browser tests that are intentionally
 absent from Python-only jobs. Final exact-head regression follows the commit;
 checkpoint results do not substitute for its CI receipts.
+
+
+A final name-resolution reproduction showed an error type named int could shadow
+primitive function annotations while error fields still used primitive int.
+The new error-type declaration registry now rejects built-in type-name collisions,
+using the same authored-name validator before namespace lowering and in the core.
+No existing record/value/function naming grammar was changed. Direct/imported
+negative regressions and RU/EN contract record this necessary boundary.
+
+Legacy functions named Ok/Err/error_id were valid before this slice. They retain
+lexical priority over the new intrinsics, with real Python/JS/Kotlin regression.
+A noncallable value/parameter cannot silently turn into an intrinsic call; pattern
+tags remain syntax independent of function names. This avoids a compatibility
+regression without expanding the old grammar or weakening Result typing.

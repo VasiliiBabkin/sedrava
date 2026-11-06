@@ -17,7 +17,8 @@ error open ReadTextError:
 ```
 
 `error closed|open Name [id "stable.identifier"]:` precedes functions/state.
-Names use `[A-Za-z][A-Za-z0-9_]*`. Each type has 1..16 variants, each has 0..16 distinct int/text/bool fields; at most
+Names use `[A-Za-z][A-Za-z0-9_]*`. Error type names cannot shadow the built-in
+type names int/text/bool/list/Result/Error. Each type has 1..16 variants, each has 0..16 distinct int/text/bool fields; at most
 16 types. Variant/field names are at most 64 ASCII identifier characters; IDs at most
 128. Empty variants use `Name:` without a body. Constructors require exact
 named fields: `ArithmeticError.IntOverflow(left=x, right=y)`. No coercion,
@@ -83,3 +84,9 @@ a wire format. No Host/Server PR is integrated by this slice.
 
 In A1 every wildcard Err arm is final, including closed errors. Constructors
 evaluate named payload expressions in declaration-field order on all targets.
+
+Compatibility of names: legacy user functions/record constructors named Ok, Err
+or error_id retain lexical priority. New intrinsic calls require those names not
+to be shadowed; a non-callable value/parameter binding is never silently ignored.
+Pattern Ok/Err tags are grammar, not function calls. Existing primitive/value/
+record naming rules are otherwise unchanged.

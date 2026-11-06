@@ -202,7 +202,7 @@ class TypedErrors(unittest.TestCase):
     def test_module_reserved_error_names_cannot_hide_behind_hygiene(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
-            for name in ('Error','Ok','Err','BudgetExceeded','CapabilityDenied'):
+            for name in ('int','text','bool','list','Result','Error','Ok','Err','BudgetExceeded','CapabilityDenied'):
                 (root/'m.sdr').write_text('module denied.errors\nexport error closed '+name+':\n    V:\n')
                 source='app "X"\nimport "m.sdr" as m\nstate n = 0\nscreen main:\n    value n\n'
                 with self.subTest(name=name),self.assertRaisesRegex(ValueError,'error type'):
@@ -296,6 +296,29 @@ test scalar: inspect -> message == "empty"
         self.assertEqual(expected[-1]['state']['entries']['items'][0]['id'],2)
         self.assertEqual(javascript(source,sequence),expected)
         self.assertEqual(kotlin(source,sequence),expected)
+
+    def test_error_type_names_cannot_shadow_primitive_types(self):
+        for name in ('int','text','bool','list','Result','Error'):
+            with self.subTest(name=name):self.reject(BASE.replace('error closed E:','error closed '+name+':'),'E_ERROR_TYPE')
+
+    def test_legacy_functions_keep_new_intrinsic_names(self):
+        source="""app "Legacy function names"
+fn Ok(x: int) -> int = x + 1
+fn Err(x: int) -> int = x + 1
+fn error_id(x: int) -> int = x + 1
+state total = 0
+action go: total = error_id(Err(Ok(total)))
+screen main:
+    value total
+test result: go -> total == 3
+"""
+        expected=reference(source,['go','go']);self.assertEqual(expected[-1]['state']['total'],6)
+        self.assertEqual(run(parse(source)),1)
+        self.assertEqual(javascript(source,['go','go']),expected)
+        self.assertEqual(kotlin(source,['go','go']),expected)
+        # A value binding is not an implicit call to a shadowed constructor.
+        self.reject(BASE.replace('fn outcome','fn bad(Ok: int) -> Result<int, E> = Ok(1)\nfn outcome'),'not callable')
+        self.reject(BASE.replace('fn outcome','fn Ok(x: int) -> Result<int, E> = Ok(x)\nfn outcome'),'not callable')
 
     def test_nested_budget_and_scope_remain_checked(self):
         # 100 iterations, each match selects a 100-iteration branch: above 10k steps.

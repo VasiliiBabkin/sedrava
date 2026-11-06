@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from sedrava_functions import FunctionType, expression_cost, expression_depth, signature_type, FUNCTION_DECLARATION, PARAMETER_DECLARATION, MAX_FUNCTION_PARAMETERS, MAX_EXPRESSION_DEPTH
 from sedrava_stdlib import SIGNATURES
 from sedrava_errors import ErrorType, ErrorValue, Match, MatchArm
-from sedrava_results import NAMES as RESULT_NAMES
+from sedrava_results import NAMES as RESULT_NAMES, SHADOWABLE_NAMES as RESULT_COMPAT_NAMES
 from sedrava_queries import NAMES as QUERY_NAMES, type_query
 from sedrava_navigation import Span, Widget, Screen, Navigation, MAX_SCREENS, MAX_NAV_COMMANDS
 
@@ -259,6 +259,7 @@ def type_of(node, types):
             node.record_type = kind
             return kind
         from sedrava_results import NAMES as RESULT_NAMES,type_result
+        if name in RESULT_COMPAT_NAMES and name in types:raise ValueError('E_RESULT: value binding is not callable: '+name)
         if name in RESULT_NAMES:return type_result(node,types,type_of)
         if name in QUERY_NAMES:return type_query(node,types,type_of)
         if name in SIGNATURES:
@@ -549,7 +550,7 @@ def _parse(source):
             errors[kind.name]=types[kind.name]=kind
             continue
         elif m := FUNCTION_DECLARATION.fullmatch(line):
-            if states or actions or m[1] in types or is_reserved_identifier(m[1]) or len(functions)>=32 or m[1] in SIGNATURES or m[1] in QUERY_NAMES or m[1] in RESULT_NAMES or m[1] in ('append','update','remove','get','has','count','next_id','list_at','list_slice','list_clear','list_remove_at','list_replace_at','list_index','list_identity','list_capacity','list_sort','list_sum'):raise ValueError(f'Line {number}: invalid pure function declaration')
+            if states or actions or m[1] in types or is_reserved_identifier(m[1]) or len(functions)>=32 or m[1] in SIGNATURES or m[1] in QUERY_NAMES or m[1] in (RESULT_NAMES-RESULT_COMPAT_NAMES) or m[1] in ('append','update','remove','get','has','count','next_id','list_at','list_slice','list_clear','list_remove_at','list_replace_at','list_index','list_identity','list_capacity','list_sort','list_sum'):raise ValueError(f'Line {number}: invalid pure function declaration')
             params=[]
             from sedrava_functions import split_parameters
             for param in split_parameters(m[2]):
@@ -560,8 +561,13 @@ def _parse(source):
             if len(params)>MAX_FUNCTION_PARAMETERS:raise ValueError(f'Line {number}: invalid function signature')
             try:result_type=signature_type(m[3],{**records,**errors})
             except ValueError as exc:raise ValueError(f'Line {number}: invalid function return type') from exc
-            body=expression(m[4],{**records,**errors,**functions,**dict(params)},number,m.start(4)+1,result_type)
-            if type_of(body,{**records,**errors,**functions,**dict(params)})!=result_type:raise ValueError(f'Line {number}: function return type mismatch')
+            function_scope={**records,**errors,**functions}
+            # A legacy function may shadow a new intrinsic, but may not turn a
+            # forbidden self-call into an accidental call of that intrinsic.
+            if m[1] in RESULT_COMPAT_NAMES:function_scope[m[1]]=None
+            function_scope.update(params)
+            body=expression(m[4],function_scope,number,m.start(4)+1,result_type)
+            if type_of(body,function_scope)!=result_type:raise ValueError(f'Line {number}: function return type mismatch')
             # Existing function bodies are pure. An explicit public-facing
             # 'effects pure' annotation is checked by the same typed parser.
             annotation = frozenset() if " effects pure = " in line else None

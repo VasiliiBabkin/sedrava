@@ -231,8 +231,8 @@ def _local_decl(line, module, path, n):
         return None
     _, kind, name = m.groups()
     if kind.startswith('error '):
-        from sedrava_errors import valid_name
-        if not valid_name(name) or name=='Error':raise LocatedError('invalid/reserved error type '+name,path,n,m.start(3)+1)
+        from sedrava_errors import valid_error_name
+        if not valid_error_name(name):raise LocatedError('invalid/reserved error type '+name,path,n,m.start(3)+1)
         kind='error'
     if is_reserved_identifier(name) or name.startswith(('M_','L_')):
         raise LocatedError(f'reserved declaration name {name}',path,n,m.start(3)+1)
