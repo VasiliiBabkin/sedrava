@@ -1,0 +1,9 @@
+# Pure user functions remain portable between app/Web/Android.
+app "Checked pure effects"
+fn increment(value: int) -> int effects pure = value + 1
+fn double_step(value: int) -> int = increment(increment(value))
+state count = 0
+action advance: count = double_step(count)
+screen main:
+    value count
+test advanced: advance -> count == 2

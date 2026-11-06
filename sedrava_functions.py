@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 MAX_FUNCTION_PARAMETERS = 8
 MAX_EXPRESSION_DEPTH = 128
-FUNCTION_DECLARATION = re.compile(r"fn ([A-Za-z][A-Za-z0-9_]*)\((.*?)\) -> (.+?) = (.+)")
+FUNCTION_DECLARATION = re.compile(r"fn ([A-Za-z][A-Za-z0-9_]*)\((.*?)\) -> (.+?)(?: effects pure)? = (.+)")
 PARAMETER_DECLARATION = re.compile(r"\s*([A-Za-z][A-Za-z0-9_]*)\s*:\s*(.+?)\s*")
 
 @dataclass(frozen=True)
@@ -16,6 +16,7 @@ class FunctionType:
     body: object
     cost: int
     depth: int = 0
+    declared_effects: frozenset[str] | None = None
 
 
 def expression_cost(node):
