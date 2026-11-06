@@ -36,8 +36,9 @@ def normalize_effects(raw):
     """Validate a public declaration or a registered primitive effect set."""
     if raw is None:
         return None
-    effects = frozenset(raw)
-    if len(effects) != len(tuple(raw)) or not effects <= KNOWN_EFFECTS:
+    requested = tuple(raw)
+    effects = frozenset(requested)
+    if len(effects) != len(requested) or not effects <= KNOWN_EFFECTS:
         raise ValueError("Unknown or duplicate effect identifier")
     return effects
 
