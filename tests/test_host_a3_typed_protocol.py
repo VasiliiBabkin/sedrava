@@ -58,8 +58,10 @@ class HostTypedRead(unittest.TestCase):
             ws = self.setup_workspace(root)
             (ws / "read" / "invalid.txt").write_bytes(b"\xff")
             (ws / "read" / "huge.txt").write_bytes(b"x" * 4097)
+            (ws / "read" / "many-scalars.txt").write_text("a" * 1025, encoding="utf-8")
             for path, expected in [("invalid.txt", "InvalidEncoding"),
-                                   ("huge.txt", "ResourceTooLarge")]:
+                                   ("huge.txt", "ResourceTooLarge"),
+                                   ("many-scalars.txt", "TextTooLong")]:
                 with self.subTest(path=path):
                     result = run_host(parse_host(PROGRAM), root=ws, supplied=("filename="+path,),
                                       trusted=True, allow_read=True, read_scope="read")
