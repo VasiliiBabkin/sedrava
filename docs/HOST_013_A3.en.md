@@ -9,7 +9,7 @@ untrusted sandbox guarantees.
 errors. \`HostReadError\` is open, identity \`sedrava.host.read.v1\`,
 with typed variants FileNotFound(path), PermissionDenied(path),
 InvalidEncoding(path), InvalidPath(reason), ResourceTooLarge(limit_bytes),
-TextTooLong(limit_scalars) and IOFailure(operation). A final checked \`match\` supports one scalar
+TextTooLong(limit_scalars) and IOFailure(operation). A final checked \`match\` supports up to eight pure branch-local \`let\` bindings and a final scalar
 \`emit\` per arm, requires Ok plus the final Err(error) fallback.
 It reuses Core #56 ErrorType/ResultType/ResultValue and exhaustive
 checker, not a separate handwritten Result evaluator.
@@ -32,7 +32,7 @@ python sedrava_cli.py host run examples/host_typed_read_013.sdr --root build/a3 
   --result-protocol v1
 ~~~
 
-Only the single-emit host match slice and typed text reads are
+Only bounded pure-lets plus terminal-emit match arms and typed text reads are
 implemented; general Host block actions, user-defined Host error
 declarations, HostPath, scoped path type parameters and typed writes
 remain future milestones. Do not merge, publish or deploy without
