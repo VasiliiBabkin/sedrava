@@ -140,10 +140,10 @@ match fetched:
             with self.subTest(code=expected_code), tempfile.TemporaryDirectory() as root:
                 ws = self.setup_workspace(root)
                 (ws / "read" / "config.json").write_text(payload, encoding="utf-8")
-                source = ('host "Expected JSON"\\n'
-                          'read_json config from "config.json"\\n'
-                          + operation + '\\n'
-                          + ('emit title\\n' if "json_get_text" in operation else 'emit number\\n'))
+                source = ('host "Expected JSON"\n'
+                          'read_json config from "config.json"\n'
+                          + operation + '\n'
+                          + ('emit title\n' if "json_get_text" in operation else 'emit number\n'))
                 program = parse_host(source)
                 outcome = execute_protocol(program, root=ws, trusted=True, allow_read=True,
                                            read_scope="read")
