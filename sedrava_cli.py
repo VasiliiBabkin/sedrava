@@ -67,6 +67,8 @@ def main(argv=None):
     host_commands = host.add_subparsers(dest="host_command", required=True)
     host_check = host_commands.add_parser("check", help="Check trusted host program without I/O")
     host_check.add_argument("source", type=Path)
+    host_effects = host_commands.add_parser("effects", help="Inspect inferred Host capabilities without I/O")
+    host_effects.add_argument("source", type=Path)
     host_run = host_commands.add_parser("run", help="Execute a trusted host program with explicit capabilities")
     host_run.add_argument("source", type=Path)
     host_run.add_argument("--root", type=Path, required=True)
@@ -109,6 +111,9 @@ def main(argv=None):
             host_program = parse_host(host_source)
             if args.host_command == "check":
                 print(f"OK: {args.source} (host; no I/O performed)")
+            elif args.host_command == "effects":
+                from sedrava_host_effects import canonical_host_manifest
+                print(canonical_host_manifest(host_program, host_source))
             else:
                 phase = "execute"
                 options = dict(root=args.root, supplied=args.host_args,
