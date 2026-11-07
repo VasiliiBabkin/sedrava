@@ -290,7 +290,11 @@ def _parse_args(spec, supplied):
 
 
 def _segments(value):
-    checked_text(value)
+    from sedrava_host_typed import HostInvalidPath
+    try:
+        checked_text(value)
+    except ValueError as exc:
+        raise HostInvalidPath("Invalid workspace-relative path") from exc
     if not value or len(value) > 240 or "\\" in value or any(ord(char) < 32 or ord(char) == 127 for char in value):
         from sedrava_host_typed import HostInvalidPath
         raise HostInvalidPath("Invalid workspace-relative path")
@@ -299,7 +303,7 @@ def _segments(value):
         from sedrava_host_typed import HostInvalidPath
         raise HostInvalidPath("Absolute, empty and traversal paths are forbidden")
     if value.startswith("/") or any(len(part.encode("utf-8")) > 120 for part in parts):
-        raise ValueError("Invalid workspace-relative path")
+        raise HostInvalidPath("Invalid workspace-relative path")
     return parts
 
 
