@@ -21,7 +21,7 @@ The read-only candidate workflow never publishes. The historical PyPI publisher 
 
 Core namespaces/provenance/packages #52 is the base of Effects & Targets #55, typed Result/Error/match #56 and Host A3 integration #57. Exact-head GitHub CI for #57 completed 16/16 workflows successfully on `46de3aa45c6c88c2ccdeddf2ac2e8a66ea99e2d9b`. Those checks **do not automatically approve an alpha publication**. The next independent read-only candidate audit is tracked in [release issue #59](https://github.com/VasiliiBabkin/sedrava/issues/59).
 
-The `host` target executes **trusted local scripts only**; scoped file descriptors and capability flags are not a malicious-code sandbox. Actual security review and explicit owner approval remain required before a public alpha, and an additional stable-main branding update (#58) must be reconciled into any alpha build that claims current official branding.
+The `host` target executes **trusted local scripts only**; scoped file descriptors and capability flags are not a malicious-code sandbox. Actual security review and explicit owner approval remain required before a public alpha, The accepted brand assets from stable-main PR #58 are now copied into the read-only alpha candidate by reusing the exact Git blobs; the master PNG and every derivative must pass SHA-256 checks in the candidate workflow. This integration affects only release preparation, not historical Core/Host PRs.
 
 ## Deliberate omissions
 
