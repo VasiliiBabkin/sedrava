@@ -53,16 +53,23 @@ def validate_outcome(outcome):
     status, phase, commit = (outcome.get("status"), outcome.get("phase"), outcome.get("commit_state"))
     if status not in STATUSES or phase not in PHASES or commit not in COMMIT_STATES:
         raise ValueError("Invalid HostExecutionResult enum")
-    if status == "rejected" and (phase != "setup" or commit != "not_started"):
-        raise ValueError("Rejected host work must not have executed")
-    if status == "fault" and commit == "committed":
-        raise ValueError("Fault cannot claim committed success")
-    if status == "success" and (outcome.get("error") is not None or commit == "unknown"):
-        raise ValueError("Successful host work cannot include error/unknown commit")
-    if status != "success" and (outcome.get("error") is None or outcome.get("result") is not None):
+    if status == "rejected":
+        if phase != "setup" or commit != "not_started":
+            raise ValueError("Rejected host work must not have executed")
+    elif phase == "setup":
+        raise ValueError("Only rejected can occur before execution")
+    elif status == "success":
+        if (phase == "execute" and commit != "not_applicable") or (
+                phase == "commit" and commit != "committed"):
+            raise ValueError("Success must reflect its final execution/commit phase")
+    elif (phase == "execute" and commit != "not_started") or (
+            phase == "commit" and commit != "unknown"):
+        raise ValueError("Failure/fault must conservatively reflect commit state")
+    if status == "success":
+        if outcome.get("error") is not None:
+            raise ValueError("Successful host work cannot include error")
+    elif outcome.get("error") is None or outcome.get("result") is not None:
         raise ValueError("Unsuccessful host work needs an error, no result")
-    if phase != "commit" and commit in ("committed", "unknown"):
-        raise ValueError("Only commit phase can commit")
     raw = json.dumps(outcome, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     if len(raw.encode("utf-8")) > 16_384:
         raise ValueError("HostExecutionResult exceeds transport size")
