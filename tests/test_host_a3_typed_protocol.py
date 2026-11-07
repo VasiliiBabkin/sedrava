@@ -152,6 +152,26 @@ class HostTypedRead(unittest.TestCase):
                     self.assertNotEqual(call(*invocation).returncode, 0)
             self.assertFalse((ws/"x.html").exists())
 
+    def test_manifest_is_derived_not_author_granted(self):
+        from sedrava_host_effects import canonical_host_manifest, host_effect_manifest
+        program = parse_host(PROGRAM)
+        manifest = host_effect_manifest(program, PROGRAM)
+        self.assertEqual(manifest["effective"], ["host.fs.read"])
+        self.assertEqual(manifest["required_grants"], ["--allow-read"])
+        self.assertEqual(manifest["target"], "host")
+        self.assertEqual(canonical_host_manifest(program, PROGRAM),
+                         canonical_host_manifest(program, PROGRAM))
+        writer = host_effect_manifest(parse_host(WRITER), WRITER)
+        self.assertEqual(writer["effective"], ["host.fs.write"])
+        with tempfile.TemporaryDirectory() as root:
+            ws = self.setup_workspace(root)
+            source = ws / "job.sdr"
+            source.write_text(PROGRAM)
+            response = subprocess.run([sys.executable, str(CLI), "host", "effects", str(source)],
+                                      capture_output=True, text=True, timeout=15)
+            self.assertEqual(response.returncode, 0, response.stderr)
+            self.assertEqual(json.loads(response.stdout)["effective"], ["host.fs.read"])
+
     def test_protocol_rejects_inconsistent_results(self):
         out = {"protocol": PROTOCOL, "status": "rejected", "phase": "commit",
                "commit_state": "not_started", "result": None,
