@@ -15,6 +15,7 @@ HOST_READ_ERROR = ErrorType(
         ("InvalidEncoding", (("path", str),)),
         ("InvalidPath", (("reason", str),)),
         ("ResourceTooLarge", (("limit_bytes", int),)),
+        ("TextTooLong", (("limit_scalars", int),)),
         ("IOFailure", (("operation", str),)),
     ),
 )
@@ -27,6 +28,10 @@ class HostInvalidPath(ValueError):
 
 class HostResourceTooLarge(ValueError):
     """Expected file-size limit; distinct from execution/work budget."""
+
+
+class HostTextTooLong(ValueError):
+    """Decoded UTF-8 exceeds the Core 1024-scalar text limit."""
 
 
 class HostPolicyViolation(ValueError):
@@ -52,6 +57,8 @@ def read_result(root_fd, path):
         return _err("InvalidPath", reason="invalid_relative_path")
     except HostResourceTooLarge:
         return _err("ResourceTooLarge", limit_bytes=4096)
+    except HostTextTooLong:
+        return _err("TextTooLong", limit_scalars=1024)
     except FileNotFoundError:
         return _err("FileNotFound", path=path)
     except PermissionError:
