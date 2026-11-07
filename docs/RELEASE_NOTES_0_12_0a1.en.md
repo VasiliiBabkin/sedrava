@@ -11,6 +11,14 @@
 - Offline `sedrava.toml` dependencies must be vendored under `vendor/`, with exact versions and canonical SHA-256 `sedrava.lock` content.
 - `sedrava lock` and `sedrava verify` check local integrity, cycles, directory traversal, symlinks and bounded dependency sizes; normal check/build verifies when a manifest is present.
 
+## Additional typed Core and trusted Host A3 candidate features
+
+- `error closed/open` variants with typed payloads and stable identities; contextual `Result<T,E>`, exhaustiveness-checked `match`, and compatibility with legacy `Result<T,Error>`.
+- Experimental `effects pure` contracts and transitive checked pure-function graphs. The manifest is not an authorization token or complete system-wide effect analysis.
+- Explicit-permission, trusted POSIX Host A1–A3 operations, scoped text/JSON I/O, `try_read` returning Core `Result<text,HostReadError>`, plus catchable expected file errors. Policy violations remain noncatchable.
+- Versioned HostExecutionResult v1 with four statuses, phase tracking and conservative unknown-commit-state errors.
+- Cross-target Python/JS/Android and Host tests have been executed on the stacked experimental sources. This **does not** certify untrusted script execution, production isolation or privileged server use.
+
 ## Explicit missing capabilities
 
 No online package registry, automatic dependency download, semver range resolution, package-qualified imports, stable ABI, guaranteed source trust from SHA-256, generated trusted server, SQLite/PostgreSQL or authentication.
