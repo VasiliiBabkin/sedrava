@@ -8,3 +8,5 @@ recursive-include .github/workflows *.yml
 
 recursive-include unicode_data *.gz *.json
 recursive-include licenses *.txt
+
+recursive-include assets/brand *.png *.ico *.md SHA256SUMS
