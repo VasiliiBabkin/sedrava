@@ -39,6 +39,8 @@ jobs:
           mkdir -p build/host-a3/read
           printf 'A3 UTF-8' > build/host-a3/read/config.txt
           python sedrava_cli.py host check examples/host_typed_read_013.sdr
+          python sedrava_cli.py host effects examples/host_typed_read_013.sdr > build/host-a3/effects.json
+          python -c 'import json; m=json.load(open("build/host-a3/effects.json")); assert m["effective"]==["host.fs.read"] and m["required_grants"]==["--allow-read"]'
           python sedrava_cli.py host run examples/host_typed_read_013.sdr --root build/host-a3 --trusted --allow-read --read-scope read --arg filename=config.txt --result-protocol v1 > build/host-a3/result.json
           python -c 'import json; r=json.load(open("build/host-a3/result.json")); assert r["status"]=="success" and r["result"]["result"]=="A3 UTF-8"'
           python sedrava_cli.py host run examples/host_typed_read_013.sdr --root build/host-a3 --trusted --allow-read --read-scope read --arg filename=missing.txt --result-protocol v1 > build/host-a3/missing.json
