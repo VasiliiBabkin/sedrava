@@ -11,6 +11,14 @@ PROTOCOL = "sedrava.host.execution.v1"
 STATUSES = frozenset(("success", "failed", "fault", "rejected"))
 PHASES = frozenset(("setup", "execute", "commit"))
 COMMIT_STATES = frozenset(("not_started", "not_applicable", "committed", "unknown"))
+FAILED_CODES = frozenset((
+    "FILE_NOT_FOUND", "PERMISSION_DENIED", "FILE_EXISTS",
+    "INVALID_ENCODING", "INVALID_PATH", "RESOURCE_TOO_LARGE",
+    "TEXT_TOO_LONG", "DIRECTORY_NOT_EMPTY", "IO_FAILURE",
+))
+FAULT_CODES = frozenset(("POLICY_VIOLATION", "IO_FAULT", "ENGINE_FAULT"))
+REJECTED_CODES = frozenset(("CONFIGURATION_REJECTED",))
+
 
 
 class HostSetupRejected(ValueError):
@@ -29,6 +37,9 @@ def _error_code(exc, phase):
         return "INVALID_PATH", "failed"
     if isinstance(exc, HostResourceTooLarge):
         return "RESOURCE_TOO_LARGE", "failed"
+    from sedrava_host_typed import HostTextTooLong
+    if isinstance(exc, HostTextTooLong):
+        return "TEXT_TOO_LONG", "failed"
     if isinstance(exc, FileNotFoundError):
         return "FILE_NOT_FOUND", "failed"
     if isinstance(exc, PermissionError):
@@ -70,6 +81,22 @@ def validate_outcome(outcome):
             raise ValueError("Successful host work cannot include error")
     elif outcome.get("error") is None or outcome.get("result") is not None:
         raise ValueError("Unsuccessful host work needs an error, no result")
+    expected_codes = {
+        "failed": FAILED_CODES, "fault": FAULT_CODES, "rejected": REJECTED_CODES
+    }
+    if status != "success":
+        error = outcome.get("error")
+        if (type(error) is not dict or set(error) != {"code", "retryable"}
+                or type(error.get("code")) is not str
+                or error["code"] not in expected_codes[status]
+                or type(error.get("retryable")) is not bool):
+            raise ValueError("Invalid HostExecutionResult error schema/code")
+        if error["retryable"]:
+            raise ValueError("A3 protocol does not authorize automatic retries")
+    elif type(outcome.get("result")) is not dict:
+        raise ValueError("Successful HostExecutionResult requires a result object")
+    if set(outcome) != {"protocol", "status", "phase", "commit_state", "result", "error"}:
+        raise ValueError("HostExecutionResult has unknown or missing fields")
     raw = json.dumps(outcome, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     if len(raw.encode("utf-8")) > 16_384:
         raise ValueError("HostExecutionResult exceeds transport size")
