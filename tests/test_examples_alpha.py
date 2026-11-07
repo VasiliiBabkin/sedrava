@@ -18,6 +18,10 @@ class ExamplesAlpha(unittest.TestCase):
             with self.subTest(example=path.name):
                 source = path.read_text(encoding='utf-8')
                 program = parse_document(source,path)
+                from sedrava_host import HostProgram
+                if isinstance(program, HostProgram):
+                    # Host examples have separate, permission-gated conformance tests.
+                    continue
                 if isinstance(program,WebApp):
                     first=generate_webapp(program)
                     second=generate_webapp(parse_document(source,path))
