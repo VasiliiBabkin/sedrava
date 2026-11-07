@@ -78,6 +78,18 @@ class HostTypedRead(unittest.TestCase):
                              ("fault", "execute", "POLICY_VIOLATION"))
             self.assertNotIn(str(elsewhere), json.dumps(out))
 
+    def test_unhandled_expected_error_is_failed_in_execute_phase(self):
+        source = 'host "Legacy read"\nread text_data from "missing.txt"\nemit text_data\n'
+        with tempfile.TemporaryDirectory() as root:
+            ws = self.setup_workspace(root)
+            result = execute_protocol(parse_host(source), root=ws,
+                                      trusted=True, allow_read=True, read_scope="read")
+            self.assertEqual((result["status"], result["phase"], result["commit_state"]),
+                             ("failed", "execute", "not_started"))
+            self.assertEqual(result["error"]["code"], "FILE_NOT_FOUND")
+            self.assertFalse(result["error"]["retryable"])
+            self.assertNotIn(str(ws), json.dumps(result))
+
     def test_configuration_rejected_before_execute(self):
         with tempfile.TemporaryDirectory() as root:
             ws = self.setup_workspace(root)
