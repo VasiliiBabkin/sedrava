@@ -25,6 +25,11 @@ codes are sanitized; no machine paths or stack traces are included.
 Default CLI output stays A2-compatible. No server API, auth, queue,
 signed manifest, worker isolation, or untrusted-source execution.
 
+Malformed JSON and expected JSON lookup/operation failures yield `failed`
+outcomes with stable `INVALID_JSON`, `JSON_LOOKUP_FAILED`, and
+`JSON_OPERATION_FAILED` codes. They are **not** yet catchable
+`Result<JsonValue,E>` values; the bounded typed `match` applies to text `try_read`.
+
 ~~~sh
 python sedrava_cli.py host check examples/host_typed_read_013.sdr
 python sedrava_cli.py host run examples/host_typed_read_013.sdr --root build/a3 \
