@@ -1,0 +1,13 @@
+# Opt-in local host JSON inventory; never exposed to browser/Android.
+host "Bounded inventory"
+arg input: text
+read_json config from input
+json_get_text title from config at "title"
+list_dir entries from "."
+json_count files from entries
+json_object report
+json_set report.title = title
+json_set report.count = files
+json_set report.items = entries
+write_json "inventory.json" = report
+emit_json report

@@ -63,6 +63,27 @@ def main(argv=None):
     build.add_argument("--output", type=Path)
     build.add_argument("--service", type=Path, help="Experimental read-only API0 service for Web output directory")
     build.add_argument("--application-id", help="Stable Android package identity (lowercase reverse-domain name)")
+    host = commands.add_parser("host", help="Trusted local host target, never Web or Android")
+    host_commands = host.add_subparsers(dest="host_command", required=True)
+    host_check = host_commands.add_parser("check", help="Check trusted host program without I/O")
+    host_check.add_argument("source", type=Path)
+    host_effects = host_commands.add_parser("effects", help="Inspect inferred Host capabilities without I/O")
+    host_effects.add_argument("source", type=Path)
+    host_run = host_commands.add_parser("run", help="Execute a trusted host program with explicit capabilities")
+    host_run.add_argument("source", type=Path)
+    host_run.add_argument("--root", type=Path, required=True)
+    host_run.add_argument("--trusted", action="store_true")
+    host_run.add_argument("--allow-read", action="store_true")
+    host_run.add_argument("--allow-write", action="store_true")
+    host_run.add_argument("--allow-list", action="store_true")
+    host_run.add_argument("--allow-mkdir", action="store_true")
+    host_run.add_argument("--allow-rmdir", action="store_true")
+    host_run.add_argument("--read-scope", default=".")
+    host_run.add_argument("--write-scope", default=".")
+    host_run.add_argument("--list-scope", default=".")
+    host_run.add_argument("--arg", dest="host_args", action="append", default=[], metavar="NAME=VALUE")
+    host_run.add_argument("--result-protocol", choices=("legacy", "v1"), default="legacy",
+                          help="Emit versioned four-outcome JSON instead of legacy result")
     package_lock = commands.add_parser("lock", help="Lock reviewed local vendored dependencies offline")
     package_lock.add_argument("project", type=Path, nargs="?", default=Path("."))
     package_verify = commands.add_parser("verify", help="Verify vendored packages against sedrava.lock")
@@ -79,6 +100,43 @@ def main(argv=None):
             return 0
         except (ValueError, OSError, UnicodeError) as exc:
             return report_error(exc,args.project/('sedrava.lock' if args.command=='verify' else 'sedrava.toml'),args.command,'compile',args.diagnostics)
+    if args.command == "host":
+        phase = "compile"
+        try:
+            from sedrava_host import parse_host, run_host
+            if args.source.stat().st_size > MAX_SOURCE_CHARS * 4:
+                raise ValueError("Host source exceeds size limit")
+            with args.source.open(encoding="utf-8") as handle:
+                host_source = handle.read(MAX_SOURCE_CHARS + 1)
+            host_program = parse_host(host_source)
+            if args.host_command == "check":
+                print(f"OK: {args.source} (host; no I/O performed)")
+            elif args.host_command == "effects":
+                from sedrava_host_effects import canonical_host_manifest
+                print(canonical_host_manifest(host_program, host_source))
+            else:
+                phase = "execute"
+                options = dict(root=args.root, supplied=args.host_args,
+                               trusted=args.trusted, allow_read=args.allow_read,
+                               allow_write=args.allow_write, allow_list=args.allow_list,
+                               allow_mkdir=args.allow_mkdir, allow_rmdir=args.allow_rmdir,
+                               read_scope=args.read_scope, write_scope=args.write_scope,
+                               list_scope=args.list_scope)
+                if args.result_protocol == "v1":
+                    from sedrava_host_protocol import execute_protocol
+                    outcome = execute_protocol(host_program, **options)
+                else:
+                    outcome = run_host(host_program, **options)
+                print(json.dumps(outcome, ensure_ascii=False, sort_keys=True))
+                if args.result_protocol == "v1" and outcome["status"] != "success":
+                    return 1
+            return 0
+        except (ValueError, OSError, UnicodeError, RecursionError) as exc:
+            if args.host_command == "run" and args.result_protocol == "v1":
+                from sedrava_host_protocol import reject
+                print(json.dumps(reject(), ensure_ascii=False, sort_keys=True))
+                return 1
+            return report_error(exc, args.source, "host", phase, args.diagnostics)
     if args.command == "build" and args.service is not None and args.target != "web":
         parser.error("--service is only supported for build web")
     if args.command == "build" and args.application_id is not None and args.target != "android":
@@ -92,6 +150,8 @@ def main(argv=None):
         from sedrava_packages import verify_if_project
         verify_if_project(args.source)
         from sedrava_syntax import document_kind
+        if document_kind(source) == "host":
+            raise ValueError("Host documents require 'sedrava host check/run'; not available as Web/Android")
         if document_kind(source) in ("site", "webapp"):
             document = parse_document(source, args.source)
             if isinstance(document, WebApp):

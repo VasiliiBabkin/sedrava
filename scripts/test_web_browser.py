@@ -386,7 +386,7 @@ screen main:
         for path in sorted((ROOT / 'examples').glob('*.sdr')):
             source = path.read_text()
             document=parse_document(source,path)
-            if isinstance(document,(Site,WebApp)):
+            if isinstance(document,(Site,WebApp)) or not hasattr(document, 'widgets'):
                 continue # Dedicated site/WebApp Chromium suites exercise these modes.
             if document.widgets:
                 self.open(source)
