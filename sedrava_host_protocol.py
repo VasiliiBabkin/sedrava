@@ -15,6 +15,7 @@ FAILED_CODES = frozenset((
     "FILE_NOT_FOUND", "PERMISSION_DENIED", "FILE_EXISTS",
     "INVALID_ENCODING", "INVALID_PATH", "RESOURCE_TOO_LARGE",
     "TEXT_TOO_LONG", "DIRECTORY_NOT_EMPTY", "IO_FAILURE",
+    "INVALID_JSON", "JSON_LOOKUP_FAILED", "JSON_OPERATION_FAILED",
 ))
 FAULT_CODES = frozenset(("POLICY_VIOLATION", "IO_FAULT", "ENGINE_FAULT"))
 REJECTED_CODES = frozenset(("CONFIGURATION_REJECTED",))
@@ -31,6 +32,14 @@ def _error_code(exc, phase):
         return "CONFIGURATION_REJECTED", "rejected"
     if isinstance(exc, HostPolicyViolation):
         return "POLICY_VIOLATION", "fault"
+    from sedrava_host_json import (HostInvalidJson, HostJsonLookupFailure,
+                                   HostJsonOperationFailure)
+    if isinstance(exc, HostInvalidJson):
+        return "INVALID_JSON", "failed"
+    if isinstance(exc, HostJsonLookupFailure):
+        return "JSON_LOOKUP_FAILED", "failed"
+    if isinstance(exc, HostJsonOperationFailure):
+        return "JSON_OPERATION_FAILED", "failed"
     if isinstance(exc, OSError) and exc.errno in (errno.ELOOP, errno.ENOTDIR):
         return "POLICY_VIOLATION", "fault"
     if isinstance(exc, HostInvalidPath):
