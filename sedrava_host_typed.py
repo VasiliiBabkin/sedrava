@@ -95,5 +95,12 @@ def execute_match(result, arms, values):
                 index = [name for name, _ in fields].index(field)
                 scope[binder] = result.error.values[index]
         from sedrava_core import evaluate
-        return evaluate(arm.body[0].first, scope)
+        for statement in arm.body:
+            if statement.operation == "let":
+                scope[statement.target] = evaluate(statement.first, scope)
+            elif statement.operation == "emit":
+                return evaluate(statement.first, scope)
+            else:
+                raise AssertionError("Unchecked Host match statement")
+        raise AssertionError("Host match arm has no emit")
     raise AssertionError("Exhaustiveness invariant violated")
