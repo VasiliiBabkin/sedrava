@@ -12,6 +12,18 @@ MAX_JSON_NODES = 128
 MAX_JSON_DEPTH = 8
 MAX_JSON_FIELDS = 32
 
+class HostInvalidJson(ValueError):
+    """Malformed or schema-invalid JSON supplied as data."""
+
+
+class HostJsonLookupFailure(ValueError):
+    """Missing key/index or type mismatch in an otherwise valid JSON document."""
+
+
+class HostJsonOperationFailure(ValueError):
+    """Invalid typed JSON transformation on an input document."""
+
+
 
 @dataclass(frozen=True)
 class JsonValue:
@@ -92,9 +104,12 @@ def loads(raw):
                             parse_float=lambda _: (_ for _ in ()).throw(ValueError("JSON floats are forbidden")),
                             parse_constant=invalid_constant,
                             object_pairs_hook=unique)
-    except (json.JSONDecodeError, UnicodeError) as exc:
-        raise ValueError("Invalid strict JSON input") from exc
-    return validate_json(parsed)
+    except (ValueError, UnicodeError) as exc:
+        raise HostInvalidJson("Invalid strict JSON input") from exc
+    try:
+        return validate_json(parsed)
+    except ValueError as exc:
+        raise HostInvalidJson("JSON value violates strict data constraints") from exc
 
 
 def lookup(document, key, expected):
@@ -106,17 +121,17 @@ def lookup(document, key, expected):
     elif type(value) is list and type(key) is int and 0 <= key < len(value):
         result = value[key]
     else:
-        raise ValueError("JSON key/index missing or invalid")
+        raise HostJsonLookupFailure("JSON key/index missing or invalid")
     if expected is JsonValue:
         return validate_json(result)
     if type(result) is not expected:
-        raise ValueError("JSON value has incorrect type")
+        raise HostJsonLookupFailure("JSON value has incorrect type")
     return result
 
 
 def count(document):
     if not isinstance(document, JsonValue) or type(document.value) not in (list, dict):
-        raise ValueError("JSON count requires array or object")
+        raise HostJsonOperationFailure("JSON count requires array or object")
     return len(document.value)
 
 
@@ -126,11 +141,14 @@ def new_object():
 
 def put(document, key, value):
     if not isinstance(document, JsonValue) or type(document.value) is not dict:
-        raise ValueError("JSON field assignment requires object")
+        raise HostJsonOperationFailure("JSON field assignment requires object")
     if type(key) is not str or not key or len(key) > 128 or key in document.value:
-        raise ValueError("Invalid or duplicate JSON object field")
+        raise HostJsonOperationFailure("Invalid or duplicate JSON object field")
     checked_text(key)
     value = value.value if isinstance(value, JsonValue) else value
     fields = dict(document.value)
     fields[key] = value
-    return validate_json(fields)
+    try:
+        return validate_json(fields)
+    except ValueError as exc:
+        raise HostJsonOperationFailure("JSON assignment violates resource/type constraints") from exc
