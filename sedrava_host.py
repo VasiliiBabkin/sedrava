@@ -393,6 +393,8 @@ def run_host(program, *, root, supplied=(), trusted=False, allow_read=False,
     """Run one trusted host document; all filesystem mutations are deferred."""
     from sedrava_host_fs import open_scope, list_dir, make_dir, remove_empty_dir
     from sedrava_host_protocol import HostSetupRejected
+    from sedrava_host_effects import infer_host_effects
+    infer_host_effects(program)
     if on_phase is not None:
         on_phase("setup")
 
