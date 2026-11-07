@@ -3,6 +3,9 @@ from sedrava_syntax import document_kind
 
 
 def parse_document(source, source_path=None):
+    if document_kind(source) == "host":
+        from sedrava_host import parse_host
+        return parse_host(source)
     from sedrava_modules import expand
     if document_kind(source) in ("site", "webapp"):
         source, _, origins = expand(source, source_path, with_origins=True)
