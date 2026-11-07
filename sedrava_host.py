@@ -318,7 +318,8 @@ def _parent(root_fd, parts):
 
 def _regular(st):
     if not stat.S_ISREG(st.st_mode) or st.st_nlink != 1:
-        raise ValueError("Workspace file must be a regular, single-link file")
+        from sedrava_host_typed import HostPolicyViolation
+        raise HostPolicyViolation("Workspace file must be a regular, single-link file")
 
 
 def _read(root_fd, relative, *, raw_json=False):
@@ -384,22 +385,25 @@ def _write(root_fd, relative, content, *, json_mode=False):
 
 def run_host(program, *, root, supplied=(), trusted=False, allow_read=False,
              allow_write=False, allow_list=False, allow_mkdir=False, allow_rmdir=False,
-             read_scope=".", write_scope=".", list_scope="."):
+             read_scope=".", write_scope=".", list_scope=".", on_phase=None):
     """Run one trusted host document; all filesystem mutations are deferred."""
     from sedrava_host_fs import open_scope, list_dir, make_dir, remove_empty_dir
+    from sedrava_host_protocol import HostSetupRejected
+    if on_phase is not None:
+        on_phase("setup")
 
     if not trusted:
-        raise ValueError("Host execution requires explicit --trusted")
+        raise HostSetupRejected("Host execution requires explicit --trusted")
     if program.needs_read and not allow_read:
-        raise ValueError("Host file reads require --allow-read")
+        raise HostSetupRejected("Host file reads require --allow-read")
     if program.needs_list and not allow_list:
-        raise ValueError("Host directory listing requires --allow-list")
+        raise HostSetupRejected("Host directory listing requires --allow-list")
     if program.needs_write and not allow_write:
-        raise ValueError("Host mutations require --allow-write")
+        raise HostSetupRejected("Host mutations require --allow-write")
     if program.needs_mkdir and not allow_mkdir:
-        raise ValueError("Host directory creation requires --allow-mkdir")
+        raise HostSetupRejected("Host directory creation requires --allow-mkdir")
     if program.needs_rmdir and not allow_rmdir:
-        raise ValueError("Host directory removal requires --allow-rmdir")
+        raise HostSetupRejected("Host directory removal requires --allow-rmdir")
     if os.name != "posix" or not all(hasattr(os, name) for name in
                                        ("O_NOFOLLOW", "O_DIRECTORY", "O_CLOEXEC")):
         raise ValueError("Host filesystem A2 supports POSIX platforms only")
@@ -417,6 +421,8 @@ def run_host(program, *, root, supplied=(), trusted=False, allow_read=False,
             wfd = open_scope(root_fd, write_scope)
         if program.needs_list:
             lfd = open_scope(root_fd, list_scope)
+        if on_phase is not None:
+            on_phase("execute")
         for step in program.steps:
             if step.operation == "let":
                 values[step.target] = evaluate(step.first, values)
@@ -466,6 +472,8 @@ def run_host(program, *, root, supplied=(), trusted=False, allow_read=False,
             else:
                 result = evaluate(step.first, values)
         if pending is not None:
+            if on_phase is not None:
+                on_phase("commit")
             operation, path, payload = pending
             if operation == "write":
                 _write(wfd, path, payload)
