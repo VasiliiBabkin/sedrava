@@ -62,7 +62,7 @@ jobs:
         run: |
           set -eu
           mkdir -p build/alpha-candidate
-          sha256sum dist/* > build/alpha-candidate/SHA256SUMS
+          (cd dist && sha256sum * > ../build/alpha-candidate/SHA256SUMS)
           cp dist/* build/alpha-candidate/
           python - <<'PY'
           import hashlib,json,os
