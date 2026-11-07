@@ -50,7 +50,7 @@ class HostProgram:
 
     @property
     def needs_read(self):
-        return any(step.operation in ("read", "read_json") for step in self.steps)
+        return any(step.operation in ("read", "read_json", "try_read") for step in self.steps)
 
     @property
     def needs_list(self):
@@ -85,7 +85,9 @@ def parse_host(source):
     arguments, steps, types = [], [], {}
     reads = writes = 0
     emitted = False
-    for indent, line, number in lines[1:]:
+    cursor = 1
+    while cursor < len(lines):
+        indent, line, number = lines[cursor]
         if indent != 0:
             raise ValueError(f"Line {number}: host statements must not be indented")
         if emitted:
@@ -177,6 +179,54 @@ def parse_host(source):
                 raise ValueError(f"Line {number}: emit_json requires JSON document")
             steps.append(HostStep("emit_json", None, m[1]))
             emitted = True
+        elif m := re.fullmatch(r"try_read ([A-Za-z][A-Za-z0-9_]*) from (.+)", line):
+            from sedrava_host_typed import HOST_READ_RESULT
+            reads += 1
+            if reads > MAX_READS or not _valid_binding(m[1], types):
+                raise ValueError(f"Line {number}: duplicate binding or read limit exceeded")
+            node = expression(m[2], str)
+            types[m[1]] = HOST_READ_RESULT
+            steps.append(HostStep("try_read", m[1], node))
+        elif m := re.fullmatch(r"match ([A-Za-z][A-Za-z0-9_]*):", line):
+            from sedrava_host_typed import HOST_READ_RESULT
+            from sedrava_errors import MatchArm, pattern, check_arm, exhaustive
+            if types.get(m[1]) != HOST_READ_RESULT:
+                raise ValueError(f"Line {number}: match requires a HostReadError Result")
+            arms, seen = [], set()
+            scan = cursor + 1
+            while scan < len(lines) and lines[scan][0] > 0:
+                indent_arm, arm_source, arm_line = lines[scan]
+                if indent_arm != 4:
+                    raise ValueError(f"Line {arm_line}: match arm must have four-space indentation")
+                try:
+                    tag, pattern_entries = pattern(arm_source)
+                    arm_types, bindings = check_arm(HOST_READ_RESULT, tag, pattern_entries, types, seen)
+                except ValueError as exc:
+                    raise ValueError(f"Line {arm_line}: {exc}") from exc
+                seen.add(tag)
+                scan += 1
+                if scan >= len(lines) or lines[scan][0] != 8:
+                    raise ValueError(f"Line {arm_line}: match arm requires an eight-space-indented emit")
+                _, body_source, body_line = lines[scan]
+                match_emit = re.fullmatch(r"emit (.+)", body_source)
+                if not match_emit:
+                    raise ValueError(f"Line {body_line}: Host A3 match arms currently support one emit")
+                try:
+                    node = parse_expr(match_emit[1], arm_types)
+                    if type_of(node, arm_types) not in (str, int, bool):
+                        raise ValueError("emit requires a scalar")
+                except ValueError as exc:
+                    raise ValueError(f"Line {body_line}: {exc}") from exc
+                arms.append(MatchArm(tag, bindings, (HostStep("emit", None, node),)))
+                scan += 1
+                if scan < len(lines) and lines[scan][0] > 4:
+                    raise ValueError(f"Line {lines[scan][2]}: each match arm permits one emit")
+            if not arms:
+                raise ValueError(f"Line {number}: match requires arms")
+            exhaustive(HOST_READ_RESULT, seen)
+            steps.append(HostStep("match", None, m[1], tuple(arms)))
+            cursor = scan - 1
+            emitted = True
         elif m := re.fullmatch(r"read ([A-Za-z][A-Za-z0-9_]*) from (.+)", line):
             reads += 1
             if reads > MAX_READS or not _valid_binding(m[1], types):
@@ -203,6 +253,7 @@ def parse_host(source):
             emitted = True
         else:
             raise ValueError(f"Line {number}: unsupported host statement")
+        cursor += 1
     if not emitted:
         raise ValueError("Host program requires a final emit statement")
     return HostProgram(name, tuple(arguments), tuple(steps))
@@ -241,10 +292,12 @@ def _parse_args(spec, supplied):
 def _segments(value):
     checked_text(value)
     if not value or len(value) > 240 or "\\" in value or any(ord(char) < 32 or ord(char) == 127 for char in value):
-        raise ValueError("Invalid workspace-relative path")
+        from sedrava_host_typed import HostInvalidPath
+        raise HostInvalidPath("Invalid workspace-relative path")
     parts = value.split("/")
     if any(part in ("", ".", "..") for part in parts):
-        raise ValueError("Absolute, empty and traversal paths are forbidden")
+        from sedrava_host_typed import HostInvalidPath
+        raise HostInvalidPath("Absolute, empty and traversal paths are forbidden")
     if value.startswith("/") or any(len(part.encode("utf-8")) > 120 for part in parts):
         raise ValueError("Invalid workspace-relative path")
     return parts
@@ -281,7 +334,8 @@ def _read(root_fd, relative, *, raw_json=False):
                 break
             data.extend(chunk)
         if len(data) > MAX_FILE_BYTES:
-            raise ValueError("Host read exceeds 4096-byte limit")
+            from sedrava_host_typed import HostResourceTooLarge
+            raise HostResourceTooLarge("Host read exceeds 4096-byte limit")
         decoded = data.decode("utf-8", errors="strict")
         return decoded if raw_json else checked_text(decoded)
     finally:
@@ -368,6 +422,9 @@ def run_host(program, *, root, supplied=(), trusted=False, allow_read=False,
                 values[step.target] = evaluate(step.first, values)
             elif step.operation == "read":
                 values[step.target] = _read(rfd, evaluate(step.first, values))
+            elif step.operation == "try_read":
+                from sedrava_host_typed import read_result
+                values[step.target] = read_result(rfd, evaluate(step.first, values))
             elif step.operation == "read_json":
                 values[step.target] = json_loads(
                     _read(rfd, evaluate(step.first, values), raw_json=True))
@@ -399,6 +456,9 @@ def run_host(program, *, root, supplied=(), trusted=False, allow_read=False,
                     pending = ("write_json", path, json_dumps(values[step.second]))
                 else:
                     pending = (step.operation, path, None)
+            elif step.operation == "match":
+                from sedrava_host_typed import execute_match
+                result = execute_match(values[step.first], step.second, values)
             elif step.operation == "emit_json":
                 document = values[step.first]
                 json_dumps(document)
