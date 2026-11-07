@@ -29,7 +29,7 @@ class HostResourceTooLarge(ValueError):
     """Expected file-size limit; distinct from execution/work budget."""
 
 
-class HostPolicyViolation(RuntimeError):
+class HostPolicyViolation(ValueError):
     """A forbidden filesystem object or symlink traversal. Not a Result."""
 
 
