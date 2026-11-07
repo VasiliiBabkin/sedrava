@@ -130,6 +130,29 @@ match fetched:
             self.assertFalse(result["error"]["retryable"])
             self.assertNotIn(str(ws), json.dumps(result))
 
+    def test_invalid_json_and_lookup_are_expected_task_failures(self):
+        cases = (
+            ('{"title":]', "json_get_text title from config at \"title\"", "INVALID_JSON"),
+            ('{"other": true}', "json_get_text title from config at \"title\"", "JSON_LOOKUP_FAILED"),
+            ('"scalar"', "json_count number from config", "JSON_OPERATION_FAILED"),
+        )
+        for payload, operation, expected_code in cases:
+            with self.subTest(code=expected_code), tempfile.TemporaryDirectory() as root:
+                ws = self.setup_workspace(root)
+                (ws / "read" / "config.json").write_text(payload, encoding="utf-8")
+                source = ('host "Expected JSON"\\n'
+                          'read_json config from "config.json"\\n'
+                          + operation + '\\n'
+                          + ('emit title\\n' if "json_get_text" in operation else 'emit number\\n'))
+                program = parse_host(source)
+                outcome = execute_protocol(program, root=ws, trusted=True, allow_read=True,
+                                           read_scope="read")
+                self.assertEqual(outcome["status"], "failed")
+                self.assertEqual(outcome["phase"], "execute")
+                self.assertEqual(outcome["commit_state"], "not_started")
+                self.assertEqual(outcome["error"]["code"], expected_code)
+                self.assertNotIn(str(ws), json.dumps(outcome))
+
     def test_configuration_rejected_before_execute(self):
         with tempfile.TemporaryDirectory() as root:
             ws = self.setup_workspace(root)
