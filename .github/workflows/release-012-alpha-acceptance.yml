@@ -37,6 +37,12 @@ jobs:
           ):
               assert Path(path).is_file(), path
           PY
+      - name: Check master and derived logo byte identities
+        run: |
+          set -eu
+          cd assets/brand
+          echo 'da9c46be34b8a14d5fb262d3ae1bb18c4ff4b50badd8541837d2d8128d1e1fbb  sedrava-logo-primary.png' | sha256sum --check -
+          sha256sum --check SHA256SUMS
       - name: Core, Host and compatibility tests
         run: |
           python -m unittest discover -s tests -v
