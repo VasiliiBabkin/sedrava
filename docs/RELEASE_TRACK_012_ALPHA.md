@@ -17,6 +17,12 @@
 
 The read-only candidate workflow never publishes. The historical PyPI publisher remains pinned to v0.10.0. A new reviewed, least-privilege publishing route is required for future versions.
 
+## Latest stacked implementation status
+
+Core namespaces/provenance/packages #52 is the base of Effects & Targets #55, typed Result/Error/match #56 and Host A3 integration #57. Exact-head GitHub CI for #57 completed 16/16 workflows successfully on `46de3aa45c6c88c2ccdeddf2ac2e8a66ea99e2d9b`. Those checks **do not automatically approve an alpha publication**. The next independent read-only candidate audit is tracked in [release issue #59](https://github.com/VasiliiBabkin/sedrava/issues/59).
+
+The `host` target executes **trusted local scripts only**; scoped file descriptors and capability flags are not a malicious-code sandbox. Actual security review and explicit owner approval remain required before a public alpha, and an additional stable-main branding update (#58) must be reconciled into any alpha build that claims current official branding.
+
 ## Deliberate omissions
 
 No semver resolver/online package manager, full native typed-IR symbols, importable mutable state, trusted server/SQLite, authentication, migrations or real multiuser isolation. These are not blockers for an explicitly limited **alpha**, but are not promised as present.
