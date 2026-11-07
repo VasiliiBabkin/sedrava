@@ -1,0 +1,56 @@
+name: Host A3 typed Core integration
+on:
+  push:
+    branches: [integration/013-host-a3-typed-errors]
+  pull_request:
+    branches: [feature/012-typed-errors-match-a1]
+permissions:
+  contents: read
+jobs:
+  typed-host:
+    name: Host A3 Python ${{ matrix.python }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.10','3.12','3.13']
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+      - name: Install source
+        run: python -m pip install '.[test,packages]'
+      - name: Host A1/A2 and A3 checked typed-result and protocol tests
+        run: |
+          python -m unittest discover -s tests -p test_trusted_host_013.py -v
+          python -m unittest discover -s tests -p test_trusted_host_a2.py -v
+          python -m unittest discover -s tests -p test_host_a3_typed_protocol.py -v
+      - name: Complete Python compiler regression
+        run: python -m unittest discover -s tests -v
+      - name: Actual CLI typed Host example
+        run: |
+          set -eu
+          mkdir -p build/host-a3/read
+          printf 'A3 UTF-8' > build/host-a3/read/config.txt
+          python sedrava_cli.py host check examples/host_typed_read_013.sdr
+          python sedrava_cli.py host run examples/host_typed_read_013.sdr --root build/host-a3 --trusted --allow-read --read-scope read --arg filename=config.txt --result-protocol v1 > build/host-a3/result.json
+          python -c 'import json; r=json.load(open("build/host-a3/result.json")); assert r["status"]=="success" and r["result"]["result"]=="A3 UTF-8"'
+          python sedrava_cli.py host run examples/host_typed_read_013.sdr --root build/host-a3 --trusted --allow-read --read-scope read --arg filename=missing.txt --result-protocol v1 > build/host-a3/missing.json
+          python -c 'import json; r=json.load(open("build/host-a3/missing.json")); assert r["status"]=="success" and r["result"]["result"]=="Source file is absent"'
+          if python sedrava_cli.py build web examples/host_typed_read_013.sdr --output build/host-a3/forbidden.html; then exit 1; fi
+          test ! -e build/host-a3/forbidden.html
+      - name: Installed distribution module and metadata audit
+        run: |
+          python -m pip install build==1.3.0 twine==6.2.0
+          python -m build
+          python -m twine check dist/*
+          python scripts/audit_dist.py
+          python -m venv build/host-a3/venv
+          build/host-a3/venv/bin/python -m pip install --no-deps dist/*.whl
+          build/host-a3/venv/bin/sedrava host check examples/host_typed_read_013.sdr
