@@ -80,6 +80,8 @@ def main(argv=None):
     host_run.add_argument("--write-scope", default=".")
     host_run.add_argument("--list-scope", default=".")
     host_run.add_argument("--arg", dest="host_args", action="append", default=[], metavar="NAME=VALUE")
+    host_run.add_argument("--result-protocol", choices=("legacy", "v1"), default="legacy",
+                          help="Emit versioned four-outcome JSON instead of legacy result")
     package_lock = commands.add_parser("lock", help="Lock reviewed local vendored dependencies offline")
     package_lock.add_argument("project", type=Path, nargs="?", default=Path("."))
     package_verify = commands.add_parser("verify", help="Verify vendored packages against sedrava.lock")
@@ -109,15 +111,26 @@ def main(argv=None):
                 print(f"OK: {args.source} (host; no I/O performed)")
             else:
                 phase = "execute"
-                outcome = run_host(host_program, root=args.root, supplied=args.host_args,
-                                   trusted=args.trusted, allow_read=args.allow_read,
-                                   allow_write=args.allow_write, allow_list=args.allow_list,
-                                   allow_mkdir=args.allow_mkdir, allow_rmdir=args.allow_rmdir,
-                                   read_scope=args.read_scope, write_scope=args.write_scope,
-                                   list_scope=args.list_scope)
+                options = dict(root=args.root, supplied=args.host_args,
+                               trusted=args.trusted, allow_read=args.allow_read,
+                               allow_write=args.allow_write, allow_list=args.allow_list,
+                               allow_mkdir=args.allow_mkdir, allow_rmdir=args.allow_rmdir,
+                               read_scope=args.read_scope, write_scope=args.write_scope,
+                               list_scope=args.list_scope)
+                if args.result_protocol == "v1":
+                    from sedrava_host_protocol import execute_protocol
+                    outcome = execute_protocol(host_program, **options)
+                else:
+                    outcome = run_host(host_program, **options)
                 print(json.dumps(outcome, ensure_ascii=False, sort_keys=True))
+                if args.result_protocol == "v1" and outcome["status"] != "success":
+                    return 1
             return 0
         except (ValueError, OSError, UnicodeError, RecursionError) as exc:
+            if args.host_command == "run" and args.result_protocol == "v1":
+                from sedrava_host_protocol import reject
+                print(json.dumps(reject(), ensure_ascii=False, sort_keys=True))
+                return 1
             return report_error(exc, args.source, "host", phase, args.diagnostics)
     if args.command == "build" and args.service is not None and args.target != "web":
         parser.error("--service is only supported for build web")
