@@ -1,0 +1,12 @@
+# Host A3: expected missing/invalid-file errors are ordinary typed Results.
+# This source is trusted host-only; it is not a browser or Android program.
+host "Read configuration safely"
+arg filename: text
+try_read file from filename
+match file:
+    Ok(content):
+        emit content
+    Err(FileNotFound { path }):
+        emit "Source file is absent"
+    Err(error):
+        emit error_id(error)
