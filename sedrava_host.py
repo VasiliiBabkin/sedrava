@@ -342,7 +342,13 @@ def _read(root_fd, relative, *, raw_json=False):
             from sedrava_host_typed import HostResourceTooLarge
             raise HostResourceTooLarge("Host read exceeds 4096-byte limit")
         decoded = data.decode("utf-8", errors="strict")
-        return decoded if raw_json else checked_text(decoded)
+        if raw_json:
+            return decoded
+        try:
+            return checked_text(decoded)
+        except ValueError as exc:
+            from sedrava_host_typed import HostTextTooLong
+            raise HostTextTooLong("Host text exceeds 1024 Unicode scalars") from exc
     finally:
         if descriptor is not None:
             os.close(descriptor)
