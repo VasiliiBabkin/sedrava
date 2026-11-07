@@ -8,8 +8,8 @@ untrusted sandbox guarantees.
 \`Result<text, HostReadError>\` and consumes only registered expected
 errors. \`HostReadError\` is open, identity \`sedrava.host.read.v1\`,
 with typed variants FileNotFound(path), PermissionDenied(path),
-InvalidEncoding(path), InvalidPath(reason), ResourceTooLarge(limit_bytes)
-and IOFailure(operation). A final checked \`match\` supports one scalar
+InvalidEncoding(path), InvalidPath(reason), ResourceTooLarge(limit_bytes),
+TextTooLong(limit_scalars) and IOFailure(operation). A final checked \`match\` supports one scalar
 \`emit\` per arm, requires Ok plus the final Err(error) fallback.
 It reuses Core #56 ErrorType/ResultType/ResultValue and exhaustive
 checker, not a separate handwritten Result evaluator.
