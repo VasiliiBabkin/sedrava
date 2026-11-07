@@ -11,9 +11,12 @@ jobs:
     name: Read-only 0.12.0a1 acceptance
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    env:
+      CHECKED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
@@ -82,7 +85,7 @@ jobs:
             "schema":1,
             "version":VERSION,
             "android_version_code":ANDROID_VERSION_CODE,
-            "source_sha":os.environ["GITHUB_SHA"],
+            "source_sha":os.environ["CHECKED_SHA"],
             "files":[{"name":p.name,"sha256":hashlib.sha256(p.read_bytes()).hexdigest(),"bytes":p.stat().st_size} for p in paths],
             "notice":"CI artifact only; not a GitHub release, PyPI upload or approved production build"
           }
@@ -93,7 +96,7 @@ jobs:
           sha256sum --check SHA256SUMS
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: sedrava-012a1-unpublished-${{ github.sha }}
+          name: sedrava-012a1-unpublished-${{ github.event.pull_request.head.sha || github.sha }}
           path: build/alpha-candidate/
           if-no-files-found: error
           retention-days: 30
