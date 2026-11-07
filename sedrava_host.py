@@ -205,22 +205,39 @@ def parse_host(source):
                     raise ValueError(f"Line {arm_line}: {exc}") from exc
                 seen.add(tag)
                 scan += 1
-                if scan >= len(lines) or lines[scan][0] != 8:
-                    raise ValueError(f"Line {arm_line}: match arm requires an eight-space-indented emit")
-                _, body_source, body_line = lines[scan]
-                match_emit = re.fullmatch(r"emit (.+)", body_source)
-                if not match_emit:
-                    raise ValueError(f"Line {body_line}: Host A3 match arms currently support one emit")
-                try:
-                    node = parse_expr(match_emit[1], arm_types)
-                    if type_of(node, arm_types) not in (str, int, bool):
-                        raise ValueError("emit requires a scalar")
-                except ValueError as exc:
-                    raise ValueError(f"Line {body_line}: {exc}") from exc
-                arms.append(MatchArm(tag, bindings, (HostStep("emit", None, node),)))
-                scan += 1
-                if scan < len(lines) and lines[scan][0] > 4:
-                    raise ValueError(f"Line {lines[scan][2]}: each match arm permits one emit")
+                body_steps = []
+                while scan < len(lines) and lines[scan][0] > 4:
+                    body_indent, body_source, body_line = lines[scan]
+                    if body_indent != 8 or len(body_steps) >= 9:
+                        raise ValueError(f"Line {body_line}: Host match body indentation/step limit")
+                    if body_steps and body_steps[-1].operation == "emit":
+                        raise ValueError(f"Line {body_line}: emit must terminate the match arm")
+                    if binding := re.fullmatch(r"let ([A-Za-z][A-Za-z0-9_]*) = (.+)", body_source):
+                        if len(body_steps) >= 8 or not _valid_binding(binding[1], arm_types):
+                            raise ValueError(f"Line {body_line}: invalid, reserved or duplicate arm binding")
+                        try:
+                            node = parse_expr(binding[2], arm_types)
+                            kind = type_of(node, arm_types)
+                            if kind not in (str, int, bool):
+                                raise ValueError("Arm let requires int, bool or text")
+                        except ValueError as exc:
+                            raise ValueError(f"Line {body_line}: {exc}") from exc
+                        arm_types[binding[1]] = kind
+                        body_steps.append(HostStep("let", binding[1], node))
+                    elif match_emit := re.fullmatch(r"emit (.+)", body_source):
+                        try:
+                            node = parse_expr(match_emit[1], arm_types)
+                            if type_of(node, arm_types) not in (str, int, bool):
+                                raise ValueError("emit requires a scalar")
+                        except ValueError as exc:
+                            raise ValueError(f"Line {body_line}: {exc}") from exc
+                        body_steps.append(HostStep("emit", None, node))
+                    else:
+                        raise ValueError(f"Line {body_line}: Host match arms allow only pure let and final emit")
+                    scan += 1
+                if not body_steps or body_steps[-1].operation != "emit":
+                    raise ValueError(f"Line {arm_line}: match arm requires a final emit")
+                arms.append(MatchArm(tag, bindings, tuple(body_steps)))
             if not arms:
                 raise ValueError(f"Line {number}: match requires arms")
             exhaustive(HOST_READ_RESULT, seen)
