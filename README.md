@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/brand/sedrava-logo-primary.png" width="220" alt="Sedrava logo" />
+</p>
+
 # Sedrava — stable 0.11.0 published on GitHub and PyPI
 
 **Describe the application; get the application. / Описал — получил.**
