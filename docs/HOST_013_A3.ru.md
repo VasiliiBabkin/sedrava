@@ -15,6 +15,7 @@
 \`InvalidEncoding { path: text }\`,
 \`InvalidPath { reason: text }\`,
 \`ResourceTooLarge { limit_bytes: int }\`,
+\`TextTooLong { limit_scalars: int }\`,
 \`IOFailure { operation: text }\`.
 
 После \`try_read\` допустим только терминальный, статически проверенный
