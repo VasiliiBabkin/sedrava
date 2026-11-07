@@ -53,6 +53,46 @@ class HostTypedRead(unittest.TestCase):
             invalid = run_host(program, supplied=("filename=../secret.txt",), **kwargs)
             self.assertEqual(invalid["result"], "sedrava.host.read.v1.InvalidPath")
 
+    def test_bounded_pure_match_lets_and_arm_scope(self):
+        source = '''host "Computed match"
+arg filename: text
+try_read fetched from filename
+match fetched:
+    Ok(content):
+        let initial = content
+        let renamed = initial
+        emit renamed
+    Err(FileNotFound { path }):
+        let missing = path
+        emit missing
+    Err(error):
+        let stable = error_id(error)
+        emit stable
+'''
+        with tempfile.TemporaryDirectory() as root:
+            ws = self.setup_workspace(root)
+            (ws / "read" / "sample.txt").write_text("UTF-8 text", encoding="utf-8")
+            program = parse_host(source)
+            kwargs = dict(root=ws, trusted=True, allow_read=True, read_scope="read")
+            self.assertEqual(run_host(program, supplied=("filename=sample.txt",), **kwargs)["result"], "UTF-8 text")
+            self.assertEqual(run_host(program, supplied=("filename=absent.txt",), **kwargs)["result"], "absent.txt")
+            self.assertEqual(run_host(program, supplied=("filename=../outside",), **kwargs)["result"],
+                             "sedrava.host.read.v1.InvalidPath")
+            from sedrava_host_effects import infer_host_effects
+            self.assertEqual(infer_host_effects(program), frozenset({"host.fs.read"}))
+        bad = (
+            source.replace("let renamed = initial", "let renamed = missing"),
+            source.replace("let renamed = initial", "let renamed = missing\n        emit missing"),
+            source.replace("let renamed = initial", "let renamed = initial\n        let renamed = initial"),
+            source.replace("let renamed = initial", "write \"out.txt\" = initial"),
+            source.replace("emit renamed", "let pending = renamed"),
+            source.replace("let renamed = initial", "".join(
+                f"let var{i} = initial\n        " for i in range(9)) + "let renamed = initial"),
+        )
+        for snippet in bad:
+            with self.subTest(snippet=snippet[:100]), self.assertRaises(ValueError):
+                parse_host(snippet)
+
     def test_read_expected_limit_and_utf8_failures(self):
         with tempfile.TemporaryDirectory() as root:
             ws = self.setup_workspace(root)
