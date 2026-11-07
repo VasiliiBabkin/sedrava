@@ -38,6 +38,6 @@ def source_lines(source, limit=MAX_SOURCE_CHARS):
 
 def document_kind(source):
     lines = source_lines(source)
-    if lines and lines[0][1].split()[0] in ('site', 'webapp'):
+    if lines and lines[0][1].split()[0] in ('site', 'webapp', 'host'):
         return lines[0][1].split()[0]
     return 'app'
