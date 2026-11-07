@@ -41,8 +41,12 @@ def infer_host_effects(program):
             if not isinstance(step.second, tuple) or not step.second:
                 raise ValueError("Malformed Host match")
             for arm in step.second:
-                if len(arm.body) != 1 or arm.body[0].operation != "emit":
-                    raise ValueError("Host match effects require verified scalar-only branch")
+                if (not 1 <= len(arm.body) <= 9 or
+                        any(not isinstance(item, HostStep) or item.operation != "let"
+                            for item in arm.body[:-1]) or
+                        not isinstance(arm.body[-1], HostStep) or
+                        arm.body[-1].operation != "emit"):
+                    raise ValueError("Host match effects require bounded pure let and final emit")
         effects.update(_EFFECTS[step.operation])
     return require_target("host", effects)
 
