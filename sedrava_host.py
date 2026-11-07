@@ -355,12 +355,21 @@ def _read(root_fd, relative, *, raw_json=False):
         os.close(parent)
 
 
-def _write(root_fd, relative, content, *, json_mode=False):
+def _write_payload(content, *, json_mode=False):
+    from sedrava_host_typed import HostResourceTooLarge, HostTextTooLong
     if not json_mode:
-        checked_text(content)
+        try:
+            checked_text(content)
+        except ValueError as exc:
+            raise HostTextTooLong("Host text exceeds 1024 Unicode scalars") from exc
     data = content.encode("utf-8")
     if len(data) > MAX_FILE_BYTES:
-        raise ValueError("Host write exceeds 4096-byte limit")
+        raise HostResourceTooLarge("Host write exceeds 4096-byte limit")
+    return data
+
+
+def _write(root_fd, relative, content, *, json_mode=False):
+    data = _write_payload(content, json_mode=json_mode)
     parent, name = _parent(root_fd, _segments(relative))
     temp = None
     descriptor = None
@@ -466,9 +475,7 @@ def run_host(program, *, root, supplied=(), trusted=False, allow_read=False,
                 _segments(path)
                 if step.operation == "write":
                     content = evaluate(step.second, values)
-                    checked_text(content)
-                    if len(content.encode("utf-8")) > MAX_FILE_BYTES:
-                        raise ValueError("Host write exceeds 4096-byte limit")
+                    _write_payload(content)
                     pending = ("write", path, content)
                 elif step.operation == "write_json":
                     pending = ("write_json", path, json_dumps(values[step.second]))
