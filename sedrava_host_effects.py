@@ -21,6 +21,7 @@ _EFFECTS = {
     "rmdir": frozenset(("host.fs.write", "host.fs.rmdir")),
     "let": frozenset(),
     "json_get": frozenset(),
+    "try_json_get_text": frozenset(),
     "json_count": frozenset(),
     "json_object": frozenset(),
     "json_set": frozenset(),

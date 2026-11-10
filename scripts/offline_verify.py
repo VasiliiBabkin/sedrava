@@ -18,6 +18,7 @@ QUICK_TESTS = (
     'test_effects_targets_012.py',
     'test_typed_errors_match_012.py',
     'test_host_a3_typed_protocol.py',
+    'test_host_a4_json_result.py',
 )
 
 

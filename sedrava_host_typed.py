@@ -77,7 +77,11 @@ def read_result(root_fd, path):
 
 def execute_match(result, arms, values):
     """Execute statically checked arm; only primitive body actions are allowed."""
-    validate_result(result, HOST_READ_RESULT)
+    from sedrava_host_json_typed import HOST_JSON_LOOKUP_RESULT
+    if type(result) is not ResultValue or result.kind not in (
+            HOST_READ_RESULT, HOST_JSON_LOOKUP_RESULT):
+        raise ValueError("Unsupported typed Host match Result")
+    validate_result(result, result.kind)
     selected = "Ok" if result.error is None else result.error.variant
     for arm in arms:
         if arm.tag != selected and arm.tag != "Err":
@@ -91,7 +95,7 @@ def execute_match(result, arms, values):
             elif arm.tag == "Err":
                 scope[binder] = result.error
             else:
-                fields = dict(HOST_READ_ERROR.variants)[arm.tag]
+                fields = dict(result.kind.error.variants)[arm.tag]
                 index = [name for name, _ in fields].index(field)
                 scope[binder] = result.error.values[index]
         from sedrava_core import evaluate

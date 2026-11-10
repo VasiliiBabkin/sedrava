@@ -1,0 +1,14 @@
+# Experimental Host A4: handle expected JSON text lookup failures.
+# The JSON comes from a strict CLI argument, so no --allow-read is needed.
+host "Safe JSON title"
+arg config: json
+try_json_get_text title from config at "title"
+match title:
+    Ok(text):
+        emit text
+    Err(MissingKey {}):
+        emit "title is missing"
+    Err(InvalidIndex {}):
+        emit "invalid array index"
+    Err(UnexpectedType {}):
+        emit "title is not text"

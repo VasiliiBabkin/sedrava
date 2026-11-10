@@ -129,6 +129,15 @@ def parse_host(source):
                 _segments(node.value)
             types[m[2]] = JsonValue
             steps.append(HostStep(m[1], m[2], node))
+        elif m := re.fullmatch(r"try_json_get_text ([A-Za-z][A-Za-z0-9_]*) from ([A-Za-z][A-Za-z0-9_]*) at (.+)", line):
+            from sedrava_host_json_typed import HOST_JSON_LOOKUP_RESULT
+            if types.get(m[2]) is not JsonValue or not _valid_binding(m[1], types):
+                raise ValueError(f"Line {number}: typed JSON source or binding type mismatch")
+            key = expression(m[3])
+            if type_of(key, types) not in (str, int):
+                raise ValueError(f"Line {number}: JSON lookup key must be text or int")
+            types[m[1]] = HOST_JSON_LOOKUP_RESULT
+            steps.append(HostStep("try_json_get_text", m[1], m[2], key))
         elif m := re.fullmatch(r"json_get_(text|int|bool|json) ([A-Za-z][A-Za-z0-9_]*) from ([A-Za-z][A-Za-z0-9_]*) at (.+)", line):
             kind = {"text": str, "int": int, "bool": bool, "json": JsonValue}[m[1]]
             if types.get(m[3]) is not JsonValue or not _valid_binding(m[2], types):
@@ -189,9 +198,11 @@ def parse_host(source):
             steps.append(HostStep("try_read", m[1], node))
         elif m := re.fullmatch(r"match ([A-Za-z][A-Za-z0-9_]*):", line):
             from sedrava_host_typed import HOST_READ_RESULT
+            from sedrava_host_json_typed import HOST_JSON_LOOKUP_RESULT
             from sedrava_errors import MatchArm, pattern, check_arm, exhaustive
-            if types.get(m[1]) != HOST_READ_RESULT:
-                raise ValueError(f"Line {number}: match requires a HostReadError Result")
+            result_type = types.get(m[1])
+            if result_type not in (HOST_READ_RESULT, HOST_JSON_LOOKUP_RESULT):
+                raise ValueError(f"Line {number}: match requires a supported typed Host Result")
             arms, seen = [], set()
             scan = cursor + 1
             while scan < len(lines) and lines[scan][0] > 0:
@@ -200,7 +211,7 @@ def parse_host(source):
                     raise ValueError(f"Line {arm_line}: match arm must have four-space indentation")
                 try:
                     tag, pattern_entries = pattern(arm_source)
-                    arm_types, bindings = check_arm(HOST_READ_RESULT, tag, pattern_entries, types, seen)
+                    arm_types, bindings = check_arm(result_type, tag, pattern_entries, types, seen)
                 except ValueError as exc:
                     raise ValueError(f"Line {arm_line}: {exc}") from exc
                 seen.add(tag)
@@ -240,7 +251,7 @@ def parse_host(source):
                 arms.append(MatchArm(tag, bindings, tuple(body_steps)))
             if not arms:
                 raise ValueError(f"Line {number}: match requires arms")
-            exhaustive(HOST_READ_RESULT, seen)
+            exhaustive(result_type, seen)
             steps.append(HostStep("match", None, m[1], tuple(arms)))
             cursor = scan - 1
             emitted = True
@@ -475,6 +486,10 @@ def run_host(program, *, root, supplied=(), trusted=False, allow_read=False,
             elif step.operation == "list_dir":
                 relative = evaluate(step.first, values)
                 values[step.target] = list_dir(lfd, relative)
+            elif step.operation == "try_json_get_text":
+                from sedrava_host_json_typed import lookup_text_result
+                values[step.target] = lookup_text_result(
+                    values[step.first], evaluate(step.second, values))
             elif step.operation == "json_get":
                 key, kind = step.second
                 values[step.target] = json_lookup(values[step.first],
