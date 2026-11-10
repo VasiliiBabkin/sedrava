@@ -1,6 +1,7 @@
 name: Sedrava CI
 on:
   push:
+    branches-ignore: [dev/offline-012]
   pull_request:
 permissions:
   contents: read

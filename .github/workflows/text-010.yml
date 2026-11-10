@@ -1,6 +1,7 @@
 name: Sedrava 0.10 text Android conformance
 on:
   push:
+    branches-ignore: [dev/offline-012]
   pull_request:
   workflow_dispatch:
 permissions:

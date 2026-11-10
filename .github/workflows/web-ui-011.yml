@@ -1,6 +1,7 @@
 name: Web UI 0.11 site
 on:
   push:
+    branches-ignore: [dev/offline-012]
   pull_request:
   workflow_dispatch:
 permissions:

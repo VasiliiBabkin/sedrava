@@ -1,6 +1,7 @@
 name: Sedrava alpha checks
 on:
   push:
+    branches-ignore: [dev/offline-012]
   pull_request:
   workflow_dispatch:
 permissions:
