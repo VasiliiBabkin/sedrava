@@ -14,6 +14,7 @@ import time
 ROOT = Path(__file__).resolve().parent.parent
 QUICK_TESTS = (
     'test_bounded_core_012.py',
+    'test_core_conformance_timeout.py',
     'test_core_namespace_integration.py',
     'test_effects_targets_012.py',
     'test_typed_errors_match_012.py',

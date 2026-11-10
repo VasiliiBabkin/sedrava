@@ -1,5 +1,5 @@
 """Run real generated domain adapters; compare acceptance AND every state field."""
-import base64,json,shutil,subprocess,tempfile
+import base64,json,os,shutil,subprocess,tempfile
 from pathlib import Path
 from sedrava_core import parse,transition
 from sedrava_syntax import physical_lines
@@ -20,6 +20,21 @@ def javascript(source,sequence,program=None):
     with tempfile.TemporaryDirectory() as tmp:
         path=Path(tmp)/'trace.js';path.write_text(code)
         return json.loads(subprocess.check_output(['node',str(path)],text=True,timeout=30))
+
+def kotlin_compile_timeout():
+    """Bounded test-only override for slow, resource-limited CI hosts.
+
+    Failure to finish compilation within this interval is still a test failure.
+    Default behaviour remains 90 seconds for existing workflows.
+    """
+    raw = os.environ.get('SEDRAVA_KOTLIN_COMPILE_TIMEOUT_SEC', '90')
+    if not raw.isascii() or not raw.isdecimal() or len(raw) > 3:
+        raise ValueError('Kotlin compilation timeout must be decimal seconds (90..300)')
+    timeout = int(raw)
+    if not 90 <= timeout <= 300:
+        raise ValueError('Kotlin compilation timeout must be in 90..300 seconds')
+    return timeout
+
 
 def kotlin(source,sequence,program=None):
     from android_codegen_v03 import generate,quoted
@@ -43,7 +58,7 @@ def kotlin(source,sequence,program=None):
         code+='\nfun main(){var s=SedravaState();\n'
         for action in sequence:code+='run {val before=s;s=transitionState(s,'+quoted(action)+');println("{\\\"accepted\\\":"+(s!==before)+",\\\"snapshot\\\":"+snapshotState(s,true)+"}")}\n'
         code+='}\n';file=root/'Run.kt';file.write_text(code);jar=root/'run.jar'
-        result=subprocess.run([compiler,str(file),'-include-runtime','-d',str(jar)],capture_output=True,text=True,timeout=90)
+        result=subprocess.run([compiler,str(file),'-include-runtime','-d',str(jar)],capture_output=True,text=True,timeout=kotlin_compile_timeout())
         if result.returncode:raise AssertionError(result.stderr)
         result=subprocess.check_output(['java','-jar',str(jar)],text=True,timeout=30)
         rows=[{'accepted':(row:=json.loads(line))['accepted'],'state':row['snapshot']['state']} for line in physical_lines(result)]
