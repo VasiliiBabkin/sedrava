@@ -56,6 +56,8 @@ class JsonResultPureChecks(unittest.TestCase):
             ('{"no-title":"ready"}', "title", "MissingKey", None),
             ('["first"]', 3, "InvalidIndex", None),
             ('["first"]', "0", "InvalidIndex", None),
+            ('[]', "title", "InvalidIndex", None),
+            ('["first"]', "title", "InvalidIndex", None),
             ('{"title":42}', "title", "UnexpectedType", None),
             ('{"title":null}', "title", "UnexpectedType", None),
             ('{"title":true}', "title", "UnexpectedType", None),
@@ -101,7 +103,7 @@ class HostJsonA4Integration(unittest.TestCase):
             ('{"title":"Hello"}', "Hello"),
             ('{"title":3}', "wrong_type"),
             ('{"other":"Hello"}', "missing"),
-            ('[]', "wrong_type"),
+            ('[]', "invalid_index"),
         ]:
             with self.subTest(raw=raw):
                 self.run_case(PROGRAM, "config="+raw, expected=expected)
