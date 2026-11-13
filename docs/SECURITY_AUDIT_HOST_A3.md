@@ -73,8 +73,9 @@ acknowledgement is not rollback; do not replay automatically.
 Location: sedrava_host_json.py:loads, json.loads exception handler (original
 lines 103–108). A 3001-byte input consisting of 1500 opening brackets, 0,
 1500 closing brackets is within the byte limit, but the Python decoder raises
-RecursionError before the depth validator runs. Protocol says ENGINE_FAULT,
-rather than INVALID_JSON for excessive input nesting. No execution budget
+RecursionError before the depth validator runs. On Python versions whose C decoder raises at this depth, the protocol says
+ENGINE_FAULT rather than INVALID_JSON. Some CPython versions (observed 3.13)
+finish decoding and correctly reject depth in the validator instead. No execution budget
 exception is made catchable; the fix catches decoder-local RecursionError only.
 Regression: test_deep_json_input_is_expected_failure_not_python_recursion_fault.
 
@@ -140,8 +141,10 @@ FIFOs and deterministic syscall-boundary fault injection. This controls ordering
 without pretending to exhaustively test kernel scheduling or all filesystems.
 
 The audit workflow checks out original SHA in a separate worktree and runs
-the same new suite. Exactly six failing assertions (five findings, two
-directory cases) are required; unexpected errors/skips fail reproduction.
+the same new suite. Exactly five consistently failing assertions are required, plus the deep-JSON
+assertion only when an independent stdlib decoder probe raises RecursionError.
+CPython decoder limits vary; fixed Host behavior is checked identically on all
+versions. Unexpected errors/skips fail reproduction.
 Then it runs fixed regressions, existing A1/A2/A3 tests, full Python regression
 on 3.10/3.12/3.13 with Node 24, docs/security guards and clean wheel/sdist
 checks. Artifacts record logs, original reproduction, tested SHA and hashes.
@@ -150,7 +153,11 @@ At report creation hosted checks are pending, not successful. The local
 executor is unavailable ("No usable execution environment is available";
 environment ccarenv_b64_Y2NhcmVudl9lYTZlYWIyYmZhMmM4MTkxOTU5OWVjNjE1MjUzOWE0OA).
 GitHub API inspection/changes work independently. No local tests are claimed.
-Final hosted results must be recorded after actual execution.
+Final hosted results must be recorded after actual execution. An intermediate
+workflow incorrectly required the decoder-recursion reproduction on every
+Python version; the 3.13 run exposed that audit-harness assumption. It remains
+visible in run 43492709125. The baseline gate now records the independent
+stdlib probe, without weakening any fixed-Host assertion.
 
 ## Decision / Решение
 
