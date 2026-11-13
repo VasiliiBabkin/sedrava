@@ -94,11 +94,46 @@ jobs:
           build/security-audit/installed/bin/python -m pip install --no-deps dist/*.whl
           build/security-audit/installed/bin/sedrava host check examples/host_typed_read_013.sdr
           sha256sum dist/* > build/security-audit/dist-sha256.txt
+      - name: Record actual exact-SHA security audit result
+        run: |
+          python - <<'PY'
+          import json, os, pathlib, re, sys
+          root=pathlib.Path("build/security-audit")
+          baseline=json.loads((root/"baseline.json").read_text())
+          suites={}
+          for name in ("security","a1","a2","a3","full"):
+              raw=(root/(name+".log")).read_text()
+              count=int(re.findall(r"Ran (\d+) tests?",raw)[-1])
+              skipped=re.findall(r"OK \(skipped=(\d+)\)",raw)
+              skip=int(skipped[-1]) if skipped else 0
+              assert re.search(r"\nOK(?:\s|$)",raw), name
+              suites[name]={"total":count,"passed":count-skip,"skipped":skip}
+          sha=(root/"tested-sha.txt").read_text().strip()
+          run_url=os.environ["GITHUB_SERVER_URL"]+"/"+os.environ["GITHUB_REPOSITORY"]+"/actions/runs/"+os.environ["GITHUB_RUN_ID"]
+          result={"source_sha":sha,"original_sha":baseline["source_sha"],
+                  "python":sys.version,"suites":suites,"baseline":baseline,
+                  "run_url":run_url,"status":"CONDITIONAL_GO_TRUSTED_LOCAL_ONLY",
+                  "publication_authorized":False}
+          (root/"audit-result.json").write_text(json.dumps(result,indent=2)+"\n")
+          report=pathlib.Path("docs/SECURITY_AUDIT_HOST_A3.md").read_text()
+          report+="\n\n## Executed CI evidence (authoritative for this artifact)\n\n"
+          report+="Tested SHA: **"+sha+"**. CI: "+run_url+"\n\n"
+          report+="Python: "+sys.version.split()[0]+". Ubuntu 24.04 hosted runner.\n\n"
+          report+="| Suite | Executed | Passed | Skipped |\n|---|---:|---:|---:|\n"
+          for name,item in suites.items():
+              report+=f"| {name} | {item['total']} | {item['passed']} | {item['skipped']} |\n"
+          report+="\nOriginal-commit reproduction: "+str(len(baseline["actual_failing_assertions"]))+" expected failures, no unexpected errors. Decoder recursion probe: "+str(baseline["decoder_recursion"])+".\n"
+          report+="\nWheel/sdist build, metadata/archive checks, clean installations, Host CLI, documentation and release-security guards completed successfully before this record was generated. Archive checksums are in dist-sha256.txt.\n"
+          report+="\n**Original candidate: NO-GO. Patched exact-SHA Host audit: CONDITIONAL GO for trusted local experimental POSIX use only**, subject to the limits above. This is not approval to publish and not proof against all vulnerabilities. Full-suite skips are recorded, not counted as passed; browser/Android acceptance belongs to separate workflows.\n"
+          (root/"SECURITY_AUDIT_HOST_A3.md").write_text(report)
+          print(json.dumps(result))
+          PY
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
           name: host-a3-security-${{ matrix.python }}-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
+            build/security-audit/*.md
             build/security-audit/*.txt
             build/security-audit/*.json
             build/security-audit/*.log
