@@ -312,6 +312,24 @@ class HostSecurityAudit(unittest.TestCase):
                 self.assertEqual(out["status"], "success")
             self.assertEqual(len(list(Path("/proc/self/fd").iterdir())), before)
 
+    def test_deep_json_input_is_expected_failure_not_python_recursion_fault(self):
+        with tempfile.TemporaryDirectory() as root:
+            (Path(root) / "deep.json").write_text("[" * 1500 + "0" + "]" * 1500)
+            source = 'host "deep"\nread_json doc from "deep.json"\nemit_json doc\n'
+            out = self.outcome(source, root, allow_read=True)
+            self.assertEqual(out["status"], "failed")
+            self.assertEqual(out["error"]["code"], "INVALID_JSON")
+            self.assertNotIn("recursion", json.dumps(out).lower())
+
+    def test_directory_entry_limit_is_data_failure_not_engine_fault(self):
+        with tempfile.TemporaryDirectory() as root:
+            for i in range(33):
+                (Path(root) / str(i)).touch()
+            source = 'host "list"\nlist_dir entries from "."\nemit_json entries\n'
+            out = self.outcome(source, root, allow_list=True)
+            self.assertEqual(out["status"], "failed")
+            self.assertEqual(out["error"]["code"], "RESOURCE_TOO_LARGE")
+
 
 if __name__ == "__main__":
     unittest.main()

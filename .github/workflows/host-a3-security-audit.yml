@@ -35,7 +35,7 @@ jobs:
           git rev-parse HEAD > build/security-audit/tested-sha.txt
           python --version > build/security-audit/python.txt
           python -m pip install '.[test,packages]'
-      - name: Reproduce four assertions on exact original release commit
+      - name: Reproduce six assertions on exact original release commit
         run: |
           git worktree add --detach build/audit-baseline 102ae4a2198c1cdefb5ec65e0a37471370210287
           cp tests/test_host_a3_security_audit.py build/audit-baseline/tests/
@@ -50,6 +50,8 @@ jobs:
               "test_list_symlink_is_policy_fault",
               "test_rmdir_symlink_is_policy_fault",
               "test_cli_transport_failure_never_fabricates_setup_rejection",
+              "test_deep_json_input_is_expected_failure_not_python_recursion_fault",
+              "test_directory_entry_limit_is_data_failure_not_engine_fault",
           }
           actual={test.id().rsplit(".",1)[1] for test,trace in result.failures}
           evidence={"source_sha":"102ae4a2198c1cdefb5ec65e0a37471370210287",

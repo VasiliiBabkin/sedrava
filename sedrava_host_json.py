@@ -104,7 +104,9 @@ def loads(raw):
                             parse_float=lambda _: (_ for _ in ()).throw(ValueError("JSON floats are forbidden")),
                             parse_constant=invalid_constant,
                             object_pairs_hook=unique)
-    except (ValueError, UnicodeError) as exc:
+    # Recursion during decoding is caused by bounded but deeply nested input,
+    # not an engine/work-budget error. Do not catch recursion around execution.
+    except (ValueError, UnicodeError, RecursionError) as exc:
         raise HostInvalidJson("Invalid strict JSON input") from exc
     try:
         return validate_json(parsed)

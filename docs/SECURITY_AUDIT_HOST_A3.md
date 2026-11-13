@@ -68,6 +68,25 @@ reject(). Once execution was attempted, transport failure returns nonzero with
 no fabricated outcome and a fixed non-sensitive stderr notice. Missing delivery
 acknowledgement is not rollback; do not replay automatically.
 
+### H3-04 — Low / P2: deeply nested JSON exposes decoder recursion as engine fault
+
+Location: sedrava_host_json.py:loads, json.loads exception handler (original
+lines 101–108). A 3001-byte input consisting of 1500 opening brackets, 0,
+1500 closing brackets is within the byte limit, but the Python decoder raises
+RecursionError before the depth validator runs. Protocol says ENGINE_FAULT,
+rather than INVALID_JSON for excessive input nesting. No execution budget
+exception is made catchable; the fix catches decoder-local RecursionError only.
+Regression: test_deep_json_input_is_expected_failure_not_python_recursion_fault.
+
+### H3-05 — Low / P2: bounded directory overflow is reported as engine fault
+
+Location: sedrava_host_fs.py:47–48. A directory with 33 ordinary files hits the
+documented 32-entry data limit, raises plain ValueError, becomes ENGINE_FAULT.
+It must remain a failed bounded-data operation, not a claim the engine crashed.
+Fix: existing HostResourceTooLarge -> failed/RESOURCE_TOO_LARGE. This does not
+turn execution/work-budget or policy violations into typed read Results.
+Regression: test_directory_entry_limit_is_data_failure_not_engine_fault.
+
 ## Boundaries checked / Границы модели
 
 - Relative paths reject absolute/dot-dot/empty/control/backslash paths and
@@ -115,12 +134,12 @@ acknowledgement is not rollback; do not replay automatically.
 
 ## Test method and evidence / Испытания
 
-21 additional tests use real temporary files/directories, hardlinks, symlinks,
+23 additional tests use real temporary files/directories, hardlinks, symlinks,
 FIFOs and deterministic syscall-boundary fault injection. This controls ordering
 without pretending to exhaustively test kernel scheduling or all filesystems.
 
 The audit workflow checks out original SHA in a separate worktree and runs
-the same new suite. Exactly four failing assertions (three findings, two
+the same new suite. Exactly six failing assertions (five findings, two
 directory cases) are required; unexpected errors/skips fail reproduction.
 Then it runs fixed regressions, existing A1/A2/A3 tests, full Python regression
 on 3.10/3.12/3.13 with Node 24, docs/security guards and clean wheel/sdist
@@ -140,7 +159,7 @@ CONDITIONAL GO can apply only to trusted local experimental use after all
 audit gates pass and owner acceptance of race/timeout/delivery limitations.
 Never advertise Host as hostile-code isolation.
 
-Серьёзность: H3-01 и H3-03 — средняя/P1, H3-02 — низкая/P2. Исправления
+Серьёзность: H3-01 и H3-03 — средняя/P1, H3-02/H3-04/H3-05 — низкая/P2. Исправления
 изолированы в отдельной ветке. Враждебные переименования, несогласованные
 конкурентные чтения, блокирующие системные вызовы и вывод секретов доверенной
 программой не устранены и прямо ограничивают применимость заключения.

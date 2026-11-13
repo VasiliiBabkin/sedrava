@@ -8,7 +8,7 @@ import stat
 
 from sedrava_host import _parent, _segments, _regular
 from sedrava_host_json import MAX_JSON_NODES, validate_json
-from sedrava_host_typed import HostPolicyViolation
+from sedrava_host_typed import HostPolicyViolation, HostResourceTooLarge
 
 MAX_LIST_ENTRIES = 32
 
@@ -46,7 +46,7 @@ def list_dir(root_fd, relative):
         with os.scandir(descriptor) as entries:
             for entry in entries:
                 if len(output) >= MAX_LIST_ENTRIES:
-                    raise ValueError("Host directory exceeds 32-entry limit")
+                    raise HostResourceTooLarge("Host directory exceeds 32-entry limit")
                 name = entry.name
                 _segments(name)
                 info = entry.stat(follow_symlinks=False)
