@@ -11,7 +11,7 @@
 3. Report errors against original imported file and line; document missing full columns/typed IR.
 4. Exact local vendor package versions, SHA-256 lockfile and transitive dependency validations pass; no network fetch is introduced.
 5. Source and distribution packages, clean installs, deterministic regeneration and tamper rejection are verified.
-6. Alpha must be based on the **published stable 0.11.0** ([tag](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0)); that source integration has been prepared, but **fresh exact-head CI is still required**. Preserve tested stable 0.11 behavior and explicitly test 0.12 versionCode 12001.
+6. Alpha must be based on the **published stable 0.11.0** ([tag](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0)); that source integration has been prepared. The read-only candidate acceptance passed on `14951a74e57929777560003aa52a425391bc41b2` ([run 42371782797](https://github.com/VasiliiBabkin/sedrava/actions/runs/42371782797)); the PR-head browser/Android-domain matrix also passed ([run 42371782882](https://github.com/VasiliiBabkin/sedrava/actions/runs/42371782882)). The candidate job skipped two HTTP-browser tests because Playwright was not installed in that job; the HTTP API-specific E2E passed on the unchanged Host/Core parent SHA #57 ([run 42343889050](https://github.com/VasiliiBabkin/sedrava/actions/runs/42343889050)). This is not a claim that every test ran in one job. Any subsequent source or release-document commit requires fresh exact-head candidate checks. Preserve tested stable 0.11 behavior and explicitly test 0.12 versionCode 12001.
 7. RU/EN docs and website must show the published stable [0.11.0](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0) and historic 0.10/0.11rc1 truthfully; mark alpha 0.12.0a1 unpublished until separately approved and released.
 8. Owner approves immutable SHA, build artifact digest, target and limitations before any GitHub release/tag/PyPI upload.
 
@@ -19,9 +19,17 @@ The read-only candidate workflow never publishes. The historical PyPI publisher 
 
 ## Latest stacked implementation status
 
-Core namespaces/provenance/packages #52 is the base of Effects & Targets #55, typed Result/Error/match #56 and Host A3 integration #57. Exact-head GitHub CI for #57 completed 16/16 workflows successfully on `46de3aa45c6c88c2ccdeddf2ac2e8a66ea99e2d9b`. Those checks **do not automatically approve an alpha publication**. The next independent read-only candidate audit is tracked in [release issue #59](https://github.com/VasiliiBabkin/sedrava/issues/59).
+Core namespaces/provenance/packages #52 is the base of Effects & Targets #55, typed Result/Error/match #56 and Host A3 integration #57. Exact head SHAs:
 
-The `host` target executes **trusted local scripts only**; scoped file descriptors and capability flags are not a malicious-code sandbox. Actual security review and explicit owner approval remain required before a public alpha, The accepted brand assets from stable-main PR #58 are now copied into the read-only alpha candidate by reusing the exact Git blobs; the master PNG and every derivative must pass SHA-256 checks in the candidate workflow. This integration affects only release preparation, not historical Core/Host PRs.
+- #52: `59d003f9dfa4ae73e8724fdb24956a7d66921a80`
+- #55: `cb10863ea8d82c8c4a73e8242d733226183ba2ac`
+- #56: `06e4d435bbf168c5df64f6bcd73b54cba8797a64`
+- #57: `46de3aa4d19f8ea641898e8f5537639548d71f42`
+- #60: `14951a74e57929777560003aa52a425391bc41b2`
+
+The #57 head SHA above is the verified value; do not use the older incorrect value `46de3aa45c6c88c2ccdeddf2ac2e8a66ea99e2d9b`. The #57 CI completed 16/16 surfaced workflows on its head. The #60 read-only candidate audit is complete on the SHA shown above, but these checks **do not automatically approve an alpha publication**. The audit is recorded in [release issue #59](https://github.com/VasiliiBabkin/sedrava/issues/59). No independent review has yet been submitted on the stacked PRs.
+
+The `host` target executes **trusted local scripts only**; scoped file descriptors and capability flags are not a malicious-code sandbox. Actual independent security review and explicit owner approval remain required before a public alpha. The accepted brand assets from stable-main PR #58 are now copied into the read-only alpha candidate by reusing the exact Git blobs; the master PNG and every derivative must pass SHA-256 checks in the candidate workflow. This integration affects only release preparation, not historical Core/Host PRs.
 
 ## Deliberate omissions
 
