@@ -71,7 +71,7 @@ acknowledgement is not rollback; do not replay automatically.
 ### H3-04 — Low / P2: deeply nested JSON exposes decoder recursion as engine fault
 
 Location: sedrava_host_json.py:loads, json.loads exception handler (original
-lines 101–108). A 3001-byte input consisting of 1500 opening brackets, 0,
+lines 103–108). A 3001-byte input consisting of 1500 opening brackets, 0,
 1500 closing brackets is within the byte limit, but the Python decoder raises
 RecursionError before the depth validator runs. Protocol says ENGINE_FAULT,
 rather than INVALID_JSON for excessive input nesting. No execution budget
@@ -96,7 +96,8 @@ Regression: test_directory_entry_limit_is_data_failure_not_engine_fault.
   mkdir/rmdir need allow-write plus the specific directory grant.
   Effect inference describes requirements, never grants them.
 - Reads/writes reject pre-existing hardlinks; symlinks and FIFOs are refused.
-  New files use mode 0600, directories 0700, subject to umask.
+  New files use mode 0600, directories 0700, subject to umask. A real chmod(0)
+  read verifies that --allow-read does not bypass OS permissions (non-root).
 - One mutation is deferred until all computations pass. A private exclusive
   temp is flushed/fsynced before one os.replace and parent fsync. Pre-replace
   failures preserve the destination. Post-replace/mkdir/rmdir failures may
@@ -134,7 +135,7 @@ Regression: test_directory_entry_limit_is_data_failure_not_engine_fault.
 
 ## Test method and evidence / Испытания
 
-23 additional tests use real temporary files/directories, hardlinks, symlinks,
+24 additional tests use real temporary files/directories, hardlinks, symlinks,
 FIFOs and deterministic syscall-boundary fault injection. This controls ordering
 without pretending to exhaustively test kernel scheduling or all filesystems.
 

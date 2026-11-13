@@ -331,5 +331,22 @@ class HostSecurityAudit(unittest.TestCase):
             self.assertEqual(out["error"]["code"], "RESOURCE_TOO_LARGE")
 
 
+    def test_actual_os_read_permissions_are_not_bypassed_by_grant(self):
+        if os.geteuid() == 0:
+            self.skipTest("Root bypasses discretionary read permissions")
+        with tempfile.TemporaryDirectory() as root:
+            target = Path(root) / "private"
+            target.write_text("secret")
+            target.chmod(0)
+            try:
+                out = self.outcome(READ, root, allow_read=True, supplied=["name=private"])
+                self.assertEqual(out["status"], "success")
+                self.assertEqual(out["result"]["result"],
+                                 "sedrava.host.read.v1.PermissionDenied")
+                self.assertNotIn("secret", json.dumps(out))
+            finally:
+                target.chmod(0o600)
+
+
 if __name__ == "__main__":
     unittest.main()
