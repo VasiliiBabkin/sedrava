@@ -8,6 +8,7 @@ import stat
 
 from sedrava_host import _parent, _segments, _regular
 from sedrava_host_json import MAX_JSON_NODES, validate_json
+from sedrava_host_typed import HostPolicyViolation, HostResourceTooLarge
 
 MAX_LIST_ENTRIES = 32
 
@@ -45,7 +46,7 @@ def list_dir(root_fd, relative):
         with os.scandir(descriptor) as entries:
             for entry in entries:
                 if len(output) >= MAX_LIST_ENTRIES:
-                    raise ValueError("Host directory exceeds 32-entry limit")
+                    raise HostResourceTooLarge("Host directory exceeds 32-entry limit")
                 name = entry.name
                 _segments(name)
                 info = entry.stat(follow_symlinks=False)
@@ -55,7 +56,7 @@ def list_dir(root_fd, relative):
                     _regular(info)
                     kind = "file"
                 else:
-                    raise ValueError("Host directory contains symlink or special entry")
+                    raise HostPolicyViolation("Host directory contains symlink or special entry")
                 output.append({"name": name, "kind": kind})
         output.sort(key=lambda item: item["name"])
         return validate_json(output)
@@ -77,7 +78,7 @@ def remove_empty_dir(root_fd, relative):
     try:
         info = os.stat(name, dir_fd=parent, follow_symlinks=False)
         if not stat.S_ISDIR(info.st_mode):
-            raise ValueError("Only ordinary empty directories may be removed")
+            raise HostPolicyViolation("Only ordinary empty directories may be removed")
         os.rmdir(name, dir_fd=parent)
         os.fsync(parent)
     finally:

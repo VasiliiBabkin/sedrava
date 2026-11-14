@@ -42,3 +42,17 @@ implemented; general Host block actions, user-defined Host error
 declarations, HostPath, scoped path type parameters and typed writes
 remain future milestones. Do not merge, publish or deploy without
 actual exact-head CI and security review.
+
+
+## Independent A3 audit: operational boundary
+
+See [SECURITY_AUDIT_HOST_A3.md](SECURITY_AUDIT_HOST_A3.md) for exact-SHA evidence.
+Exclusive temporary creation does not authorize deleting a colliding existing
+name. Directory policy violations remain fatal, not typed read errors. If CLI
+result delivery fails after execution, it exits nonzero without fabricating a
+setup rejection: work may already be committed; do not automatically retry.
+
+Trust includes root ancestors and absence of hostile renames/mount changes.
+Concurrent inode reads are not snapshots. Byte/AST/statement limits do not
+provide OS timeouts for blocked filesystem syscalls. Explicit emitted content
+is application data, not a secret-redaction guarantee.

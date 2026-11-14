@@ -27,7 +27,7 @@ class HostInvalidPath(ValueError):
 
 
 class HostResourceTooLarge(ValueError):
-    """Expected file-size limit; distinct from execution/work budget."""
+    """Expected filesystem data limit; distinct from execution/work budget."""
 
 
 class HostTextTooLong(ValueError):
