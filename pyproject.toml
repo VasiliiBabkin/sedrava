@@ -36,6 +36,7 @@ py-modules = ['sedrava', 'sedrava_version', 'sedrava_android_identity', 'sedrava
 # Installed examples and references are available under sys.prefix/share/sedrava.
 [tool.setuptools.data-files]
 "share/sedrava" = ["README.md", "CHANGELOG.md", "LICENSE", "DEDICATION.md"]
+"share/sedrava/assets/brand" = ["assets/brand/*"]
 "share/sedrava/licenses" = ["licenses/*.txt"]
 "share/sedrava/docs" = ["docs/*.md"]
 "share/sedrava/examples/assets" = ["examples/assets/*"]

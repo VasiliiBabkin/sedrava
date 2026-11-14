@@ -1,3 +1,5 @@
+<p align="center"><img src="../assets/brand/sedrava-logo-primary.png" width="160" alt="Sedrava logo" /></p>
+
 # Sedrava documentation — English (stable 0.11.0)
 
 **Latest published stable:** [Sedrava 0.11.0](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0) ([PyPI](https://pypi.org/project/sedrava/0.11.0/)). Previous stable [0.10.0](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.10.0) ([PyPI](https://pypi.org/project/sedrava/0.10.0/)) remains available. The language is experimental, not a production framework.

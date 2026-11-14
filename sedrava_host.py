@@ -396,9 +396,12 @@ def _write(root_fd, relative, content, *, json_mode=False):
             _regular(os.stat(name, dir_fd=parent, follow_symlinks=False))
         except FileNotFoundError:
             pass
-        temp = ".sedrava-" + secrets.token_hex(16) + ".tmp"
-        descriptor = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
+        candidate = ".sedrava-" + secrets.token_hex(16) + ".tmp"
+        descriptor = os.open(candidate, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
                              0o600, dir_fd=parent)
+        # Only unlink a temporary entry that this invocation actually created.
+        # O_EXCL failure must never delete a pre-existing file.
+        temp = candidate
         with os.fdopen(descriptor, "wb") as handle:
             descriptor = None
             handle.write(data)

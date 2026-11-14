@@ -133,6 +133,11 @@ def main(argv=None):
             return 0
         except (ValueError, OSError, UnicodeError, RecursionError) as exc:
             if args.host_command == "run" and args.result_protocol == "v1":
+                if phase != "compile":
+                    # Execution may already have committed. A broken output pipe
+                    # is not a setup rejection and must never suggest no work ran.
+                    print("Host result transport failed; do not retry automatically.", file=sys.stderr)
+                    return 1
                 from sedrava_host_protocol import reject
                 print(json.dumps(reject(), ensure_ascii=False, sort_keys=True))
                 return 1

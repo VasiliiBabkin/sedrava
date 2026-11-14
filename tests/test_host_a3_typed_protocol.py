@@ -192,6 +192,62 @@ match fetched:
             self.assertEqual(other["phase"], "execute")
             self.assertEqual(other["commit_state"], "not_applicable")
 
+    def test_post_replace_directory_fsync_failure_is_unknown_and_not_retryable(self):
+        """A visible replacement can precede a failed durability barrier."""
+        with tempfile.TemporaryDirectory() as root:
+            ws = self.setup_workspace(root)
+            target = ws / "write" / "out.txt"
+            target.write_text("old", encoding="utf-8")
+            real_fsync = os.fsync
+            calls = []
+
+            def fail_directory_fsync(fd):
+                calls.append(fd)
+                if len(calls) == 2:
+                    raise OSError(5, "injected directory fsync failure")
+                return real_fsync(fd)
+
+            with patch("sedrava_host.os.fsync", side_effect=fail_directory_fsync):
+                outcome = execute_protocol(
+                    parse_host(WRITER), root=ws, trusted=True,
+                    allow_write=True, write_scope="write",
+                    supplied=("name=out.txt",))
+            self.assertEqual(len(calls), 2)
+            self.assertEqual(target.read_text(encoding="utf-8"), "hello")
+            self.assertEqual(outcome["status"], "failed")
+            self.assertEqual(outcome["phase"], "commit")
+            self.assertEqual(outcome["commit_state"], "unknown")
+            self.assertEqual(outcome["error"]["code"], "IO_FAILURE")
+            self.assertIs(outcome["error"]["retryable"], False)
+
+    def test_destination_symlink_swap_before_replace_stays_within_scope(self):
+        """Demonstrate the documented race, without claiming race isolation."""
+        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as outside:
+            ws = self.setup_workspace(root)
+            target = ws / "write" / "out.txt"
+            target.write_text("old", encoding="utf-8")
+            victim = Path(outside) / "victim.txt"
+            victim.write_text("outside", encoding="utf-8")
+            real_replace = os.replace
+            observed = []
+
+            def swap_destination(src, dst, **kwargs):
+                target.unlink()
+                target.symlink_to(victim)
+                observed.append(target.is_symlink())
+                return real_replace(src, dst, **kwargs)
+
+            with patch("sedrava_host.os.replace", side_effect=swap_destination):
+                outcome = execute_protocol(
+                    parse_host(WRITER), root=ws, trusted=True,
+                    allow_write=True, write_scope="write",
+                    supplied=("name=out.txt",))
+            self.assertEqual(observed, [True])
+            self.assertEqual(victim.read_text(encoding="utf-8"), "outside")
+            self.assertEqual(target.read_text(encoding="utf-8"), "hello")
+            self.assertFalse(target.is_symlink())
+            self.assertEqual(outcome["status"], "success")
+
     def test_match_compile_rejections(self):
         program = PROGRAM
         bad = [

@@ -1,6 +1,6 @@
 # Sedrava 0.12.0a1 — заметки к экспериментальной альфе
 
-**Экспериментальная альфа 0.12.0a1 пока не опубликована.** Актуальная стабильная версия — [0.11.0](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0) ([PyPI](https://pypi.org/project/sedrava/0.11.0/)); исторические [0.10.0](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.10.0) и [0.11.0rc1](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0rc1) доступны. Исходники 0.12 перенесены на стабильную основу 0.11 в ветке `integration/012-alpha1-stable-base`, но должны пройти новые испытания на точном коммите. Тега `v0.12.0a1`, GitHub-релиза и пакета PyPI пока нет.
+**Экспериментальная альфа 0.12.0a1 пока не опубликована.** Актуальная стабильная версия — [0.11.0](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0) ([PyPI](https://pypi.org/project/sedrava/0.11.0/)); исторические [0.10.0](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.10.0) и [0.11.0rc1](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0rc1) доступны. Исходники 0.12 перенесены на стабильную основу 0.11 в ветке `integration/012-alpha1-stable-base`; тега `v0.12.0a1`, GitHub-релиза и опубликованного пакета PyPI пока нет. Read-only проверка кандидата прошла на точном SHA `14951a74e57929777560003aa52a425391bc41b2` ([run 42371782797](https://github.com/VasiliiBabkin/sedrava/actions/runs/42371782797)); матрица Chromium/Firefox/WebKit и Android-domain также прошла на этом PR head ([run 42371782882](https://github.com/VasiliiBabkin/sedrava/actions/runs/42371782882)). Два HTTP-browser теста были пропущены в candidate job, поскольку в нём не установлен Playwright; отдельный HTTP API E2E прошёл на неизменённом родительском SHA Host/Core #57 ([run 42343889050](https://github.com/VasiliiBabkin/sedrava/actions/runs/42343889050)). Это не означает, что весь набор тестов выполнился в одном задании. Результаты относятся только к указанному SHA; после этого обновления документации перед выпуском необходимы новые проверки точного head SHA.
 
 ## Реализовано в исходном коде
 
@@ -11,12 +11,37 @@
 - Локальные библиотеки из `vendor/` описываются в `sedrava.toml` с точными версиями и фиксируются в `sedrava.lock` с SHA-256.
 - Команды `sedrava lock` и `sedrava verify` проверяют целостность и ограничения зависимостей; компилятор проверяет lockfile, если присутствует файл проекта.
 
+## Дополнительные изменения ядра и Host A3 в кандидате
+
+- Типы ошибок `error closed/open` с типизированными полями и устойчивыми идентификаторами, контекстный `Result<T,E>` и исчерпывающий `match`. Встроенный старый `Result<T,Error>` сохранён.
+- Экспериментальные контракты `effects pure`, транзитивная проверка чистых функций и диагностический манифест эффектов. Эти возможности **не** представляют полного решения для произвольных пользовательских эффектов.
+- Ограниченная доверенная POSIX Host-среда с явными разрешениями на файловые операции, JSON, `try_read` и типизированным `Result<text,HostReadError>`. Обрабатываются ожидаемые ошибки; нарушение политики не становится `Err`.
+- Структурированный HostExecutionResult v1 со статусами `success/failed/fault/rejected`, фазами и неопределённым состоянием записи при сбое после начала фиксации.
+- Реальные проверки Python 3.10/3.12/3.13, браузеров и Android на экспериментальных исходниках. **Кандидат альфы не является сертифицированным безопасным исполняющим окружением для чужого кода.**
+
 ## Не реализовано
 
 Сетевой реестр пакетов, автоматическая загрузка, разрешение диапазонов версий, квалифицированный импорт из пакетов, стабильный ABI, доверенный сервер, SQLite/PostgreSQL и аутентификация. Хеш пакета сам по себе не гарантирует безопасность его кода.
 
 ## Условия выпуска
 
-Исходная экспериментальная цепочка [PR #39–43](https://github.com/VasiliiBabkin/sedrava/pull/43) опиралась на прежнюю Web-ветку. Новая интеграционная ветка основана на **опубликованной стабильной 0.11.0**, не изменяя её релиз. До публикации альфы требуются новые тесты Python, Web, Android, модулей и пакетов на итоговом SHA, проверка архивов и отдельное решение владельца о теге, GitHub и PyPI.
+Исходная экспериментальная цепочка [#39–43](https://github.com/VasiliiBabkin/sedrava/pull/43) опиралась на прежнюю Web-ветку. Новая интеграционная ветка основана на **опубликованной стабильной 0.11.0**, не изменяя её релиз. До публикации необходимы новые проверки Python, Web, Android, модулей и пакетов на итоговом SHA, проверка архивов и отдельное решение владельца о теге, GitHub и PyPI.
 
 [Условия альфы](RELEASE_TRACK_012_ALPHA.md) · [Пространства имён](NAMESPACES_012_EXPERIMENTAL.md) · [Локальные пакеты](PACKAGES_012_EXPERIMENTAL.md) · [English](RELEASE_NOTES_0_12_0a1.en.md).
+
+## Release preparation checkpoint — 2026-11-14
+
+Owner approved preparation and publication of experimental 0.12.0a1. Security fixes from PR #62 were merged into the release branch at `2d1d2052966776114071f02ec1d860ff3e2eaae4`. On that exact merge SHA, 16/16 surfaced GitHub Actions workflows completed successfully, including the read-only release candidate run https://github.com/VasiliiBabkin/sedrava/actions/runs/43551718450. This is an **integration checkpoint, not a final publishing SHA**: documentation changes below require fresh exact-head verification. Security disposition is **CONDITIONAL GO for trusted local POSIX execution only**; Host is not a sandbox, and hostile rename/mount races, atomic read snapshots and syscall timeouts are not guaranteed. See [Host A3 audit](SECURITY_AUDIT_HOST_A3.md).
+
+Publication checklist (pending until verified):
+
+- [x] Owner authorized the experimental alpha publication.
+- [x] Merge PR #62 Host A3 security fixes into release candidate branch.
+- [x] Verify 16/16 GitHub workflows on the integration merge SHA above.
+- [ ] Verify CI and release candidate on the **final documentation/build SHA**.
+- [ ] Record exact wheel/sdist and any APK SHA-256 digests from the final build artifacts; do not reuse earlier digests.
+- [ ] Reconcile public RU/EN website and release notes with actual published status.
+- [ ] Verify a least-privilege PyPI publishing route for 0.12.0a1; the historical publisher must not be assumed to support it.
+- [ ] Create tag and GitHub release only from the final verified SHA; publish PyPI only after the publishing route is verified.
+
+Until publication actually succeeds, 0.12.0a1 remains unpublished and 0.11.0 remains the published stable release.

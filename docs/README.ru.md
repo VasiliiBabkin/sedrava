@@ -1,3 +1,5 @@
+<p align="center"><img src="../assets/brand/sedrava-logo-primary.png" width="160" alt="Логотип Sedrava" /></p>
+
 # Sedrava — документация (стабильная 0.11.0)
 
 **Последняя стабильная:** [Sedrava 0.11.0](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0) ([PyPI](https://pypi.org/project/sedrava/0.11.0/)). Предыдущая [0.10.0](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.10.0) ([PyPI](https://pypi.org/project/sedrava/0.10.0/)) доступна. Язык остаётся экспериментальным и не сертифицирован для промышленного использования.
