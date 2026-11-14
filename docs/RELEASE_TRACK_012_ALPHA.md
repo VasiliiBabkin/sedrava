@@ -34,3 +34,20 @@ The `host` target executes **trusted local scripts only**; scoped file descripto
 ## Deliberate omissions
 
 No semver resolver/online package manager, full native typed-IR symbols, importable mutable state, trusted server/SQLite, authentication, migrations or real multiuser isolation. These are not blockers for an explicitly limited **alpha**, but are not promised as present.
+
+## Release preparation checkpoint — 2026-11-14
+
+Owner approved preparation and publication of experimental 0.12.0a1. Security fixes from PR #62 were merged into the release branch at `2d1d2052966776114071f02ec1d860ff3e2eaae4`. On that exact merge SHA, 16/16 surfaced GitHub Actions workflows completed successfully, including the read-only release candidate run https://github.com/VasiliiBabkin/sedrava/actions/runs/43551718450. This is an **integration checkpoint, not a final publishing SHA**: documentation changes below require fresh exact-head verification. Security disposition is **CONDITIONAL GO for trusted local POSIX execution only**; Host is not a sandbox, and hostile rename/mount races, atomic read snapshots and syscall timeouts are not guaranteed. See [Host A3 audit](SECURITY_AUDIT_HOST_A3.md).
+
+Publication checklist (pending until verified):
+
+- [x] Owner authorized the experimental alpha publication.
+- [x] Merge PR #62 Host A3 security fixes into release candidate branch.
+- [x] Verify 16/16 GitHub workflows on the integration merge SHA above.
+- [ ] Verify CI and release candidate on the **final documentation/build SHA**.
+- [ ] Record exact wheel/sdist and any APK SHA-256 digests from the final build artifacts; do not reuse earlier digests.
+- [ ] Reconcile public RU/EN website and release notes with actual published status.
+- [ ] Verify a least-privilege PyPI publishing route for 0.12.0a1; the historical publisher must not be assumed to support it.
+- [ ] Create tag and GitHub release only from the final verified SHA; publish PyPI only after the publishing route is verified.
+
+Until publication actually succeeds, 0.12.0a1 remains unpublished and 0.11.0 remains the published stable release.
