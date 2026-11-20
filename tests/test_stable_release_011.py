@@ -7,7 +7,10 @@ from scripts.check_rc_to_stable_011 import RC, FINAL, PUBLISHED
 ROOT = Path(__file__).resolve().parents[1]
 class StableRelease011Tests(unittest.TestCase):
     def test_identity_and_strict_android_upgrade_order(self):
-        self.assertEqual((VERSION, ANDROID_VERSION_CODE), ("0.11.0", 11002))
+        if VERSION == "0.12.0a1":
+            self.assertEqual(ANDROID_VERSION_CODE, 12001)
+        else:
+            self.assertEqual((VERSION, ANDROID_VERSION_CODE), ("0.11.0", 11002))
         self.assertEqual((RC, FINAL), ("0.11.0rc1", "0.11.0"))
         self.assertTrue(10003 < 11001 < ANDROID_VERSION_CODE)
     def test_original_rc_artifacts_are_pinned(self):

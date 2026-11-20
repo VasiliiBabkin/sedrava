@@ -1,0 +1,23 @@
+{
+  "packages": [
+    {
+      "dependencies": [],
+      "files": {
+        "panel.sdr": "9c6b1dbe4f3ceffc4761d06a0495e4b6979bea6aeea2a2d195081cadf7296bca",
+        "sedrava.toml": "521973bcb0af7c294c5714abb58888840d9a0c96c8c76d7e679ac8888c9d8846"
+      },
+      "name": "example.cards",
+      "path": "vendor/example.cards",
+      "version": "1.0.0"
+    }
+  ],
+  "root": {
+    "dependencies": [
+      "example.cards"
+    ],
+    "manifest_sha256": "25e6a113cfebcb256b818e93a773649142633d310fe4cd837d1eb4c905647a1f",
+    "name": "example.locked.site",
+    "version": "0.1.0"
+  },
+  "schema": 1
+}

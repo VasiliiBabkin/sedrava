@@ -1,0 +1,4 @@
+module example.second
+export component Panel:
+    card:
+        heading "Second namespaced panel"

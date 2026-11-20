@@ -1,10 +1,7 @@
-name: Sedrava 0.11.0 stable read-only candidate verification
+name: Historical Sedrava 0.11 stable candidate verification (manual)
 
 on:
-  push:
-    branches: [release/011-stable-preparation]
-  pull_request:
-    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read

@@ -1,0 +1,41 @@
+name: Sedrava 0.12 A2 source provenance
+on:
+  push:
+    branches: [feature/012-source-provenance-a2]
+  pull_request:
+    paths:
+      - "sedrava_source_map.py"
+      - "sedrava_namespaces.py"
+      - "sedrava_modules.py"
+      - "sedrava_frontend.py"
+      - "site_codegen.py"
+      - "sedrava_webapp.py"
+      - "pyproject.toml"
+      - "tests/test_module_provenance_012.py"
+      - ".github/workflows/provenance-012.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source-provenance:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Provenance and namespace regression
+        run: |
+          python -m unittest tests.test_module_provenance_012 tests.test_namespaced_modules_012 tests.test_platform_modules -v
+      - name: Real namespaced site and WebApp compilation
+        run: |
+          python -m sedrava_cli check examples/namespace_012_site.sdr
+          python -m sedrava_cli build site examples/namespace_012_site.sdr --output build/namespaced-site
+          python -m sedrava_cli check examples/namespace_012_webapp.sdr
+          python -m sedrava_cli build webapp examples/namespace_012_webapp.sdr --output build/namespaced-webapp

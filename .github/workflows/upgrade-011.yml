@@ -1,7 +1,6 @@
-name: Published 0.10 to 0.11 stable-candidate upgrade and rollback
+name: Historical published 0.10 to stable 0.11 upgrade/rollback (manual)
 on:
-  pull_request:
-    branches: [main]
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

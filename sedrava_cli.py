@@ -49,7 +49,22 @@ def main(argv=None):
     build.add_argument("--output", type=Path)
     build.add_argument("--service", type=Path, help="Experimental read-only API0 service for Web output directory")
     build.add_argument("--application-id", help="Stable Android package identity (lowercase reverse-domain name)")
+    package_lock = commands.add_parser("lock", help="Lock reviewed local vendored dependencies offline")
+    package_lock.add_argument("project", type=Path, nargs="?", default=Path("."))
+    package_verify = commands.add_parser("verify", help="Verify vendored packages against sedrava.lock")
+    package_verify.add_argument("project", type=Path, nargs="?", default=Path("."))
     args = parser.parse_args(argv)
+    if args.command in ("lock", "verify"):
+        try:
+            from sedrava_packages import lock, verify
+            if args.command == "lock":
+                print(lock(args.project))
+            else:
+                verify(args.project)
+                print(f"PASS: {args.project}/sedrava.lock")
+            return 0
+        except (ValueError, OSError, UnicodeError) as exc:
+            parser.exit(1, f"sedrava: {exc}\n")
     if args.command == "build" and args.service is not None and args.target != "web":
         parser.error("--service is only supported for build web")
     if args.command == "build" and args.application_id is not None and args.target != "android":
@@ -59,6 +74,8 @@ def main(argv=None):
             raise ValueError("Source exceeds size limit")
         with args.source.open(encoding="utf-8") as handle:
             source = handle.read(MAX_SOURCE_CHARS + 1)
+        from sedrava_packages import verify_if_project
+        verify_if_project(args.source)
         from sedrava_syntax import document_kind
         if document_kind(source) in ("site", "webapp"):
             document = parse_document(source, args.source)
