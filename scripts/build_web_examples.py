@@ -14,6 +14,9 @@ def application_examples(root=ROOT):
     for path in sorted((root / 'examples').glob('*.sdr')):
         source = path.read_text(encoding='utf-8')
         document = parse_document(source,path)
+        if isinstance(document, dict) and document.get("format") == 1 and "migrations" in document:
+            # Server schemas are validated separately, never emitted as browser apps.
+            continue
         if not isinstance(document, (Site, WebApp)) and document.widgets:
             yield path, source
 

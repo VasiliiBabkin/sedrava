@@ -44,7 +44,7 @@ def main(argv=None):
     test = commands.add_parser("test", help="Run embedded Sedrava tests")
     test.add_argument("source", type=Path)
     build = commands.add_parser("build", help="Generate an application")
-    build.add_argument("target", choices=("web", "android", "site", "webapp", "api-web", "api-page"))
+    build.add_argument("target", choices=("web", "android", "site", "webapp", "api-web", "api-page", "server"))
     build.add_argument("source", type=Path)
     build.add_argument("--output", type=Path)
     build.add_argument("--service", type=Path, help="Experimental read-only API0 service for Web output directory")
@@ -59,6 +59,22 @@ def main(argv=None):
             raise ValueError("Source exceeds size limit")
         with args.source.open(encoding="utf-8") as handle:
             source = handle.read(MAX_SOURCE_CHARS + 1)
+        # Server documents are a separate restricted source dialect. They are
+        # never parsed as browser-owned app state or as arbitrary Python/SQL.
+        first_declaration = next((line.strip() for line in source.splitlines() if line.strip() and not line.lstrip().startswith("#")), "")
+        if first_declaration.startswith("server "):
+            from sedrava_server_schema import parse_server, build_server
+            if args.command == "check":
+                parse_server(source)
+                print(f"OK: {args.source} (experimental server schema)")
+                return 0
+            if args.command == "build" and args.target == "server":
+                output = args.output or Path("build/server")
+                print(build_server(source, output, args.source))
+                return 0
+            raise ValueError("Server declarations support only check and build server")
+        if args.command == "build" and args.target == "server":
+            raise ValueError("build server requires a server document")
         from sedrava_syntax import document_kind
         if document_kind(source) in ("site", "webapp"):
             document = parse_document(source, args.source)

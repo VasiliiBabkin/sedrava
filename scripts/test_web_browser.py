@@ -388,6 +388,8 @@ screen main:
             document=parse_document(source,path)
             if isinstance(document,(Site,WebApp)):
                 continue # Dedicated site/WebApp Chromium suites exercise these modes.
+            if isinstance(document,dict) and document.get('format') == 1 and 'migrations' in document:
+                continue # Server schema validated separately; it has no browser widgets.
             if document.widgets:
                 self.open(source)
                 self.assertTrue(self.page.locator('body').is_visible())
