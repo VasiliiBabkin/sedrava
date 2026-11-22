@@ -14,8 +14,8 @@ pub mod modules;
 pub mod navigation;
 pub mod parser;
 pub mod runtime;
-pub mod snapshot;
 pub mod site;
+pub mod snapshot;
 pub mod stdlib;
 pub mod web;
 
