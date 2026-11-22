@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Check Rust Android project generation and identity safety (not APK build).
 
-The VDS lacks Android SDK/Gradle and cannot demonstrate JVM/Compose compilation.
+APK and JVM tests run separately in verify_native_android_kotlin.py.
 """
 from __future__ import annotations
 import argparse
@@ -31,6 +31,8 @@ def main()->int:
     cases=[
         (ROOT/"examples/counter.sdr","org.sedrava.testcounter"),
         (ROOT/"tests/rust_cases/native_android_scalar.sdr","org.sedrava.demo"),
+        (ROOT/"examples/task_manager_navigation.sdr","org.sedrava.tasks"),
+        (ROOT/"tests/rust_cases/native_web_queries.sdr","org.sedrava.queries"),
     ]
     with tempfile.TemporaryDirectory(prefix="sdr-native-android-") as temp:
         for source,app_id in cases:
@@ -39,7 +41,6 @@ def main()->int:
             run(binary,source,one,app_id)
             run(binary,source,two,app_id)
             names={p.relative_to(one) for p in one.rglob("*") if p.is_file()}
-            assert len(names)==8,names
             assert names=={p.relative_to(two) for p in two.rglob("*") if p.is_file()}
             for file in names:
                 assert (one/file).read_bytes()==(two/file).read_bytes()
@@ -52,18 +53,15 @@ def main()->int:
             assert resource.getroot().tag=="resources"
             main=list(one.rglob("MainActivity.kt"))
             assert len(main)==1
-            kt=main[0].read_text("utf8")
-            assert f"package {app_id}" in kt
-            assert "Math.addExact" in kt
-            assert "if(validState(next)) next else current" in kt
-            assert "setContent { MaterialTheme { SedravaScreen() } }" in kt
-            assert not ("python3" in kt or "runtime.exec" in kt)
+            kotlin = {p.name: p.read_text("utf8") for p in main[0].parent.glob("*.kt")}
+            assert set(kotlin) == {"MainActivity.kt", "Domain.kt", "Program.kt", "Snapshots.kt", "Storage.kt", "Collections.kt", "Navigation.kt"}
+            assert all(text.startswith(f"package {app_id}\n") for text in kotlin.values())
+            assert "setContent" in kotlin["MainActivity.kt"]
+            assert not manifest.getroot().findall("uses-permission")
             if "native_android_scalar" in source.name:
                 assert "Android Rust · Демо" in meta["title"]
                 assert "\\@" in (one/"app/src/main/res/values/strings.xml").read_text()
-                assert "render_doubled" in kt
-                assert "require(" in kt
-                assert "OutlinedTextField" in kt
+                assert "OutlinedTextField" in kotlin["MainActivity.kt"]
             run(binary,source,one,app_id,success=False)
             assert project_identity(one)==app_id
             print(f"PASS: deterministic native Android preview, {source.name}, identity={app_id}")
@@ -76,10 +74,10 @@ def main()->int:
         run(binary,cases[0][0],dangling,"org.sedrava.dangling",success=False)
         assert dangling.is_symlink()
         unsupported=Path(temp)/"unsupported"
-        run(binary,ROOT/"examples/task_manager_navigation.sdr",
-            unsupported,"org.sedrava.navigation",success=False)
+        run(binary,ROOT/"examples/platform_catalog.sdr",
+            unsupported,"org.sedrava.catalog",success=False)
         assert not unsupported.exists()
-        print("PASS: invalid identifiers and unsupported navigation are rejected without project creation")
+        print("PASS: invalid identifiers and unsupported WebApp are rejected without project creation")
     return 0
 
 if __name__=="__main__":

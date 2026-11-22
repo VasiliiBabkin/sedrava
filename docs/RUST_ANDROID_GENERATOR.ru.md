@@ -1,71 +1,97 @@
-# Экспериментальная генерация Android на Rust
+# Нативный Android-генератор Sedrava
 
-**Статус: частичный перенос, не готовый Android-релиз.**
+Нативный генератор создаёт приложение Kotlin и Jetpack Compose из
+поддерживаемого Rust app-mode. Разбор исходника, проверка типов и генерация
+выполняются Rust. APK выполняет сгенерированную логику локально.
+Python 0.11 остаётся основным компилятором и эталоном сравнения.
 
-Rust может самостоятельно создавать исходный проект Android с Jetpack Compose
-для проверенного одноэкранного подмножества языка. Вызова Python-компилятора
-внутри генератора нет. Действующий Python 0.11 остается основным для Android.
+## Покрытие
 
-## Команда
+- Скалярные и вычисляемые состояния, типизированные записи, bounded
+  collections, устойчивые ID, чистые функции, запросы к коллекциям и
+  поддержанная Rust stdlib.
+- Проверяемая int32-арифметика, лимиты Unicode, `require` и `rule`.
+  Действия выполняются над кандидатом. При ошибке состояние и стек
+  экранов сохраняются.
+- Экраны, guards, переходы с действием, pop и системный Back. Выбор
+  записи и связанный переход выполняются атомарно. После изменения
+  состояния экран с переставшим выполняться guard закрывается.
+- Элементы app-mode `text`, `value`, `show`, `display`, `input`,
+  `button` и `list` с выбором, заголовком, статусом или переходом.
+  Поля принимают int/text, а bool-изменения выражаются действиями.
+  Прокручиваемая компоновка ограничивает ширину на больших экранах.
+  Заголовки, выделение строк и сообщения об ошибках имеют семантику
+  доступности. Манифест приложения не запрашивает сетевых разрешений.
 
-Из корня клона Sedrava (после установки Rust/Cargo):
+В модели Python 0.11 app-mode отсутствуют отдельный switch и формы
+WebApp DSL. Этот генератор принимает app-mode. Site, WebApp и Host
+используют отдельные режимы.
 
-    cargo build --manifest-path rust/Cargo.toml --locked --bin sedrava-native
-    ./rust/target/debug/sedrava-native build android \
-      tests/rust_cases/native_android_scalar.sdr \
-      --output build/native-android-preview \
-      --application-id org.sedrava.demo
+## Состояние и совместимость
 
-Каталог output должен быть **новым и несуществующим**: генератор не будет
-перезаписывать ранее созданный проект. Вначале собираются все файлы
-в отдельном временном каталоге, затем публикуется готовая структура.
+Android хранит UTF-8 JSON schema-1 в приватном файле
+`files/sedrava-state.json`. Формат использует ту же сигнатуру и поля,
+что snapshot Python и Rust. Записываются только значения `persist`.
+Проверяются дубли JSON-ключей, корректность Unicode и int32, глубина,
+размер, типы, идентификаторы и правила приложения.
 
-Структура включает MainActivity.kt, AndroidManifest.xml, strings.xml,
-Gradle settings/build, gradle.properties и sedrava-android.json. Метаданные
-identity совместимы с Python-проверкой project_identity.
+Запись выполняется вне главного потока через временный файл с
+синхронизацией данных и атомарной заменой. Перед записью сверяется
+последняя прочитанная версия. Повреждённое исходное сохранение
+остаётся на диске. Приложение показывает ошибку и отклоняет изменение
+сохраняемых значений. В модели один процесс-писатель. Долговечность при
+потере питания и несколько независимых писателей требуют отдельной проверки.
 
-## Что поддерживается сейчас
+Если нативного файла ещё нет, приложение читает прежние Android
+`SharedPreferences("sedrava_state")`: у Python 0.11 это схема 1 для
+записей и навигации либо типизированные scalar preference keys для
+скалярной программы. Первый успешно сохранённый нативный переход
+записывает schema-1, исходные preferences сохраняются. Для обновления
+установленного приложения нужно сохранить Android application ID,
+доступ к каталогу прежнего приложения и подпись APK.
 
-- Скалярные state: int32, bool, text.
-- derive, rule, action, require, if/else, let, проверка int32 overflow.
-- Простые элементы text/value/show/button/input/display на одном экране.
-- Генерация Kotlin/Compose-кода и валидного манифеста Android.
-- Явное application-id с валидацией допустимого package ID; ресурсы и
-  строки экранируются.
+Поворот и пересоздание Activity используют ViewModel. Для восстановления
+вытесненной Activity Android Bundle хранит ограниченный полный snapshot
+и стек экранов. Bundle применяется только при совпадении с текущими
+сохранёнными значениями. При холодном старте восстанавливаются значения
+`persist`, а навигация начинается с начального экрана.
 
-## Явно не поддерживается
+## Воспроизведение в изолированном окружении
 
-- Android persist, сохранение/восстановление данных между запусками.
-- Типизированные записи и коллекции, UI-списки и запросы к ним.
-- Чистые функции и полноценная stdlib в Android-коде.
-- Navigation/multi-screen, Site/WebApp и Host API.
+Нужны JDK 17, Gradle 8.11.1 и Android SDK с `platforms;android-35`,
+`build-tools;35.0.0` и `platform-tools`. AGP 8.9.2, Kotlin 2.0.21 и
+Compose BOM 2024.12.01 соответствуют существующему Android-проекту.
 
-Если исходник требует этих возможностей, Rust-генератор должен отказать,
-а не незаметно исключить их из проекта.
+~~~sh
+cargo fmt --manifest-path rust/Cargo.toml --all -- --check
+cargo build --manifest-path rust/Cargo.toml --locked
+cargo test --manifest-path rust/Cargo.toml --locked --all-targets
+python3 scripts/verify_native_android.py
+python3 scripts/verify_native_android_kotlin.py --gradle "$(command -v gradle)"
+./rust/target/debug/sedrava-native build android examples/task_manager_navigation.sdr \
+  --output build/android-native-tasks --application-id org.sedrava.nativecheck.tasks
+gradle -p build/android-native-tasks --no-daemon :app:assembleDebug :app:lintDebug
+apk=build/android-native-tasks/app/build/outputs/apk/debug/app-debug.apk
+"$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$apk"
+"$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$apk"
+~~~
 
-## Проверки
+`verify_native_android_kotlin.py` компилирует полученные Kotlin-файлы
+модели, коллекций, навигации, snapshot и файлового хранилища на JVM без
+подмены Android/Compose библиотек. Проверяются последовательность
+переходов по Python-эталону, результаты запросов, повреждённые данные,
+условия отклонения, миграция preferences и чтение Android snapshot
+интерпретаторами Python и Rust. APK-сборка отдельно компилирует настоящую
+Android/Compose часть.
 
-    python3 scripts/verify_native_android.py
+Для независимой проверки на эмуляторе используйте новый тестовый AVD.
+Установите APK через `adb install "$apk"`, запустите
+`adb shell am start -n org.sedrava.nativecheck.tasks/.MainActivity`.
+Добавьте две задачи, откройте первую, переименуйте её, смените статус,
+поверните устройство и проверьте, что открыт тот же экран. Вернитесь
+назад, удалите одну запись, остановите и снова запустите приложение.
+Проверьте восстановление списка, отказ пустого названия и
+`adb logcat -d -s AndroidRuntime`. Ни Gradle, ни JVM-сценарии сами
+по себе не подтверждают эти действия на устройстве.
 
-Проверяет, что два вызова генератора с одинаковыми параметрами дают
-идентичные файлы, корректные XML, приложение с нужным package ID,
-проверку ограничений, отказ от небезопасных ID и отказ от перезаписи.
-
-При наличии Gradle 8.11.1 можно дополнительно выполнить:
-
-    python3 scripts/verify_native_android_kotlin.py \
-      --gradle /path/to/gradle
-
-Этот тест использует **реальный Kotlin JVM compiler**, но вместо Android
-и Compose использует локальные тестовые заглушки, чтобы проверить синтаксис
-и переходы состояния. Такой тест **не равен Gradle Android build / APK**.
-
-На первоначальном VDS проверено наличие Java 17; Android SDK, adb и
-системный Gradle отсутствовали. Поэтому не заявляется успешная сборка
-или установка APK на телефон, пока это не будет отдельно подтверждено.
-
-Завершение переноса Android будет возможно только после расширения
-генератора на все публичные элементы Sedrava, испытаний реального
-Android Gradle Plugin, Gradle/Lint/JVM и установки APK на устройстве.
-
-Общее состояние: [задача №65](https://github.com/VasiliiBabkin/sedrava/issues/65).
+Полная матрица переноса остаётся в [карте миграции](RUST_FULL_MIGRATION.ru.md).
