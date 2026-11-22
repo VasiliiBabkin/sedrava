@@ -20,6 +20,14 @@ Python 0.11 остаётся основным компилятором, а за�
     cargo install --path rust/sedrava-core --bin sedrava-native --locked
     sedrava-native --version
 
+Подтверждена и установка без предварительного клонирования GitHub-репозитория
+на Linux x86_64 (Cargo 1.100.0, коммит fcec9d5):
+
+    cargo install --git https://github.com/VasiliiBabkin/sedrava sedrava-core --bin sedrava-native --locked
+
+Cargo скачает исходники и соберёт бинарник. Для этого способа нужен Rust/Cargo,
+но Python и pip не требуются. Это всё ещё неполный экспериментальный компилятор.
+
 При наличии Rust и исходников пользователь может собрать preview-архив:
 
     cargo build --manifest-path rust/Cargo.toml --locked --release --bin sedrava-native
