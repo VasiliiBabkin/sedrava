@@ -14,7 +14,9 @@ def application_examples(root=ROOT):
     for path in sorted((root / 'examples').glob('*.sdr')):
         source = path.read_text(encoding='utf-8')
         document = parse_document(source,path)
-        if not isinstance(document, (Site, WebApp)) and document.widgets:
+        if isinstance(document, (Site, WebApp)) or not hasattr(document, 'widgets'):
+            continue
+        if document.widgets:
             yield path, source
 
 

@@ -1,0 +1,9 @@
+# Host-only experimental program. Never compiled into Web or Android.
+host "Local report"
+arg input: text
+arg output: text
+arg heading: text
+read source_text from input
+let report = concat(heading, source_text)
+write output = report
+emit report

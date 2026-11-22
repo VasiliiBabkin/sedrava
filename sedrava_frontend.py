@@ -12,5 +12,8 @@ def parse_document(source, source_path=None):
     if document_kind(source) == 'webapp':
         from sedrava_webapp import parse_webapp
         return parse_webapp(source)
+    if document_kind(source) == 'host':
+        from sedrava_host import parse_host
+        return parse_host(source)
     from sedrava_core import parse
     return parse(source)
