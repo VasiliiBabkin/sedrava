@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Differential checks: restricted Rust scalar core vs authoritative Python core.
+"""Differential checks: restricted Rust native core vs authoritative Python core.
 
 Python standard library only. Compare actual JSON state for accepted runs and
 success/rejection for invalid runs; error wording is intentionally not compared.
@@ -24,6 +24,12 @@ CASES = {
     "tests/rust_cases/overflow.sdr": ["overflow"],
     "tests/rust_cases/require.sdr": ["guarded", "negative"],
     "tests/rust_cases/escaped.sdr": ["change"],
+    "examples/task_manager.sdr": ["add", "complete", "rename", "delete"],
+    "tests/rust_cases/records_lists.sdr": ["add", "finish", "delete"],
+    "tests/rust_cases/functions_queries.sdr": ["add", "update"],
+    "examples/task_manager_navigation.sdr": ["add_task", "prepare_details", "open_details", "delete_and_back", "$back", "toggle_task"],
+    "tests/rust_cases/navigation.sdr": ["open", "back", "$back", "step", "disable"],
+    "tests/rust_cases/lazy_queries.sdr": ["prepare"],
 }
 
 
@@ -112,10 +118,10 @@ def main() -> int:
         if len(mismatches) >= 20:
             break
 
-    unsupported = execute(rust, "check", "examples/task_manager.sdr", [])
+    unsupported = execute(rust, "check", "examples/platform_tasks.sdr", [])
     unsupported_correctly_rejected = unsupported[0] != 0
     if not unsupported_correctly_rejected:
-        mismatches.append({"source": "examples/task_manager.sdr", "problem": "unsupported collection program accepted"})
+        mismatches.append({"source": "examples/platform_tasks.sdr", "problem": "unsupported webapp UI accepted"})
 
     summary = {
         "schema": "sedrava-rust-differential-v1",
@@ -124,10 +130,10 @@ def main() -> int:
         "comparisons": total,
         "python_accepted": accepted,
         "python_rejected": rejected,
-        "unsupported_collection_rejected": unsupported_correctly_rejected,
+        "unsupported_webapp_ui_rejected": unsupported_correctly_rejected,
         "mismatch_count": len(mismatches),
         "mismatches": mismatches,
-        "note": "Comparable outcomes are only for the explicitly listed scalar subset; same rejection does not prove identical failure semantics.",
+         "note": "Comparable outcomes are limited to listed scalar, record, collection, pure function, standard library and navigation examples; same rejection does not prove identical failure semantics.",
     }
     output = json.dumps(summary, indent=2, ensure_ascii=False)
     if opts.report:

@@ -3,7 +3,8 @@
 
 use crate::expr;
 use crate::model::{
-    ensure_text, fail, Error, Program, Result, State, Stmt, Value, MAX_ACTION_STEPS,
+    fail, validate, Error, Program, Result, State, Stmt, Value, MAX_ACTION_STEPS,
+    MAX_SNAPSHOT_UTF16,
 };
 
 /// Resolve every derived value from the accepted state in declaration order.
@@ -17,30 +18,36 @@ pub fn resolve(program: &Program, state: &State) -> Result<State> {
             .types
             .get(key)
             .ok_or_else(|| Error(format!("Missing state type: {key}")))?;
-        if *expected != value.kind() {
-            return fail(format!("State type mismatch: {key}"));
-        }
-        if let Value::Text(s) = value {
-            ensure_text(s)?;
-        }
+        validate(value, expected).map_err(|e| Error(format!("State {key}: {e}")))?;
     }
     for (name, expression) in &program.derives {
-        let value = expr::evaluate(expression, &values)?;
+        let value = expr::evaluate_full(expression, &values, &program.types, &program.functions)?;
         let expected = program
             .types
             .get(name)
             .ok_or_else(|| Error(format!("Missing derived type for {name}")))?;
-        if value.kind() != *expected {
-            return fail(format!("Derived type mismatch: {name}"));
-        }
+        validate(&value, expected).map_err(|e| Error(format!("Derived {name}: {e}")))?;
         values.insert(name.to_owned(), value);
+    }
+    // Preserve resource budgeting for records and bounded collections.
+    if state
+        .values()
+        .any(|v| matches!(v, Value::List { .. } | Value::Record { .. }))
+    {
+        let encoded = serde_json::to_string(&state)
+            .map_err(|e| Error(format!("Cannot serialize state: {e}")))?;
+        if encoded.encode_utf16().count() > MAX_SNAPSHOT_UTF16 {
+            return fail("State exceeds snapshot resource limit");
+        }
     }
     Ok(values)
 }
 
 pub fn rules_hold(program: &Program, values: &State) -> Result<bool> {
     for condition in &program.rules {
-        if expr::evaluate(condition, values)? != Value::Bool(true) {
+        if expr::evaluate_full(condition, values, &program.types, &program.functions)?
+            != Value::Bool(true)
+        {
             return Ok(false);
         }
     }
@@ -70,22 +77,43 @@ fn execute_block(
         environment.extend(locals.clone());
         match statement {
             Stmt::Assign(key, expression) => {
-                let value = expr::evaluate(expression, &environment)?;
+                let value = expr::evaluate_full(
+                    expression,
+                    &environment,
+                    &program.types,
+                    &program.functions,
+                )?;
                 candidate.insert(key.clone(), value);
                 // Even when rules are checked only on final candidate, derived
                 // expressions must remain computable after *each* assignment.
                 resolve(program, candidate)?;
             }
             Stmt::Let(name, expression) => {
-                locals.insert(name.to_string(), expr::evaluate(expression, &environment)?);
+                locals.insert(
+                    name.to_string(),
+                    expr::evaluate_full(
+                        expression,
+                        &environment,
+                        &program.types,
+                        &program.functions,
+                    )?,
+                );
             }
             Stmt::Require(condition) => {
-                if expr::evaluate(condition, &environment)? != Value::Bool(true) {
+                if expr::evaluate_full(condition, &environment, &program.types, &program.functions)?
+                    != Value::Bool(true)
+                {
                     return fail("Action requirement rejected");
                 }
             }
             Stmt::Branch(condition, yes, no) => {
-                let branch = if expr::evaluate(condition, &environment)? == Value::Bool(true) {
+                let branch = if expr::evaluate_full(
+                    condition,
+                    &environment,
+                    &program.types,
+                    &program.functions,
+                )? == Value::Bool(true)
+                {
                     yes
                 } else {
                     no
@@ -133,6 +161,16 @@ pub fn run_actions(program: &Program, actions: &[String]) -> Result<State> {
 /// Execute embedded tests through exactly the same transition function as CLI run.
 pub fn run_tests(program: &Program) -> Result<usize> {
     for test in &program.tests {
+        if program.has_navigation {
+            let (state, _) = crate::navigation::run_session(program, &test.actions)
+                .map_err(|e| Error(format!("{}: {e}", test.name)))?;
+            if expr::evaluate_full(&test.expected, &state, &program.types, &program.functions)?
+                != Value::Bool(true)
+            {
+                return fail(format!("{}: assertion failed", test.name));
+            }
+            continue;
+        }
         let mut state = program.states.clone();
         for action in &test.actions {
             let (candidate, accepted) = transition(program, &state, action)
@@ -143,7 +181,9 @@ pub fn run_tests(program: &Program) -> Result<usize> {
             state = candidate;
         }
         let values = resolve(program, &state)?;
-        if expr::evaluate(&test.expected, &values)? != Value::Bool(true) {
+        if expr::evaluate_full(&test.expected, &values, &program.types, &program.functions)?
+            != Value::Bool(true)
+        {
             return fail(format!("{}: assertion failed", test.name));
         }
     }

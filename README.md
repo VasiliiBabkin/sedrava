@@ -17,11 +17,14 @@ Start with [Quick Start](docs/QUICKSTART.md), the [text reference](docs/LANGUAGE
 ## Experimental native Rust core (research branch)
 
 A native Rust compiler/interpreter core now runs a deliberately restricted subset of
-Sedrava: typed scalar values, checked arithmetic, actions, derives, invariants,
-embedded tests and a standalone CLI. It is **not** the default compiler and
+Sedrava: checked scalar values, records, bounded lists, pure functions,
+collection queries, navigation, actions, derives, invariants, embedded tests
+and a standalone CLI. Web/Android generators, persistence, modules and
+Host Effects remain on Python. It is **not** the default compiler and
 does **not** replace the stable Python 0.11.0 toolchain.
 
 - [Rust migration and design decision](docs/ADR_RUST_CORE.md)
+- [Full native Rust migration coverage and release gates (RU)](docs/RUST_FULL_MIGRATION.ru.md)
 - [Russian build/use guide and unsupported features](docs/RUST_CORE_MIGRATION.ru.md)
 - [Differential Python/Rust checker](scripts/verify_rust_core.py)
 - [Scoped CLI benchmark](scripts/benchmark_rust_core.py)

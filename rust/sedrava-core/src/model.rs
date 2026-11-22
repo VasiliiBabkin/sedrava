@@ -1,7 +1,7 @@
-//! AST and value representation for the intentionally restricted native core.
+//! Typed values and expression IR for the experimental native Sedrava core.
 
-use serde::Serialize;
-use std::collections::BTreeMap;
+use serde::{Serialize, Serializer};
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 pub const MAX_TEXT_SCALARS: usize = 1024;
@@ -9,13 +9,49 @@ pub const MAX_SOURCE_CHARS: usize = 100_000;
 pub const MAX_AST_NODES: usize = 256;
 pub const MAX_ACTION_STEPS: usize = 10_000;
 pub const MAX_BLOCK_DEPTH: usize = 32;
+pub const MAX_COLLECTIONS: usize = 16;
+pub const MAX_RECORDS: usize = 16;
+pub const MAX_SNAPSHOT_UTF16: usize = 200_000;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
-#[serde(untagged)]
+pub enum Kind {
+    Int,
+    Bool,
+    Text,
+    Record {
+        name: String,
+        fields: Vec<(String, Kind)>,
+    },
+    List {
+        record: Box<Kind>,
+        capacity: usize,
+    },
+    Function {
+        parameters: Vec<Kind>,
+        result: Box<Kind>,
+    },
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ListItem {
+    pub id: i32,
+    pub record: Value,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum Value {
     Int(i32),
     Bool(bool),
     Text(String),
+    Record {
+        kind: Kind,
+        fields: BTreeMap<String, Value>,
+    },
+    List {
+        kind: Kind,
+        items: Vec<ListItem>,
+        next_id: i32,
+    },
 }
 
 impl Value {
@@ -24,19 +60,82 @@ impl Value {
             Self::Int(_) => Kind::Int,
             Self::Bool(_) => Kind::Bool,
             Self::Text(_) => Kind::Text,
+            Self::Record { kind, .. } | Self::List { kind, .. } => kind.clone(),
+        }
+    }
+
+    pub fn plain(&self) -> serde_json::Value {
+        match self {
+            Self::Int(v) => serde_json::json!(v),
+            Self::Bool(v) => serde_json::json!(v),
+            Self::Text(v) => serde_json::json!(v),
+            Self::Record { fields, .. } => serde_json::Value::Object(
+                fields
+                    .iter()
+                    .map(|(key, v)| (key.clone(), v.plain()))
+                    .collect(),
+            ),
+            Self::List { items, next_id, .. } => {
+                let rows: Vec<_> = items
+                    .iter()
+                    .map(|row| {
+                        let mut data = match row.record.plain() {
+                            serde_json::Value::Object(m) => m,
+                            _ => unreachable!("typed collection rows contain records"),
+                        };
+                        data.insert("id".to_owned(), serde_json::json!(row.id));
+                        serde_json::Value::Object(data)
+                    })
+                    .collect();
+                serde_json::json!({"next_id":next_id,"items":rows})
+            }
         }
     }
 }
 
-pub type State = BTreeMap<String, Value>;
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Kind {
-    Int,
-    Bool,
-    Text,
+impl Serialize for Value {
+    fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
+        self.plain().serialize(serializer)
+    }
 }
+
+pub fn validate(value: &Value, expected: &Kind) -> Result<()> {
+    if &value.kind() != expected {
+        return fail("Value type mismatch");
+    }
+    match (value, expected) {
+        (Value::Text(v), Kind::Text) => ensure_text(v),
+        (Value::Record { fields, .. }, Kind::Record { fields: schema, .. }) => {
+            if fields.len() != schema.len() {
+                return fail("Invalid record field count");
+            }
+            for (name, field_kind) in schema {
+                let Some(v) = fields.get(name) else {
+                    return fail("Missing record field");
+                };
+                validate(v, field_kind)?;
+            }
+            Ok(())
+        }
+        (Value::List { items, next_id, .. }, Kind::List { record, capacity }) => {
+            if *next_id < 1 || items.len() > *capacity {
+                return fail("Invalid bounded collection");
+            }
+            let mut ids = BTreeSet::new();
+            for row in items {
+                if row.id <= 0 || row.id >= *next_id || !ids.insert(row.id) {
+                    return fail("Invalid or duplicate record identity");
+                }
+                validate(&row.record, record)?;
+            }
+            Ok(())
+        }
+        (Value::Int(_), Kind::Int) | (Value::Bool(_), Kind::Bool) => Ok(()),
+        _ => fail("Type mismatch"),
+    }
+}
+
+pub type State = BTreeMap<String, Value>;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Unary {
@@ -65,6 +164,13 @@ pub enum Expr {
     Bool(bool),
     Text(String),
     Ident(String),
+    Attr(Box<Expr>, String),
+    Conditional(Box<Expr>, Box<Expr>, Box<Expr>),
+    Call {
+        name: String,
+        args: Vec<Expr>,
+        kwargs: Vec<(String, Expr)>,
+    },
     Unary(Unary, Box<Expr>),
     Binary(Binary, Box<Expr>, Box<Expr>),
 }
@@ -85,14 +191,42 @@ pub struct EmbeddedTest {
 }
 
 #[derive(Clone, Debug)]
+pub struct PureFunction {
+    pub name: String,
+    pub parameters: Vec<(String, Kind)>,
+    pub result: Kind,
+    pub body: Expr,
+}
+
+#[derive(Clone, Debug)]
+pub struct Screen {
+    pub name: String,
+    pub guard: Option<Expr>,
+    pub commands: Vec<String>,
+    pub requires_navigation: bool,
+}
+
+#[derive(Clone, Debug)]
+pub struct Navigation {
+    pub name: String,
+    pub target: String,
+    pub action: Option<String>,
+}
+
+#[derive(Clone, Debug)]
 pub struct Program {
     pub name: String,
     pub states: State,
     pub types: BTreeMap<String, Kind>,
     pub derives: Vec<(String, Expr)>,
+    pub functions: BTreeMap<String, PureFunction>,
     pub actions: BTreeMap<String, Vec<Stmt>>,
     pub rules: Vec<Expr>,
     pub tests: Vec<EmbeddedTest>,
+    pub screens: BTreeMap<String, Screen>,
+    pub navigation: BTreeMap<String, Navigation>,
+    pub initial_screen: String,
+    pub has_navigation: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -103,7 +237,6 @@ impl fmt::Display for Error {
         f.write_str(&self.0)
     }
 }
-
 impl std::error::Error for Error {}
 
 pub type Result<T> = std::result::Result<T, Error>;

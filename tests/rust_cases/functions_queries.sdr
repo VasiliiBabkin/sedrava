@@ -1,0 +1,36 @@
+app "Functions, dates, bounded queries"
+record Task:
+    title: text
+    done: bool
+    score: int
+fn matches(task: Task, query: text) -> bool = contains(lower_ascii(task.title), lower_ascii(query))
+fn points(task: Task) -> int = task.score
+fn boosted(task: Task) -> Task = Task(title=task.title, done=task.done, score=task.score + 1)
+fn is_valid(task: Task, pool: list<Task>(max=20)) -> bool = has(pool, task.score)
+state tasks: list<Task>(max=20) = []
+state title = "Backyard"
+state query = "back"
+derive matches_now = filter(tasks, matches, query)
+derive matches_count = count(matches_now)
+derive score_total = sum(tasks, points)
+derive high_first = find(tasks, matches, query)
+derive all_match = all(tasks, matches, query)
+derive any_match = any(tasks, matches, query)
+derive ordered = sort(tasks, points)
+derive improved = map(tasks, boosted)
+derive normalized = trim(lower_ascii(concat("  AB", "C \n")))
+derive valid_date = is_date("2024-02-29")
+derive leap_end = date_add("2024-02-29", 1)
+derive leap_days = date_days("2024-03-01") - date_days("2024-02-29")
+action add:
+    tasks = append(tasks, Task(title=title, done=false, score=2))
+action update:
+    tasks = update(tasks, 1, Task(title="Second", done=true, score=3))
+test initial: -> matches_count == 0 and score_total == 0 and valid_date and leap_end == "2024-03-01" and leap_days == 1 and normalized == "abc"
+test after_add: add -> matches_count == 1 and score_total == 2 and high_first == 1 and all_match and any_match and get(improved, 1).score == 3
+test after_update: add, update -> matches_count == 0 and score_total == 3 and not any_match
+screen main:
+    text "Functions"
+    value matches_count
+    value score_total
+    button "Add" -> add
