@@ -1,0 +1,27 @@
+app "Portable persistent records"
+record Task:
+    title: text
+    done: bool
+state title = "Начало 😀"
+state tasks: list<Task>(max=10) = []
+state selected = 0
+persist title
+persist tasks
+derive total = count(tasks)
+derive completed = count(filter(tasks, "done", true))
+action add:
+    require title != ""
+    tasks = append(tasks, Task(title=title, done=false))
+action complete:
+    require has(tasks, 1)
+    tasks = update(tasks, 1, Task(title=get(tasks, 1).title, done=true))
+action reject:
+    tasks = append(tasks, Task(title="Should not persist", done=false))
+    require false
+rule total <= 2
+test initial: -> total == 0
+test added: add -> total == 1
+screen main:
+    text "Portable"
+    value total
+    button "Add" -> add

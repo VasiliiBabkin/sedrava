@@ -145,7 +145,11 @@ pub fn transition(program: &Program, state: &State, action: &str) -> Result<(Sta
 }
 
 pub fn run_actions(program: &Program, actions: &[String]) -> Result<State> {
-    let mut state = program.states.clone();
+    run_actions_from(program, &program.states, actions)
+}
+
+pub fn run_actions_from(program: &Program, initial: &State, actions: &[String]) -> Result<State> {
+    let mut state = initial.clone();
     for action in actions {
         let (candidate, accepted) = transition(program, &state, action)?;
         if !accepted {

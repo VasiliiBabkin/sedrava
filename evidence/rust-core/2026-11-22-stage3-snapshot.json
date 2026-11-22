@@ -1,0 +1,28 @@
+{
+  "schema": "sedrava-native-snapshot-conformance-v1",
+  "fixture": "tests/rust_cases/persistent_records.sdr",
+  "checks": 14,
+  "passed": [
+    "Python produced a valid schema-1 snapshot",
+    "Rust loaded Python snapshot, changed records, Python restored identical state",
+    "Python read Rust snapshot and schema signature matched",
+    "Python updated Rust snapshot; Rust restored it",
+    "Rust rejected require violation without modifying snapshot",
+    "Both engines reject duplicate-key without modifying snapshot",
+    "Both engines reject bad-signature without modifying snapshot",
+    "Both engines reject bad-schema without modifying snapshot",
+    "Both engines reject floating-point-number without modifying snapshot",
+    "Both engines reject bad-record-id without modifying snapshot",
+    "Both engines reject out-of-range-int without modifying snapshot",
+    "Both engines reject unknown-state-key without modifying snapshot",
+    "Navigation snapshots keep only canonical state, not derived fields",
+    "The source file cannot be used as the snapshot destination"
+  ],
+  "scope": "Python/Rust portable schema-1 JSON, typed records, failure non-modification on local filesystem",
+  "not_verified": [
+    "Power-loss durability",
+    "Concurrent writers",
+    "Windows/macOS atomic rename",
+    "All user programs"
+  ]
+}

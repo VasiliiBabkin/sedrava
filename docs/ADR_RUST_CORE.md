@@ -28,9 +28,10 @@ measurable startup/compilation performance. No universal speedup assumed.
 
 ## Next milestones
 
-1. Typed IR and source spans with structured diagnostics.
+1. Experimental typed JSON IR and top-level source spans now implemented;
+   next complete expression-level spans and structured diagnostics.
 2. Records, bounded lists and identity with cross-runtime conformance.
-3. Pure functions, modules, resource budgets and Host Effects.
+3. Pure functions implemented; still port modules, full budgets and Host Effects.
 4. Connect existing Web/Android generators through versioned IR after parity.
 5. Investigate native code generation separately.
 6. Integrate SedravaSQL through explicit storage permissions and a stable API.
