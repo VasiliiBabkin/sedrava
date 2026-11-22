@@ -7,9 +7,13 @@ certification or production readiness.
 ## Exact revisions
 
 - Rust build, rustfmt, unit tests and differential tests: Sedrava
-  commit 31250bee938863bca60ce7f23bb6a00140516f5a.
+  commit cd8701f432708df305b35d86237fc69a1e607070 (14 Rust tests).
+  Earlier Python regression and documentation checks were run on
+  31250bee938863bca60ce7f23bb6a00140516f5a; only Rust parser code
+  changed subsequently.
 - CLI benchmark: source commit 20066cb93240e101ccdc5cf8f6c7dedd7bb30efa;
-  the later commit applies rustfmt only to Rust implementation and adds docs/lockfile.
+  later revisions format Rust code, add a lockfile and restrict expression
+  nesting. The benchmark was **not rerun on the later revision**.
 - Script inputs: scripts/verify_rust_core.py and
   scripts/benchmark_rust_core.py in this branch.
 
@@ -38,12 +42,12 @@ From a checkout at the test revision:
 
 Observed:
 - rustfmt check: PASS
-- Rust unit tests: **13 passed, 0 failed**
+- Rust unit tests: **14 passed, 0 failed**
 - Native CLI build: PASS
 - Python/Rust differential: **263 comparisons, 0 mismatches**;
   167 accepted and 96 rejected by Python, matching Rust success/rejection.
 - Unsupported records/collections sample: explicitly rejected by Rust.
-- Existing Python suite: **274 tests, 0 failures, 5 skipped**
+- Existing Python suite (prior revision, no Python core changes): **274 tests, 0 failures, 5 skipped**
 - Documentation checker: **60 documents / local links checked, PASS**
 
 The differential program compares actual JSON output on successful runs.
@@ -91,3 +95,10 @@ and workload choice can change these numbers substantially.
   above; the listed checks ran directly on the Linux VDS.
 
 This report is an engineering record, not a release certificate.
+
+## Additional parser robustness check
+
+The native parser limits recursive parentheses, repeated unary minus and
+repeated logical negation to 64 nested levels. A regression test rejects
+1000 levels without exhausting the call stack; it passed within the 14 Rust
+tests at commit cd8701f432708df305b35d86237fc69a1e607070.
