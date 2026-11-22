@@ -5,6 +5,7 @@
 //! compiler: site/webapp modes, full UI generation, imports and host effects
 //! remain in Python until native conformance is demonstrated.
 
+pub mod android;
 pub mod collections;
 pub mod expr;
 pub mod ir;

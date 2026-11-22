@@ -38,7 +38,7 @@ Rust: парсер, типы, интерпретатор, генераторы W
 | Локальные импорты/пакеты, компоненты, стили | Частично | Проверенный локальный импорт fn/record на Rust; компонентные макросы, стили и Site/WebApp остаются на Python |
 | Site и WebApp, layout, виджеты, маршруты | Не перенесено | Проверять все режимы 0.11 |
 | Web-генератор JavaScript/HTML | Экспериментальная реализация app-mode | Проверены state/record/list, чистые функции, запросы, persist и multi-screen navigation в Node DOM mock; Site/WebApp и реальные браузерные E2E не проверены |
-| Android-генератор Kotlin/Compose | Не перенесено | APK должен иметь отдельные проверки |
+| Android-генератор Kotlin/Compose | Экспериментальное подмножество | Rust создаёт Compose/Gradle исходники для single-screen scalar app; persist/list/navigation, APK и устройство не проверены |
 | HTTP-сервисы, запросы, политики Host Effects | Не перенесено | Доступ к сети/ФС нельзя расширять неявно |
 | Нативные бинарники для Windows/macOS | Не проверено | cargo install и preview-архив проверяются на Linux x86_64; Windows/macOS ещё нет |
 | Совместимость всех существующих .sdr-программ | Не доказана | Нужна матрица по режимам/платформам |
@@ -118,3 +118,6 @@ SHA и сохранять окружение, выходные коды и ош�
 
 
 Проверяемые прототипы [импортов и Web](RUST_WEB_SCALAR.ru.md) и [распространения](DISTRIBUTION_NATIVE.ru.md).
+
+
+Подробности экспериментального [Android-подмножества](RUST_ANDROID_GENERATOR.ru.md).

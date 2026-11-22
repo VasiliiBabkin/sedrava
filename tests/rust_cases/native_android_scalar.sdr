@@ -1,0 +1,21 @@
+app "Android Rust · Демо @?"
+state count = 1
+state name = "Проверка 😀"
+derive doubled = count * 2
+derive positive = count > 0
+action increase:
+    count = count + 1
+action decrease:
+    require positive
+    count = count - 1
+rule count >= 0
+test initial: -> count == 1 and doubled == 2
+test after_step: increase -> count == 2 and doubled == 4
+screen main:
+    text "Привет, Android"
+    input count
+    input name
+    value doubled
+    show positive : text "Положительное число"
+    button "Добавить" -> increase
+    button "Уменьшить" -> decrease

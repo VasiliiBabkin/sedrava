@@ -21,10 +21,13 @@ fn usage() {
            sedrava-native inspect FILE
            sedrava-native ir FILE
            sedrava-native expand FILE
-           sedrava-native build web FILE [--output PATH]\n\
+           sedrava-native build web FILE [--output PATH]
+           sedrava-native build android FILE --output DIR --application-id ID\n\
          Supports typed records, bounded lists, pure functions, navigation,\n\
          snapshot persistence and experimental typed IR export.\n\
-         Not supported: Web/Android generation, site/webapp DSL, component expansion,\n\
+         Full Site/WebApp and Android generators remain incomplete.
+         Native Android preview requires explicit application ID.
+         Not supported: complete native site/webapp, component expansion,\n\
          Host Effects or the full 0.11 language.\n\
          See docs/RUST_CORE_MIGRATION.ru.md. Do not use for production."
     );
@@ -116,15 +119,65 @@ fn run() -> Result<()> {
     }
     let command = &args[1];
     let is_build = command == "build";
-    if is_build && args.get(2).map(String::as_str) != Some("web") {
+    if is_build && !matches!(args.get(2).map(String::as_str), Some("web" | "android")) {
         return Err(Error(
-            "Only scalar build web is supported natively; other targets are not migrated".into(),
+            "Native build supports only experimental web and android targets".into(),
         ));
     }
     let source_index = if is_build { 3 } else { 2 };
     let source = args
         .get(source_index)
         .ok_or_else(|| Error("Expected a command, target and .sdr file".into()))?;
+    if is_build && args[2] == "android" {
+        if args.len() != 8 || args[4] != "--output" || args[6] != "--application-id" {
+            return Err(Error(
+                "Expected build android FILE --output DIR --application-id ID".into(),
+            ));
+        }
+        let output = PathBuf::from(&args[5]);
+        if fs::symlink_metadata(&output).is_ok() {
+            return Err(Error(
+                "Android output directory must not already exist".into(),
+            ));
+        }
+        let program = load(source)?;
+        let project = sedrava_core::android::generate(&program, &args[7])?;
+        let parent = output
+            .parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .unwrap_or(Path::new("."));
+        fs::create_dir_all(parent)
+            .map_err(|e| Error(format!("Cannot create output parent: {e}")))?;
+        let staging = tempfile::tempdir_in(parent)
+            .map_err(|e| Error(format!("Cannot stage Android project: {e}")))?;
+        for (name, bytes) in &project.files {
+            let relative = Path::new(name);
+            if relative.is_absolute()
+                || relative
+                    .components()
+                    .any(|part| !matches!(part, std::path::Component::Normal(_)))
+            {
+                return Err(Error("Invalid generated relative Android path".into()));
+            }
+            let target = staging.path().join(relative);
+            let dir = target
+                .parent()
+                .ok_or_else(|| Error("Generated project path missing parent".into()))?;
+            fs::create_dir_all(dir)
+                .map_err(|e| Error(format!("Cannot stage Android directory: {e}")))?;
+            fs::write(&target, bytes)
+                .map_err(|e| Error(format!("Cannot write Android source: {e}")))?;
+        }
+        let temp = staging.keep();
+        if let Err(error) = fs::rename(&temp, &output) {
+            let _ = fs::remove_dir_all(&temp);
+            return Err(Error(format!(
+                "Cannot atomically publish Android directory: {error}"
+            )));
+        }
+        println!("{}", output.display());
+        return Ok(());
+    }
     if is_build {
         let output = if args.len() == 4 {
             PathBuf::from("build/web/index.html")
