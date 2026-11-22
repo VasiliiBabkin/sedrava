@@ -196,6 +196,10 @@ pub struct PureFunction {
     pub parameters: Vec<(String, Kind)>,
     pub result: Kind,
     pub body: Expr,
+    /// An opt-in upper bound for app-domain effects. Some(empty) is pure.
+    /// This is neither a permission grant nor a complete UI/Host manifest.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub declared_effects: Option<BTreeSet<String>>,
 }
 
 #[derive(Clone, Debug, Serialize)]
