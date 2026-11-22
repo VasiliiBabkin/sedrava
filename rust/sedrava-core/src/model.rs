@@ -199,10 +199,35 @@ pub struct PureFunction {
 }
 
 #[derive(Clone, Debug, Serialize)]
+pub enum Widget {
+    Text(String),
+    Value(String),
+    Show {
+        condition: String,
+        label: String,
+    },
+    Input {
+        state: String,
+        label: String,
+    },
+    Button {
+        label: String,
+        action: String,
+    },
+    Display(Expr),
+    List {
+        collection: String,
+        selected: String,
+        options: Vec<(String, String)>,
+    },
+}
+
+#[derive(Clone, Debug, Serialize)]
 pub struct Screen {
     pub name: String,
     pub guard: Option<Expr>,
     pub commands: Vec<String>,
+    pub widgets: Vec<Widget>,
     pub requires_navigation: bool,
 }
 

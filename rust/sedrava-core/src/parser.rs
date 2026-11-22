@@ -6,7 +6,7 @@
 use crate::expr;
 use crate::model::{
     fail, EmbeddedTest, Error, Expr, Kind, Navigation, Program, PureFunction, Result, Screen,
-    SourceSpan, State, Stmt, Value, MAX_ACTION_STEPS, MAX_BLOCK_DEPTH, MAX_COLLECTIONS,
+    SourceSpan, State, Stmt, Value, Widget, MAX_ACTION_STEPS, MAX_BLOCK_DEPTH, MAX_COLLECTIONS,
     MAX_RECORDS, MAX_SOURCE_CHARS,
 };
 use std::collections::{BTreeMap, BTreeSet};
@@ -345,6 +345,67 @@ fn parse_widget(
         return line_error(number, "Widget unsupported by native scalar core");
     }
     Ok(None)
+}
+
+/// Preserve validated widget declarations as structured data for backends.
+fn widget_ast(line: &Line, types: &BTreeMap<String, Kind>) -> Result<Widget> {
+    let text = line.content.as_str();
+    let n = line.number;
+    if let Some(value) = text.strip_prefix("text ") {
+        return Ok(Widget::Text(parse_label(value, n)?));
+    }
+    if let Some(key) = text.strip_prefix("value ") {
+        return Ok(Widget::Value(key.to_owned()));
+    }
+    if let Some(rest) = text.strip_prefix("input ") {
+        let (key, label) = if let Some((key, label)) = rest.split_once(" label ") {
+            (key, parse_label(label, n)?)
+        } else {
+            (rest, rest.to_owned())
+        };
+        return Ok(Widget::Input {
+            state: key.to_owned(),
+            label,
+        });
+    }
+    if let Some(rest) = text.strip_prefix("show ") {
+        let Some((condition, label)) = rest.split_once(" : text ") else {
+            return line_error(n, "Invalid show declaration");
+        };
+        return Ok(Widget::Show {
+            condition: condition.to_owned(),
+            label: parse_label(label, n)?,
+        });
+    }
+    if let Some(rest) = text.strip_prefix("button ") {
+        let Some((label, action)) = rest.rsplit_once(" -> ") else {
+            return line_error(n, "Invalid button declaration");
+        };
+        return Ok(Widget::Button {
+            label: parse_label(label, n)?,
+            action: action.to_owned(),
+        });
+    }
+    if let Some(rest) = text.strip_prefix("display ") {
+        let (expr, _) = checked_expression(rest, types, n)?;
+        return Ok(Widget::Display(expr));
+    }
+    if let Some(rest) = text.strip_prefix("list ") {
+        let tokens: Vec<&str> = rest.split_whitespace().collect();
+        if tokens.len() < 3 {
+            return line_error(n, "Invalid list declaration");
+        }
+        let options = tokens[3..]
+            .chunks(2)
+            .map(|chunk| (chunk[0].to_owned(), chunk.get(1).unwrap_or(&"").to_string()))
+            .collect();
+        return Ok(Widget::List {
+            collection: tokens[0].to_owned(),
+            selected: tokens[2].to_owned(),
+            options,
+        });
+    }
+    line_error(n, "Unsupported widget for native backend")
 }
 
 /// Parse supported app semantics including typed records/lists, functions,
@@ -743,6 +804,7 @@ pub fn parse(source: &str) -> Result<Program> {
             }
             let widget_indent = lines[i].indent;
             let mut commands = Vec::new();
+            let mut widgets = Vec::new();
             let mut requires_navigation = false;
             let mut count = 0;
             while i < lines.len() && lines[i].indent != 0 {
@@ -759,6 +821,7 @@ pub fn parse(source: &str) -> Result<Program> {
                 if let Some(action) = parse_widget(&lines[i], &types, &states)? {
                     commands.push(action);
                 }
+                widgets.push(widget_ast(&lines[i], &types)?);
                 count += 1;
                 i += 1;
             }
@@ -778,6 +841,7 @@ pub fn parse(source: &str) -> Result<Program> {
                     name: screen_name.to_owned(),
                     guard,
                     commands,
+                    widgets,
                     requires_navigation,
                 },
             );

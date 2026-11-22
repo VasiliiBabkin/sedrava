@@ -1,0 +1,14 @@
+app "Native imports"
+import "modules/native_math.sdr"
+state count = 3
+state who = "Седрава"
+derive doubled = double(count)
+derive hello = greeting(who)
+action increase:
+    count = count + 1
+test doubles: increase -> doubled == 8
+screen main:
+    text "Modules"
+    value doubled
+    value hello
+    button "Increase" -> increase

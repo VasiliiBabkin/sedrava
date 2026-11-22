@@ -19,10 +19,12 @@ fn usage() {
            sedrava-native test FILE\n\
            sedrava-native run FILE [ACTION ...] [--state-file PATH]\n\
            sedrava-native inspect FILE
-           sedrava-native ir FILE\n\
+           sedrava-native ir FILE
+           sedrava-native expand FILE
+           sedrava-native build web FILE [--output PATH]\n\
          Supports typed records, bounded lists, pure functions, navigation,\n\
          snapshot persistence and experimental typed IR export.\n\
-         Not supported: Web/Android generation, site/webapp DSL, modules,\n\
+         Not supported: Web/Android generation, site/webapp DSL, component expansion,\n\
          Host Effects or the full 0.11 language.\n\
          See docs/RUST_CORE_MIGRATION.ru.md. Do not use for production."
     );
@@ -33,9 +35,8 @@ fn load(path: &str) -> Result<sedrava_core::Program> {
     if metadata.len() > (sedrava_core::model::MAX_SOURCE_CHARS as u64) * 4 {
         return Err(Error("Source file exceeds size limit".into()));
     }
-    let raw = fs::read_to_string(Path::new(path))
-        .map_err(|e| Error(format!("Cannot read {path}: {e}")))?;
-    parse(&raw)
+    let expanded = sedrava_core::modules::expand_local_imports(Path::new(path))?;
+    parse(&expanded.source)
 }
 
 /// Persist after successfully validating every action. No in-place truncation.
@@ -114,7 +115,64 @@ fn run() -> Result<()> {
         return Err(Error("Expected a command and a .sdr file".into()));
     }
     let command = &args[1];
-    let source = &args[2];
+    let is_build = command == "build";
+    if is_build && args.get(2).map(String::as_str) != Some("web") {
+        return Err(Error(
+            "Only scalar build web is supported natively; other targets are not migrated".into(),
+        ));
+    }
+    let source_index = if is_build { 3 } else { 2 };
+    let source = args
+        .get(source_index)
+        .ok_or_else(|| Error("Expected a command, target and .sdr file".into()))?;
+    if is_build {
+        let output = if args.len() == 4 {
+            PathBuf::from("build/web/index.html")
+        } else if args.len() == 6 && args[4] == "--output" {
+            PathBuf::from(&args[5])
+        } else {
+            return Err(Error("Expected build web FILE [--output PATH]".into()));
+        };
+        let expanded = sedrava_core::modules::expand_local_imports(Path::new(source))?;
+        let program = parse(&expanded.source)?;
+        let generated = sedrava_core::web::generate_web(&program)?;
+        let source_path = fs::canonicalize(source).map_err(|e| Error(e.to_string()))?;
+        let parent = output
+            .parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .unwrap_or(Path::new("."));
+        let parent_real = if parent.exists() {
+            fs::canonicalize(parent).map_err(|e| Error(e.to_string()))?
+        } else {
+            fs::create_dir_all(parent).map_err(|e| Error(e.to_string()))?;
+            fs::canonicalize(parent).map_err(|e| Error(e.to_string()))?
+        };
+        let file_name = output
+            .file_name()
+            .ok_or_else(|| Error("Build output must be a file".into()))?;
+        let output_canonical = parent_real.join(file_name);
+        if output_canonical == source_path || expanded.imported_paths.contains(&output_canonical) {
+            return Err(Error(
+                "Web output must not overwrite the source or an imported module".into(),
+            ));
+        }
+        write_snapshot(&output, &generated)?;
+        // Snapshots deliberately use private tempfile permissions. Generated
+        // static web artifacts, in contrast, must be readable by web servers.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&output, fs::Permissions::from_mode(0o644))
+                .map_err(|e| Error(format!("Cannot make generated web output readable: {e}")))?;
+        }
+        println!("{}", output.display());
+        return Ok(());
+    }
+    if command == "expand" && args.len() == 3 {
+        let expanded = sedrava_core::modules::expand_local_imports(Path::new(source))?;
+        print!("{}", expanded.source);
+        return Ok(());
+    }
     let program = load(source)?;
     match command.as_str() {
         "check" if args.len() == 3 => {
