@@ -1,0 +1,31 @@
+app "Native Web functions"
+fn double(n: int) -> int = n * 2
+fn greet(who: text) -> text = concat("Hello, ", who)
+fn positive(n: int) -> bool = n > 0
+state count = 1
+state who = "  A😀Z  "
+state today = "2024-02-29"
+derive doubled = double(count)
+derive hello = greet(trim(who))
+derive length = text_length(trim(who))
+derive ascii = lower_ascii(trim(who))
+derive next_day = date_add(today, 1)
+derive days = date_days(today)
+derive can_reset = positive(count)
+derive valid = is_date(today)
+action add: count = count + 1
+action reset:
+    require positive(count)
+    count = 0
+test initial: -> doubled == 2 and length == 3 and valid
+test added: add -> doubled == 4
+screen main:
+    text "Functions"
+    value doubled
+    value hello
+    value length
+    value ascii
+    value next_day
+    value can_reset
+    button "Add" -> add
+    button "Reset" -> reset

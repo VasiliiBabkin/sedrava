@@ -1,0 +1,35 @@
+app "Native Web queries"
+record Row:
+    label: text
+    done: bool
+    score: int
+fn points(row: Row) -> int = row.score
+fn eligible(row: Row) -> bool = row.done
+fn adjust(row: Row) -> Row = Row(label=row.label, done=row.done, score=row.score + 1)
+state items: list<Row>(max=10) = []
+state selected = 0
+persist items
+derive total = sum(items, points)
+derive done_count = count(filter(items, "done", true))
+derive first_done = find(items, eligible)
+derive all_done = all(items, eligible)
+derive any_done = any(items, eligible)
+derive mapped = map(items, adjust)
+derive ordered = sort(items, "label")
+derive filtered = filter(items, eligible)
+action add_one:
+    items = append(items, Row(label="B", done=false, score=2))
+action add_two:
+    items = append(items, Row(label="A", done=true, score=3))
+test initial: -> total == 0 and not any_done and all_done
+test populated: add_one, add_two -> total == 5 and done_count == 1 and first_done == 2 and not all_done
+screen main:
+    text "Queries"
+    value total
+    value done_count
+    value first_done
+    value any_done
+    value all_done
+    list items select selected
+    button "First" -> add_one
+    button "Second" -> add_two
