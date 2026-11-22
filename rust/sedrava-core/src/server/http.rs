@@ -1,6 +1,6 @@
 //! Limited HTTP/1.1 framing for the local native preview.
 //! Each accepted TCP connection carries exactly one request; always close.
-use super::{reply, Server, MAX_REQUEST_BODY};
+use super::{reply_stateful, Server, Session, MAX_REQUEST_BODY};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
@@ -188,6 +188,7 @@ fn reason(status: u16) -> &'static str {
         413 => "Content Too Large",
         415 => "Unsupported Media Type",
         422 => "Unprocessable Content",
+        503 => "Service Unavailable",
         431 => "Request Header Fields Too Large",
         _ => "Internal Server Error",
     }
@@ -209,10 +210,11 @@ fn write_response(stream: &mut TcpStream, response: Response) -> std::io::Result
     stream.flush()
 }
 
-pub(super) fn process(server: &Server, stream: &mut TcpStream) {
+pub(super) fn process(server: &Server, session: &mut Session, stream: &mut TcpStream) {
     let response = match parse_request(stream) {
-        Ok(request) => reply(
+        Ok(request) => reply_stateful(
             server,
+            session,
             &request.method,
             &request.path,
             &request.body,

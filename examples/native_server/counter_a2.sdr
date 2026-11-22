@@ -1,0 +1,27 @@
+# Sedrava Server A2: bounded stateful handlers, optional private persistence.
+server "Counter A2"
+state count: int = 0
+state label: text = "new"
+state enabled: bool = false
+route GET "/counter":
+    respond 200 { count: state.count, label: state.label, enabled: state.enabled }
+route POST "/increment":
+    request delta: int
+    require request.delta > 0
+    set count = state.count + request.delta
+    require state.count <= 5
+    respond 200 { count: state.count, accepted: true }
+route POST "/label":
+    request label: text
+    require request.label != ""
+    set label = request.label
+    respond 200 { label: state.label }
+route PUT "/enabled":
+    request enabled: bool
+    set enabled = request.enabled
+    respond 200 { enabled: state.enabled }
+route DELETE "/reset":
+    set count = 0
+    set label = "new"
+    set enabled = false
+    respond 200 { count: state.count, label: state.label, enabled: state.enabled }
