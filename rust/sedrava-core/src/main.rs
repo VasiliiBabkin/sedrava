@@ -107,7 +107,7 @@ fn run() -> Result<()> {
         return Ok(());
     }
     if args[1] == "--version" {
-        println!("sedrava-native 0.1.0-alpha.1 (experimental Rust scalar core)");
+        println!("sedrava-native 0.1.0-alpha.1 (experimental partial Sedrava core)");
         return Ok(());
     }
     if args.len() < 3 {
