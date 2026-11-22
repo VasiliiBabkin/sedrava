@@ -1,5 +1,19 @@
 # Sedrava — Roadmap / Дорожная карта
 
+## Native Rust Core / Экспериментальный перенос ядра
+
+- Отдельная ветка: experiment/rust-core-migration.
+- Реализовано самостоятельное Rust-ядро для ограниченного набора скалярных
+  .sdr-программ (парсер, проверка типов, интерпретатор, CLI).
+- Тестовые программы сравниваются с Python через
+  [scripts/verify_rust_core.py](../scripts/verify_rust_core.py).
+- Код не заменяет опубликованную Python 0.11.0; генераторы Web/Android,
+  records/collections, imports и Host Effects пока не перенесены.
+- Решение и следующие этапы: [ADR](ADR_RUST_CORE.md) и
+  [руководство](RUST_CORE_MIGRATION.ru.md).
+- Любое утверждение о скорости должно быть ограничено сценарием,
+  датой, оборудованием и воспроизводимыми измерениями.
+
 ## Published releases / Опубликованные версии
 
 - **0.10.0**, previous stable version: [GitHub](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.10.0), [PyPI](https://pypi.org/project/sedrava/0.10.0/), published 31 October 2026. Unicode, records, bounded lists, navigation and Web/Android generation.

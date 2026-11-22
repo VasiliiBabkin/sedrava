@@ -57,13 +57,35 @@ fn is_identifier(name: &str) -> bool {
         && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
         && !matches!(
             name,
-            "true" | "false" | "True" | "False" | "None" | "and" | "or" | "not"
-                | "if" | "else" | "for" | "while" | "class" | "def" | "return"
-                | "lambda" | "import" | "from" | "try" | "except" | "with"
+            "true"
+                | "false"
+                | "True"
+                | "False"
+                | "None"
+                | "and"
+                | "or"
+                | "not"
+                | "if"
+                | "else"
+                | "for"
+                | "while"
+                | "class"
+                | "def"
+                | "return"
+                | "lambda"
+                | "import"
+                | "from"
+                | "try"
+                | "except"
+                | "with"
         )
 }
 
-fn checked_expression(source: &str, kinds: &BTreeMap<String, Kind>, line: usize) -> Result<(Expr, Kind)> {
+fn checked_expression(
+    source: &str,
+    kinds: &BTreeMap<String, Kind>,
+    line: usize,
+) -> Result<(Expr, Kind)> {
     let expr = expr::parse(source).map_err(|e| Error(format!("Line {line}: {e}")))?;
     let kind = expr::infer(&expr, kinds).map_err(|e| Error(format!("Line {line}: {e}")))?;
     Ok((expr, kind))
@@ -149,9 +171,7 @@ fn parse_block(
                 return line_error(number, "Empty if branch");
             }
             let mut no = Vec::new();
-            if *pos < lines.len()
-                && lines[*pos].indent == indent
-                && lines[*pos].content == "else:"
+            if *pos < lines.len() && lines[*pos].indent == indent && lines[*pos].content == "else:"
             {
                 *pos += 1;
                 if *pos >= lines.len() || lines[*pos].indent <= indent {
@@ -167,7 +187,12 @@ fn parse_block(
             continue;
         }
         if let Some(rest) = text.strip_prefix("require ") {
-            body.push(Stmt::Require(require_type(rest, &scope, Kind::Bool, number)?));
+            body.push(Stmt::Require(require_type(
+                rest,
+                &scope,
+                Kind::Bool,
+                number,
+            )?));
         } else if let Some(rest) = text.strip_prefix("let ") {
             let (name, value) = split_decl(rest, number)?;
             if scope.contains_key(name) {
@@ -192,7 +217,11 @@ fn parse_block(
     Ok(body)
 }
 
-fn parse_widget(line: &Line, types: &BTreeMap<String, Kind>, states: &State) -> Result<Option<String>> {
+fn parse_widget(
+    line: &Line,
+    types: &BTreeMap<String, Kind>,
+    states: &State,
+) -> Result<Option<String>> {
     let number = line.number;
     let text = line.content.as_str();
     if let Some(label) = text.strip_prefix("text ") {
@@ -342,7 +371,8 @@ pub fn parse(source: &str) -> Result<Program> {
             let Some((sequences, condition)) = body.split_once("->") else {
                 return line_error(current.number, "Expected '->' in test");
             };
-            if !is_identifier(test_name) || tests.iter().any(|t: &EmbeddedTest| t.name == test_name) {
+            if !is_identifier(test_name) || tests.iter().any(|t: &EmbeddedTest| t.name == test_name)
+            {
                 return line_error(current.number, "Invalid or duplicate test");
             }
             tests.push(EmbeddedTest {

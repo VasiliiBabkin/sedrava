@@ -114,7 +114,9 @@ pub fn fail<T>(msg: impl Into<String>) -> Result<T> {
 
 pub fn ensure_text(s: &str) -> Result<()> {
     if s.chars().count() > MAX_TEXT_SCALARS {
-        return fail(format!("Text exceeds {MAX_TEXT_SCALARS} Unicode scalar values"));
+        return fail(format!(
+            "Text exceeds {MAX_TEXT_SCALARS} Unicode scalar values"
+        ));
     }
     Ok(())
 }

@@ -14,6 +14,28 @@
 
 Start with [Quick Start](docs/QUICKSTART.md), the [text reference](docs/LANGUAGE_0_10_TEXT.md), [text profile example](examples/text_profile.sdr), and [measured report](docs/TEXT_010_REPORT.md). The [task manager](examples/task_manager.sdr) now uses records and lists directly in `.sdr`; the [navigation example](docs/NAVIGATION_QUICKSTART.en.md) adds guarded screens and Back.
 
+## Experimental native Rust core (research branch)
+
+A native Rust compiler/interpreter core now runs a deliberately restricted subset of
+Sedrava: typed scalar values, checked arithmetic, actions, derives, invariants,
+embedded tests and a standalone CLI. It is **not** the default compiler and
+does **not** replace the stable Python 0.11.0 toolchain.
+
+- [Rust migration and design decision](docs/ADR_RUST_CORE.md)
+- [Russian build/use guide and unsupported features](docs/RUST_CORE_MIGRATION.ru.md)
+- [Differential Python/Rust checker](scripts/verify_rust_core.py)
+- [Scoped CLI benchmark](scripts/benchmark_rust_core.py)
+
+For example, from the repository root, after installing Rust:
+
+    cargo build --manifest-path rust/Cargo.toml --locked --bin sedrava-native
+    cargo test --manifest-path rust/Cargo.toml --locked --workspace
+    ./rust/target/debug/sedrava-native run examples/reference_09.sdr add add
+
+This experiment makes no claims about Web/Android output speed, full 0.11
+language compatibility or production readiness. Published Python releases
+remain unchanged.
+
 ## Getting started
 
 **Describe the application; get the application. / Опиши приложение — получи приложение.**

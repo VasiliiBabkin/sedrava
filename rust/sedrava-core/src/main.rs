@@ -53,7 +53,10 @@ fn run() -> Result<()> {
         }
         "run" => {
             let values = run_actions(&program, &args[3..])?;
-            println!("{}", serde_json::to_string(&values).map_err(|e| Error(e.to_string()))?);
+            println!(
+                "{}",
+                serde_json::to_string(&values).map_err(|e| Error(e.to_string()))?
+            );
         }
         "inspect" if args.len() == 3 => {
             let output = json!({
@@ -65,12 +68,16 @@ fn run() -> Result<()> {
                 "supported": "scalar states, int32/bool/text, derived, rules, actions, tests",
                 "full_language": false
             });
-            println!("{}", serde_json::to_string_pretty(&output)
-                .map_err(|e| Error(e.to_string()))?);
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&output).map_err(|e| Error(e.to_string()))?
+            );
         }
         _ => {
             usage();
-            return Err(Error(format!("Unknown command or extra arguments: {command}")));
+            return Err(Error(format!(
+                "Unknown command or extra arguments: {command}"
+            )));
         }
     }
     Ok(())

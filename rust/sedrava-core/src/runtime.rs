@@ -26,9 +26,10 @@ pub fn resolve(program: &Program, state: &State) -> Result<State> {
     }
     for (name, expression) in &program.derives {
         let value = expr::evaluate(expression, &values)?;
-        let expected = program.types.get(name).ok_or_else(|| {
-            Error(format!("Missing derived type for {name}"))
-        })?;
+        let expected = program
+            .types
+            .get(name)
+            .ok_or_else(|| Error(format!("Missing derived type for {name}")))?;
         if value.kind() != *expected {
             return fail(format!("Derived type mismatch: {name}"));
         }
@@ -107,13 +108,7 @@ pub fn transition(program: &Program, state: &State, action: &str) -> Result<(Sta
         .get(action)
         .ok_or_else(|| Error(format!("Unknown action: {action}")))?;
     let mut candidate = state.clone();
-    execute_block(
-        program,
-        &mut candidate,
-        body,
-        &mut State::new(),
-        &mut 0,
-    )?;
+    execute_block(program, &mut candidate, body, &mut State::new(), &mut 0)?;
     let final_values = resolve(program, &candidate)?;
     if !rules_hold(program, &final_values)? {
         return Ok((state.clone(), false));
@@ -126,7 +121,9 @@ pub fn run_actions(program: &Program, actions: &[String]) -> Result<State> {
     for action in actions {
         let (candidate, accepted) = transition(program, &state, action)?;
         if !accepted {
-            return fail(format!("Action {action}: invariant rejected; state unchanged"));
+            return fail(format!(
+                "Action {action}: invariant rejected; state unchanged"
+            ));
         }
         state = candidate;
     }
@@ -202,7 +199,11 @@ mod tests {
              action act:\n    if n == 0:\n        n = n + 5\n    else:\n        n = n - 1",
         )
         .unwrap();
-        assert_eq!(run_actions(&p, &["act".into(), "act".into()])
-            .unwrap().get("n"), Some(&Value::Int(4)));
+        assert_eq!(
+            run_actions(&p, &["act".into(), "act".into()])
+                .unwrap()
+                .get("n"),
+            Some(&Value::Int(4))
+        );
     }
 }

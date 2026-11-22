@@ -45,13 +45,13 @@ fn lex(source: &str) -> Result<Vec<Tok>> {
                 pos += 1;
             }
             let raw: String = chars[start..pos].iter().collect();
-            let x = raw.parse::<i64>().map_err(|_| Error("Integer literal out of range".into()))?;
+            let x = raw
+                .parse::<i64>()
+                .map_err(|_| Error("Integer literal out of range".into()))?;
             Tok::Int(x)
         } else if c.is_ascii_alphabetic() || c == '_' {
             let start = pos;
-            while pos < chars.len()
-                && (chars[pos].is_ascii_alphanumeric() || chars[pos] == '_')
-            {
+            while pos < chars.len() && (chars[pos].is_ascii_alphanumeric() || chars[pos] == '_') {
                 pos += 1;
             }
             let word: String = chars[start..pos].iter().collect();
@@ -363,9 +363,7 @@ pub fn evaluate(expr: &Expr, values: &State) -> Result<Value> {
                 Error("Integer overflow: outside signed 32-bit range".into())
             })?))
         }
-        Expr::Unary(Unary::Not, inner) => {
-            Ok(Value::Bool(!as_bool(evaluate(inner, values)?)?))
-        }
+        Expr::Unary(Unary::Not, inner) => Ok(Value::Bool(!as_bool(evaluate(inner, values)?)?)),
         Expr::Binary(Binary::And, left, right) => {
             let a = as_bool(evaluate(left, values)?)?;
             Ok(Value::Bool(a && as_bool(evaluate(right, values)?)?))
@@ -389,9 +387,9 @@ pub fn evaluate(expr: &Expr, values: &State) -> Result<Value> {
                 Binary::Mul => as_int(a)?.checked_mul(as_int(b)?),
                 Binary::And | Binary::Or => unreachable!(),
             };
-            result.map(Value::Int).ok_or_else(|| {
-                Error("Integer overflow: outside signed 32-bit range".into())
-            })
+            result
+                .map(Value::Int)
+                .ok_or_else(|| Error("Integer overflow: outside signed 32-bit range".into()))
         }
     }
 }
