@@ -76,4 +76,25 @@ Issue #65 therefore remains OPEN. This stage only establishes a tested
 starting point for the Android backend without modifying the published
 Python compiler or breaking user projects.
 
-Before merging, re-run against the exact GitHub source SHA and record it.
+## Exact GitHub source confirmation
+
+Clean detached Git worktree source SHA:
+`3c4f565024f4e78ac957cde2629cdf516c918f7f`.
+
+The published implementation was independently rechecked on the Linux VDS:
+- Cargo fmt, Rust build and **40 Rust unit tests**: PASS.
+- Native Android project determinism, metadata, invalid-ID and dangling
+  symlink output rejection: PASS.
+- **Real Kotlin 2.0.21 JVM compilation** via Gradle 8.11.1 against local
+  Android/Compose test stubs, followed by executable domain-state tests: PASS.
+- Existing Node mock-DOM Web and native import tests: PASS.
+- Python/Rust interpreter differential: 390 comparisons, zero observed
+  mismatches on the tested subset; rejected cases compare acceptance only.
+- Snapshot interoperability: 14 checks PASS.
+- Existing Python regression: 274 tests, 5 skipped, no failures.
+- Documentation checker: PASS.
+- Git worktree clean after verification, no GitHub Actions used.
+
+This evidence-only GitHub commit does not change the verified implementation.
+No actual Android Gradle Plugin build, APK, device, or real Compose UI test
+has been performed.
