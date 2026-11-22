@@ -1,0 +1,151 @@
+{
+  "coverage": "app-scalar-single-screen",
+  "diagnostics": {
+    "coverage": "declarations-only",
+    "declarations": {
+      "action:decrement": {
+        "column": 1,
+        "line": 4
+      },
+      "action:increment": {
+        "column": 1,
+        "line": 3
+      },
+      "action:reset": {
+        "column": 1,
+        "line": 5
+      },
+      "screen:main": {
+        "column": 1,
+        "line": 9
+      },
+      "state:count": {
+        "column": 1,
+        "line": 2
+      },
+      "test:increment": {
+        "column": 1,
+        "line": 7
+      },
+      "test:reset": {
+        "column": 1,
+        "line": 8
+      }
+    }
+  },
+  "program": {
+    "actions": [
+      {
+        "name": "decrement",
+        "statements": [
+          {
+            "expression": {
+              "left": {
+                "name": "count",
+                "node": "reference"
+              },
+              "node": "binary",
+              "operator": "sub",
+              "right": {
+                "node": "literal",
+                "type": "int",
+                "value": 1
+              }
+            },
+            "op": "set",
+            "target": "count"
+          }
+        ]
+      },
+      {
+        "name": "increment",
+        "statements": [
+          {
+            "expression": {
+              "left": {
+                "name": "count",
+                "node": "reference"
+              },
+              "node": "binary",
+              "operator": "add",
+              "right": {
+                "node": "literal",
+                "type": "int",
+                "value": 1
+              }
+            },
+            "op": "set",
+            "target": "count"
+          }
+        ]
+      },
+      {
+        "name": "reset",
+        "statements": [
+          {
+            "expression": {
+              "node": "literal",
+              "type": "int",
+              "value": 0
+            },
+            "op": "set",
+            "target": "count"
+          }
+        ]
+      }
+    ],
+    "name": "Sedrava Counter",
+    "rules": [
+      {
+        "left": {
+          "name": "count",
+          "node": "reference"
+        },
+        "node": "binary",
+        "operator": "ge",
+        "right": {
+          "node": "literal",
+          "type": "int",
+          "value": 0
+        }
+      }
+    ],
+    "screen": {
+      "name": "main",
+      "widgets": [
+        {
+          "kind": "text",
+          "text": "Sedrava Counter"
+        },
+        {
+          "kind": "value",
+          "name": "count"
+        },
+        {
+          "action": "increment",
+          "kind": "button",
+          "label": "Add"
+        },
+        {
+          "action": "decrement",
+          "kind": "button",
+          "label": "Subtract"
+        },
+        {
+          "action": "reset",
+          "kind": "button",
+          "label": "Reset"
+        }
+      ]
+    },
+    "state": [
+      {
+        "initial": 0,
+        "name": "count",
+        "type": "int"
+      }
+    ]
+  },
+  "schema": "sedrava.ir.app",
+  "version": "1.0-candidate.1"
+}

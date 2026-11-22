@@ -1,0 +1,153 @@
+{
+  "coverage": "app-scalar-single-screen",
+  "diagnostics": {
+    "coverage": "declarations-only",
+    "declarations": {
+      "action:increase": {
+        "column": 1,
+        "line": 5
+      },
+      "action:revoke": {
+        "column": 1,
+        "line": 8
+      },
+      "screen:main": {
+        "column": 1,
+        "line": 11
+      },
+      "state:allowed": {
+        "column": 1,
+        "line": 3
+      },
+      "state:count": {
+        "column": 1,
+        "line": 2
+      },
+      "state:message": {
+        "column": 1,
+        "line": 4
+      },
+      "test:initial": {
+        "column": 1,
+        "line": 10
+      }
+    }
+  },
+  "program": {
+    "actions": [
+      {
+        "name": "increase",
+        "statements": [
+          {
+            "expression": {
+              "name": "allowed",
+              "node": "reference"
+            },
+            "op": "require"
+          },
+          {
+            "expression": {
+              "left": {
+                "name": "count",
+                "node": "reference"
+              },
+              "node": "binary",
+              "operator": "add",
+              "right": {
+                "node": "literal",
+                "type": "int",
+                "value": 1
+              }
+            },
+            "op": "set",
+            "target": "count"
+          }
+        ]
+      },
+      {
+        "name": "revoke",
+        "statements": [
+          {
+            "expression": {
+              "node": "literal",
+              "type": "bool",
+              "value": false
+            },
+            "op": "set",
+            "target": "allowed"
+          }
+        ]
+      }
+    ],
+    "name": "IR Guard",
+    "rules": [
+      {
+        "left": {
+          "left": {
+            "name": "count",
+            "node": "reference"
+          },
+          "node": "binary",
+          "operator": "ge",
+          "right": {
+            "node": "literal",
+            "type": "int",
+            "value": 0
+          }
+        },
+        "node": "binary",
+        "operator": "and",
+        "right": {
+          "left": {
+            "name": "count",
+            "node": "reference"
+          },
+          "node": "binary",
+          "operator": "le",
+          "right": {
+            "node": "literal",
+            "type": "int",
+            "value": 10
+          }
+        }
+      }
+    ],
+    "screen": {
+      "name": "main",
+      "widgets": [
+        {
+          "kind": "text",
+          "text": "<img src=x onerror=alert(1)>"
+        },
+        {
+          "kind": "value",
+          "name": "count"
+        },
+        {
+          "action": "increase",
+          "kind": "button",
+          "label": "Next"
+        }
+      ]
+    },
+    "state": [
+      {
+        "initial": 0,
+        "name": "count",
+        "type": "int"
+      },
+      {
+        "initial": true,
+        "name": "allowed",
+        "type": "bool"
+      },
+      {
+        "initial": "Привет",
+        "name": "message",
+        "type": "text"
+      }
+    ]
+  },
+  "schema": "sedrava.ir.app",
+  "version": "1.0-candidate.1"
+}

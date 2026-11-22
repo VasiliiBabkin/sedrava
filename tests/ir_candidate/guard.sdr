@@ -1,0 +1,14 @@
+app "IR Guard"
+state count = 0
+state allowed = true
+state message = "Привет"
+action increase:
+    require allowed
+    count = count + 1
+action revoke: allowed = false
+rule count >= 0 and count <= 10
+test initial: -> count == 0
+screen main:
+    text "<img src=x onerror=alert(1)>"
+    value count
+    button "Next" -> increase
