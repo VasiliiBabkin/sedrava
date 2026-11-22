@@ -65,14 +65,14 @@ fn read_source(path: &str) -> Result<String> {
 }
 
 #[cfg(any(target_os = "linux", target_vendor = "apple"))]
-fn publish_web_directory(staged: &Path, output: &Path) -> std::io::Result<()> {
+fn publish_new_directory(staged: &Path, output: &Path) -> std::io::Result<()> {
     use rustix::fs::{renameat_with, RenameFlags, CWD};
     renameat_with(CWD, staged, CWD, output, RenameFlags::NOREPLACE)?;
     Ok(())
 }
 
 #[cfg(not(any(target_os = "linux", target_vendor = "apple")))]
-fn publish_web_directory(staged: &Path, output: &Path) -> std::io::Result<()> {
+fn publish_new_directory(staged: &Path, output: &Path) -> std::io::Result<()> {
     match fs::symlink_metadata(output) {
         Ok(_) => Err(std::io::Error::new(
             std::io::ErrorKind::AlreadyExists,
@@ -317,7 +317,7 @@ fn run() -> Result<()> {
             }
         }
         let temp = staging.keep();
-        if let Err(e) = publish_web_directory(&temp, &output) {
+        if let Err(e) = publish_new_directory(&temp, &output) {
             let _ = fs::remove_dir_all(&temp);
             return Err(Error(format!("Cannot publish Web directory: {e}")));
         }
@@ -365,7 +365,7 @@ fn run() -> Result<()> {
                 .map_err(|e| Error(format!("Cannot write Android source: {e}")))?;
         }
         let temp = staging.keep();
-        if let Err(error) = fs::rename(&temp, &output) {
+        if let Err(error) = publish_new_directory(&temp, &output) {
             let _ = fs::remove_dir_all(&temp);
             return Err(Error(format!(
                 "Cannot atomically publish Android directory: {error}"

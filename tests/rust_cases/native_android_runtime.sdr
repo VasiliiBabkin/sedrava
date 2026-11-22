@@ -1,0 +1,30 @@
+app "Android runtime"
+state count = 0
+state enabled = true
+state label = ""
+persist count
+persist enabled
+persist label
+derive doubled = count * 2
+derive scalars = text_length(label)
+derive tomorrow = date_add("2024-02-28", 1)
+rule count >= 0
+action increment:
+    count = count + 1
+action reject:
+    count = 5
+    require not enabled
+action intermediate:
+    count = 2147483647
+    count = 1
+action minimum:
+    let minimum_value = -2147483648
+    count = minimum_value
+action underflow:
+    count = 0 - 1
+screen main:
+    text "Android runtime"
+    value doubled
+    input count
+    input label
+    button "Increment" -> increment
