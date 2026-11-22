@@ -1,0 +1,402 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/VasiliiBabkin/sedrava/main/schemas/ir/app-1.0-candidate.1.schema.json",
+  "title": "Sedrava IR app scalar candidate",
+  "description": "Experimental subset, NOT a stable external ABI",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "version",
+    "coverage",
+    "program",
+    "diagnostics"
+  ],
+  "properties": {
+    "schema": {
+      "const": "sedrava.ir.app"
+    },
+    "version": {
+      "const": "1.0-candidate.1"
+    },
+    "coverage": {
+      "const": "app-scalar-single-screen"
+    },
+    "program": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "state",
+        "actions",
+        "rules",
+        "screen"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "state": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "type",
+              "initial"
+            ],
+            "properties": {
+              "name": {
+                "$ref": "#/$defs/name"
+              },
+              "type": {
+                "enum": [
+                  "int",
+                  "bool",
+                  "text"
+                ]
+              },
+              "initial": {
+                "oneOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -2147483648,
+                    "maximum": 2147483647
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "string",
+                    "maxLength": 1024
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "statements"
+            ],
+            "properties": {
+              "name": {
+                "$ref": "#/$defs/name"
+              },
+              "statements": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "op",
+                        "target",
+                        "expression"
+                      ],
+                      "properties": {
+                        "op": {
+                          "const": "set"
+                        },
+                        "target": {
+                          "$ref": "#/$defs/name"
+                        },
+                        "expression": {
+                          "$ref": "#/$defs/expr"
+                        }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "op",
+                        "expression"
+                      ],
+                      "properties": {
+                        "op": {
+                          "const": "require"
+                        },
+                        "expression": {
+                          "$ref": "#/$defs/expr"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "rules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/expr"
+          }
+        },
+        "screen": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "widgets"
+          ],
+          "properties": {
+            "name": {
+              "$ref": "#/$defs/name"
+            },
+            "widgets": {
+              "type": "array",
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "kind",
+                      "text"
+                    ],
+                    "properties": {
+                      "kind": {
+                        "const": "text"
+                      },
+                      "text": {
+                        "type": "string",
+                        "maxLength": 1024
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "kind",
+                      "name"
+                    ],
+                    "properties": {
+                      "kind": {
+                        "const": "value"
+                      },
+                      "name": {
+                        "$ref": "#/$defs/name"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "kind",
+                      "label",
+                      "action"
+                    ],
+                    "properties": {
+                      "kind": {
+                        "const": "button"
+                      },
+                      "label": {
+                        "type": "string",
+                        "maxLength": 1024
+                      },
+                      "action": {
+                        "$ref": "#/$defs/name"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "diagnostics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "coverage",
+        "declarations"
+      ],
+      "properties": {
+        "coverage": {
+          "const": "declarations-only"
+        },
+        "declarations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "line",
+              "column"
+            ],
+            "properties": {
+              "line": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "column": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "name": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+    },
+    "expr": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "node",
+            "type",
+            "value"
+          ],
+          "properties": {
+            "node": {
+              "const": "literal"
+            },
+            "type": {
+              "enum": [
+                "int",
+                "bool",
+                "text"
+              ]
+            },
+            "value": {
+              "oneOf": [
+                {
+                  "type": "integer",
+                  "minimum": -2147483648,
+                  "maximum": 2147483647
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "string",
+                  "maxLength": 1024
+                }
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "node",
+            "name"
+          ],
+          "properties": {
+            "node": {
+              "const": "reference"
+            },
+            "name": {
+              "$ref": "#/$defs/name"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "node",
+            "operator",
+            "argument"
+          ],
+          "properties": {
+            "node": {
+              "const": "unary"
+            },
+            "operator": {
+              "enum": [
+                "neg",
+                "not"
+              ]
+            },
+            "argument": {
+              "$ref": "#/$defs/expr"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "node",
+            "operator",
+            "left",
+            "right"
+          ],
+          "properties": {
+            "node": {
+              "const": "binary"
+            },
+            "operator": {
+              "enum": [
+                "add",
+                "sub",
+                "mul",
+                "eq",
+                "ne",
+                "lt",
+                "le",
+                "gt",
+                "ge",
+                "and",
+                "or"
+              ]
+            },
+            "left": {
+              "$ref": "#/$defs/expr"
+            },
+            "right": {
+              "$ref": "#/$defs/expr"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "node",
+            "test",
+            "then",
+            "else"
+          ],
+          "properties": {
+            "node": {
+              "const": "conditional"
+            },
+            "test": {
+              "$ref": "#/$defs/expr"
+            },
+            "then": {
+              "$ref": "#/$defs/expr"
+            },
+            "else": {
+              "$ref": "#/$defs/expr"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

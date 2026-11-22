@@ -13,6 +13,7 @@ pub mod host;
 #[cfg(unix)]
 pub(crate) mod host_json;
 pub mod ir;
+pub mod ir_candidate;
 pub mod model;
 pub mod modules;
 pub mod navigation;
@@ -25,6 +26,7 @@ pub mod snapshot;
 pub mod stdlib;
 pub mod typed_errors;
 pub mod web;
+pub mod web_ir;
 
 pub use model::{Error, Kind, Program, Result, State, Value};
 pub use parser::parse;

@@ -25,8 +25,10 @@ fn usage() {
            sedrava-native run FILE [ACTION ...] [--state-file PATH]\n\
            sedrava-native inspect FILE
            sedrava-native ir FILE
+           sedrava-native ir-candidate FILE
            sedrava-native expand FILE
            sedrava-native build web FILE [--output PATH]
+           sedrava-native build web-ir FILE [--output PATH]
            sedrava-native build site FILE --output DIR
            sedrava-native build webapp FILE --output DIR
            sedrava-native build android FILE --output DIR --application-id ID\n\
@@ -328,7 +330,7 @@ fn run() -> Result<()> {
     if is_build
         && !matches!(
             args.get(2).map(String::as_str),
-            Some("web" | "android" | "site" | "webapp")
+            Some("web" | "web-ir" | "android" | "site" | "webapp")
         )
     {
         return Err(Error(
@@ -477,7 +479,12 @@ fn run() -> Result<()> {
         };
         let expanded = sedrava_core::modules::expand_local_imports(Path::new(source))?;
         let program = parse(&expanded.source)?;
-        let generated = sedrava_core::web::generate_web(&program)?;
+        let generated = if args[2] == "web-ir" {
+            let candidate = sedrava_core::ir_candidate::export(&program)?;
+            sedrava_core::web_ir::generate(&candidate)?
+        } else {
+            sedrava_core::web::generate_web(&program)?
+        };
         let source_path = fs::canonicalize(source).map_err(|e| Error(e.to_string()))?;
         let parent = output
             .parent()
@@ -590,6 +597,13 @@ fn run() -> Result<()> {
         }
         "ir" if args.len() == 3 => {
             let ir = sedrava_core::ir::export(&program)?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&ir).map_err(|e| Error(e.to_string()))?
+            );
+        }
+        "ir-candidate" if args.len() == 3 => {
+            let ir = sedrava_core::ir_candidate::export(&program)?;
             println!(
                 "{}",
                 serde_json::to_string_pretty(&ir).map_err(|e| Error(e.to_string()))?
