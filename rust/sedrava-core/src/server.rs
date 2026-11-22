@@ -13,6 +13,12 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 mod http;
+mod state;
+mod storage;
+
+use state::{StateDef, Step, Values};
+use std::path::Path;
+use storage::{SaveFailure, Store};
 
 pub const MAX_REQUEST_BODY: usize = 16_384;
 const MAX_SOURCE: usize = 32_768;
@@ -28,17 +34,14 @@ pub enum ScalarType {
     Bool,
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum ResponseValue {
-    Literal(Value),
-    RequestField(String),
-}
+pub use state::Expr as ResponseValue;
 
 #[derive(Clone, Debug)]
 pub struct Route {
     method: String,
     path: String,
     request: BTreeMap<String, ScalarType>,
+    steps: Vec<Step>,
     response: BTreeMap<String, ResponseValue>,
     status: u16,
 }
@@ -47,6 +50,7 @@ pub struct Route {
 pub struct Server {
     pub name: String,
     routes: Vec<Route>,
+    states: BTreeMap<String, StateDef>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -85,6 +89,7 @@ fn json_string(raw: &str) -> Result<String> {
 fn fields(
     raw: &str,
     schema: &BTreeMap<String, ScalarType>,
+    states: &BTreeMap<String, StateDef>,
 ) -> Result<BTreeMap<String, ResponseValue>> {
     let source = raw.trim();
     if !source.starts_with('{') || !source.ends_with('}') {
@@ -133,24 +138,7 @@ fn fields(
         if !identifier(key) || result.contains_key(key) || value.is_empty() {
             return fail("E_SERVER_RESPONSE: invalid or repeated response key");
         }
-        let parsed = if let Some(field) = value.strip_prefix("request.") {
-            if !identifier(field) || !schema.contains_key(field) {
-                return fail("E_SERVER_RESPONSE: unknown typed request field");
-            }
-            ResponseValue::RequestField(field.into())
-        } else {
-            let literal: Value = serde_json::from_str(value)
-                .map_err(|_| Error("E_SERVER_RESPONSE: expected JSON scalar".into()))?;
-            match &literal {
-                Value::String(v)
-                    if v.chars().count() <= MAX_SCALAR_TEXT && !v.chars().any(char::is_control) => {
-                }
-                Value::Bool(_) => {}
-                Value::Number(v) if v.as_i64().is_some_and(|n| i32::try_from(n).is_ok()) => {}
-                _ => return fail("E_SERVER_RESPONSE: only text, int32 and bool literals"),
-            }
-            ResponseValue::Literal(literal)
-        };
+        let (parsed, _kind) = state::expression(value, schema, states)?;
         result.insert(key.to_string(), parsed);
     }
     Ok(result)
@@ -184,10 +172,19 @@ pub fn parse(source: &str) -> Result<Server> {
         return fail("E_SERVER_PARSE: invalid server name");
     }
     let mut routes = Vec::new();
+    let mut states = BTreeMap::new();
     let mut current: Option<Route> = None;
     let mut has_response = false;
     for (number, line) in lines.into_iter().skip(1) {
-        if line.starts_with("route ") && !line.starts_with(' ') {
+        if let Some(decl) = line.strip_prefix("state ") {
+            if current.is_some() || !routes.is_empty() || states.len() >= 16 {
+                return fail("E_SERVER_STATE: state declarations must precede routes (max 16)");
+            }
+            let (name, def) = state::parse_state(decl)?;
+            if states.insert(name, def).is_some() {
+                return fail("E_SERVER_STATE: duplicate state name");
+            }
+        } else if line.starts_with("route ") && !line.starts_with(' ') {
             if let Some(previous) = current.take() {
                 if !has_response {
                     return fail(format!(
@@ -221,6 +218,7 @@ pub fn parse(source: &str) -> Result<Server> {
                 method: method.into(),
                 path,
                 request: BTreeMap::new(),
+                steps: Vec::new(),
                 response: BTreeMap::new(),
                 status: 200,
             });
@@ -253,6 +251,13 @@ pub fn parse(source: &str) -> Result<Server> {
                     _ => return fail("E_SERVER_PARSE: only int, bool, text supported"),
                 };
                 route.request.insert(key.to_string(), kind);
+            } else if content.starts_with("set ") || content.starts_with("require ") {
+                if has_response || route.steps.len() >= 32 {
+                    return fail("E_SERVER_STEP: handler steps after response or over budget");
+                }
+                let step =
+                    state::parse_step(content, &route.request, &states, route.method == "GET")?;
+                route.steps.push(step);
             } else if let Some(response) = content.strip_prefix("respond ") {
                 if has_response {
                     return fail("E_SERVER_PARSE: multiple respond statements");
@@ -266,7 +271,7 @@ pub fn parse(source: &str) -> Result<Server> {
                 if !matches!(route.status, 200 | 201 | 202) {
                     return fail("E_SERVER_PARSE: only 200, 201, 202 accepted in A1");
                 }
-                route.response = fields(value, &route.request)?;
+                route.response = fields(value, &route.request, &states)?;
                 has_response = true;
             } else {
                 return fail(format!(
@@ -292,7 +297,11 @@ pub fn parse(source: &str) -> Result<Server> {
             return fail("E_SERVER_PARSE: duplicate route");
         }
     }
-    Ok(Server { name, routes })
+    Ok(Server {
+        name,
+        routes,
+        states,
+    })
 }
 
 struct StrictObject(Map<String, Value>);
@@ -323,8 +332,49 @@ impl<'de> Deserialize<'de> for StrictObject {
     }
 }
 
+pub(crate) struct Session {
+    values: Values,
+    store: Option<Store>,
+    poisoned: bool,
+}
+impl Session {
+    fn open(program: &Server, state_dir: Option<&Path>) -> Result<Self> {
+        let (store, values) = if let Some(dir) = state_dir {
+            let (store, values) = Store::open(dir, &program.name, &program.states)?;
+            (Some(store), values)
+        } else {
+            (
+                None,
+                program
+                    .states
+                    .iter()
+                    .map(|(name, def)| (name.clone(), def.initial.clone()))
+                    .collect(),
+            )
+        };
+        Ok(Self {
+            values,
+            store,
+            poisoned: false,
+        })
+    }
+}
+
+#[cfg(test)]
 pub(crate) fn reply(
     program: &Server,
+    method: &str,
+    path: &str,
+    body: &[u8],
+    content_type: Option<&str>,
+) -> http::Response {
+    let mut session = Session::open(program, None).expect("in-memory state");
+    reply_stateful(program, &mut session, method, path, body, content_type)
+}
+
+pub(crate) fn reply_stateful(
+    program: &Server,
+    session: &mut Session,
     method: &str,
     path: &str,
     body: &[u8],
@@ -395,20 +445,52 @@ pub(crate) fn reply(
             bindings.insert(key.clone(), value.clone());
         }
     }
-    let mut output = Map::new();
-    for (key, value) in &route.response {
-        let data = match value {
-            ResponseValue::Literal(v) => v.clone(),
-            ResponseValue::RequestField(name) => bindings[name].clone(),
+    // Candidate is isolated until all handler statements, response
+    // expressions and optional durable storage succeed.
+    let request: Values = bindings.into_iter().collect();
+    let mut candidate = session.values.clone();
+    if let Err(error) = state::run(&route.steps, &request, &mut candidate) {
+        return match error {
+            state::EvalError::Overflow => http::Response::error(422, "INTEGER_OVERFLOW"),
+            state::EvalError::GuardRejected => http::Response::error(422, "GUARD_REJECTED"),
+            state::EvalError::Invalid => http::Response::error(500, "HANDLER_FAILED"),
         };
-        output.insert(key.clone(), data);
+    }
+    let mut output = Map::new();
+    for (key, expr) in &route.response {
+        match state::eval(expr, &request, &candidate) {
+            Ok(value) => {
+                output.insert(key.clone(), value);
+            }
+            Err(state::EvalError::Overflow) => {
+                return http::Response::error(422, "INTEGER_OVERFLOW")
+            }
+            Err(_) => return http::Response::error(500, "HANDLER_FAILED"),
+        }
+    }
+    if candidate != session.values {
+        if let Some(store) = session.store.as_mut() {
+            match store.save(&candidate) {
+                Ok(()) => {}
+                Err(SaveFailure::RejectedBeforeCommit) => {
+                    return http::Response::error(503, "STATE_WRITE_FAILED")
+                }
+                Err(SaveFailure::DurabilityUncertain) => {
+                    // Rename may already be visible. Stop to prevent
+                    // subsequent requests from using stale in-memory state.
+                    session.poisoned = true;
+                    return http::Response::error(503, "STATE_COMMIT_UNCERTAIN");
+                }
+            }
+        }
+        session.values = candidate;
     }
     http::Response::json(route.status, Value::Object(output))
 }
 
 /// Single-threaded local preview: no listening on public interfaces,
 /// no long-lived keep-alive connections or concurrent state mutation.
-pub fn serve(program: &Server, options: RuntimeOptions) -> Result<()> {
+pub fn serve(program: &Server, options: RuntimeOptions, state_dir: Option<&Path>) -> Result<()> {
     if options.max_requests == 0
         || options.max_requests > 10_000
         || options.idle_ms < 500
@@ -416,6 +498,7 @@ pub fn serve(program: &Server, options: RuntimeOptions) -> Result<()> {
     {
         return fail("E_SERVER_RUN: max_requests 1..10000 and idle_ms 500..120000 required");
     }
+    let mut session = Session::open(program, state_dir)?;
     let listener = TcpListener::bind(("127.0.0.1", options.port))
         .map_err(|e| Error(format!("E_SERVER_BIND: unable to bind loopback: {e}")))?;
     listener
@@ -436,7 +519,10 @@ pub fn serve(program: &Server, options: RuntimeOptions) -> Result<()> {
             Ok((mut stream, _)) => {
                 let _ = stream.set_read_timeout(Some(Duration::from_millis(1200)));
                 let _ = stream.set_write_timeout(Some(Duration::from_millis(1200)));
-                http::process(program, &mut stream);
+                http::process(program, &mut session, &mut stream);
+                if session.poisoned {
+                    return fail("E_SERVER_STORAGE: post-commit sync uncertain; process stopped");
+                }
                 served += 1;
                 last = Instant::now();
             }
