@@ -20,16 +20,18 @@ A native Rust compiler/interpreter core now runs a deliberately restricted subse
 Sedrava: checked scalar values, records, bounded lists, pure functions,
 collection queries, navigation, schema-1 persistent snapshots, experimental
 typed IR export, actions, derives, invariants, embedded tests and a standalone
-CLI. Rust now generates an experimental single-screen scalar Web preview;
-full Web/Android generators, Site/WebApp DSL, component modules and Host Effects
-remain on Python. It is **not** the default compiler and
+CLI. Rust now generates experimental multi-screen Web applications with
+typed record lists, pure functions, queries and schema-1 browser persistence.
+The experimental app-mode Web generator is tested on representative examples;
+Site/WebApp DSL, Android code generation, Host Effects and full browser
+acceptance remain pending. It is **not** the default compiler and
 does **not** replace the stable Python 0.11.0 toolchain.
 
 - [Rust migration and design decision](docs/ADR_RUST_CORE.md)
 - [Full native Rust migration coverage and release gates (RU)](docs/RUST_FULL_MIGRATION.ru.md)
 - [Rust native persistence and typed IR guide (RU)](docs/RUST_NATIVE_PERSISTENCE.ru.md)
 - [Native distribution strategy (RU)](docs/DISTRIBUTION_NATIVE.ru.md)
-- [Native scalar Web generator status (RU)](docs/RUST_WEB_SCALAR.ru.md)
+- [Native app-mode Web generator status (RU)](docs/RUST_WEB_SCALAR.ru.md)
 - [Russian build/use guide and unsupported features](docs/RUST_CORE_MIGRATION.ru.md)
 - [Differential Python/Rust checker](scripts/verify_rust_core.py)
 - [Scoped CLI benchmark](scripts/benchmark_rust_core.py)
