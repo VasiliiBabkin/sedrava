@@ -1,0 +1,31 @@
+
+.s-webapp{max-width:100%;padding:16px;min-height:100vh}
+.s-webapp .s-value{display:block;font-variant-numeric:tabular-nums}
+.s-webapp output{font-weight:650;white-space:pre-wrap}
+.s-webapp .s-field{display:grid;gap:8px;max-width:100%;width:min(100%,40rem)}
+.s-webapp label{font-weight:600}
+.s-webapp input:not([type=checkbox]),.s-webapp textarea{font:inherit;display:block;width:100%;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--foreground)}
+.s-webapp textarea{min-height:96px;resize:vertical}
+.s-webapp input[type=checkbox]{width:20px;height:20px;accent-color:var(--accent)}
+.s-webapp .s-checkbox label{display:flex;align-items:center;gap:12px}
+.s-webapp button.s-button{cursor:pointer;font:inherit}
+.s-webapp button:disabled{opacity:.5;cursor:not-allowed}
+.s-webapp input:focus-visible,.s-webapp textarea:focus-visible,.s-webapp button:focus-visible{outline:3px solid var(--gold);outline-offset:3px}
+.s-webapp [aria-invalid=true]{border-color:var(--gold)!important}
+.s-webapp [role=alert]{color:var(--gold);font-size:.9rem}
+.s-webapp [hidden]{display:none!important}
+.s-webapp .s-list{list-style:none;display:grid;gap:12px;padding:0;margin:0;min-width:0}
+.s-webapp .s-list li{min-width:0}
+.s-webapp .s-list-choice{font:inherit;text-align:left;color:var(--foreground);background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px 16px;min-height:48px;width:100%;display:grid;gap:4px;cursor:pointer}
+.s-webapp .s-list-choice[aria-pressed=true]{outline:2px solid var(--accent);outline-offset:1px}
+.s-webapp .s-list-title{font-weight:650;overflow-wrap:anywhere;white-space:pre-wrap}
+.s-webapp .s-list-status{color:var(--muted);font-size:.85rem}
+#sedrava-error{margin:16px auto;max-width:80rem;padding:12px}
+
+.s-webapp [data-each-items]{display:grid;gap:16px;min-width:0}.s-webapp [data-each-items]>[role=listitem]{min-width:0}
+.s-webapp [data-table]{max-width:100%;overflow:auto}.s-webapp table{width:100%;border-collapse:collapse;table-layout:fixed}.s-webapp th,.s-webapp td{text-align:start;border-block-end:1px solid var(--border);padding:12px 8px;overflow-wrap:anywhere}.s-webapp td button{font:inherit;padding:8px;border-radius:10px;background:var(--surface);color:var(--foreground);border:1px solid var(--border);width:100%}
+.s-webapp select{font:inherit;padding:12px;color:var(--foreground);background:var(--surface);border:1px solid var(--border);border-radius:10px;width:100%;max-width:100%}
+.s-webapp form{display:grid;gap:16px}.s-webapp dialog{color:var(--foreground);background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:24px;width:min(34rem,calc(100% - 32px));max-height:85vh;overflow:auto}
+.s-webapp dialog::backdrop{background:#0009}.s-webapp button{overflow-wrap:anywhere;min-height:44px;max-width:100%}
+.s-webapp h1[tabindex="-1"]:focus{outline:none}
+.s-webapp [data-view][hidden]{display:none!important}.s-webapp [data-view]{min-width:0}

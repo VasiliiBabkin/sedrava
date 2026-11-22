@@ -43,7 +43,7 @@ def main() -> None:
             assert (output / "index.html").exists()
             assert (output / "guide" / "index.html").exists()
             html = (output / "index.html").read_text(encoding="utf-8")
-            assert 'href="/guide/"' in html
+            assert 'href="guide/index.html"' in html
             assert "without calling Python" in html
         assert (folder / "site-1" / "index.html").read_bytes() == (
             folder / "site-2" / "index.html"
