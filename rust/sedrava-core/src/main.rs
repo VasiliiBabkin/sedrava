@@ -18,7 +18,7 @@ fn usage() {
            sedrava-native lock DIR\n           sedrava-native verify DIR\n           sedrava-native host check FILE
            sedrava-native host run FILE --root DIR --trusted [--allow-read] [--allow-write]
            sedrava-native server check FILE
-           sedrava-native server run FILE [--port PORT] [--max-requests N] [--idle-ms N] [--state-dir ABSOLUTE_PRIVATE_DIR]
+           sedrava-native server run FILE [--port PORT] [--max-requests N] [--idle-ms N] [--state-dir ABSOLUTE_PRIVATE_DIR] [--transactional]
            sedrava-native check FILE\n\
            sedrava-native effects FILE [--target app|web|android]\n\
            sedrava-native test FILE\n\
@@ -241,11 +241,16 @@ fn server_command(args: &[String]) -> Result<()> {
                 idle_ms: 30_000,
             };
             let mut state_dir=None;
+            let mut transactional=false;
             let mut seen=std::collections::BTreeSet::new();
             let mut next=options.iter();
             while let Some(flag)=next.next() {
                 if !seen.insert(flag.as_str()) {
                     return Err(Error("E_SERVER_CLI: duplicated option".into()));
+                }
+                if flag=="--transactional" {
+                    transactional=true;
+                    continue;
                 }
                 let value=next.next().ok_or_else(|| Error(
                     "E_SERVER_CLI: expected option argument".into()))?;
@@ -260,9 +265,9 @@ fn server_command(args: &[String]) -> Result<()> {
                     _ => return Err(Error(format!("E_SERVER_CLI: unsupported option {flag}"))),
                 }
             }
-            server::serve(&program,settings,state_dir.as_deref())
+            server::serve(&program,settings,state_dir.as_deref(),transactional)
         }
-        _ => Err(Error("Expected server check FILE or server run FILE [--port PORT] [--max-requests N] [--idle-ms N] [--state-dir ABSOLUTE_PRIVATE_DIR]".into())),
+        _ => Err(Error("Expected server check FILE or server run FILE [--port PORT] [--max-requests N] [--idle-ms N] [--state-dir ABSOLUTE_PRIVATE_DIR] [--transactional]".into())),
     }
 }
 
