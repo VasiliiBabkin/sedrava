@@ -1,0 +1,12 @@
+app "Require rejects"
+state value = 0
+action guarded:
+    value = value + 1
+    require false
+action negative:
+    value = -1
+rule value >= 0
+test initial: -> value == 0
+screen main:
+    value value
+    button "Guarded" -> guarded

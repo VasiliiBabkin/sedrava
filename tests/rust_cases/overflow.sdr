@@ -1,0 +1,7 @@
+app "Integer overflow"
+state value = 2147483647
+action overflow: value = value + 1
+test initial: -> value == 2147483647
+screen main:
+    value value
+    button "Overflow" -> overflow

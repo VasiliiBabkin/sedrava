@@ -1,0 +1,13 @@
+app "Unicode and escapes"
+state message = "A\nB"
+state icon = "😀"
+derive ok = message == "A\nB"
+action change:
+    message = "Алиса 😀"
+rule ok or message == "Алиса 😀"
+test initial: -> ok and icon != ""
+test changed: change -> not ok and message == "Алиса 😀"
+screen main:
+    text "Unicode"
+    value message
+    button "Change" -> change
