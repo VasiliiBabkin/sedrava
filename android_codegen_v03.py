@@ -5,10 +5,19 @@ from pathlib import Path
 from sedrava_android_identity import application_id as resolve_id, prepare_identity, kotlin_path, write_title
 from sedrava_records import ListValue
 from sedrava_records_codegen import kt_support, kt_persistence
-from sedrava_core import parse, run, Assign, If, Require, Let
+from sedrava_core import parse, run, Assign, If, Require, Let, Repeat
 from android_codegen import generate as scaffold
 
 def kt(node, names):
+    if isinstance(node, ast.Subscript):
+        base=kt(node.value,names)
+        kind=node.subscript_kind
+        if isinstance(node.slice,ast.Slice):
+            start=kt(node.slice.lower,names)
+            end=kt(node.slice.upper,names)
+            return ('sdrTextSlice' if kind is str else 'sdr_list_slice')+'('+','.join((base,start,end))+')'
+        index=kt(node.slice,names)
+        return ('sdrTextAt' if kind is str else 'sdr_list_at')+'('+','.join((base,index))+')'
     if isinstance(node, ast.Attribute): return '(' + kt(node.value, names) + ').sdr_' + node.attr
     if isinstance(node, ast.Call):
         if hasattr(node,"collection_query"):
@@ -166,7 +175,12 @@ def generate(source, output, _program=None, _domain_only=False, application_id=N
             elif isinstance(stmt, Assign):
                 lines.append(" " * depth + scope[stmt.name] + " = " + kt(stmt.expr, scope))
                 lines.append(" " * depth + "checkDerivedState(" + next_args + ")")
-            else:
+            elif isinstance(stmt, Repeat):
+                local="_sdr_repeat_"+stmt.name
+                lines.append(" " * depth + "for (" + local + " in 0 until " + str(stmt.count) + ") {")
+                emit(stmt.body, depth + 2, {**scope,stmt.name:local})
+                lines.append(" " * depth + "}")
+            elif isinstance(stmt, If):
                 lines.append(" " * depth + "if (" + kt(stmt.condition, scope) + ") {")
                 emit(stmt.yes, depth + 2, scope)
                 if stmt.no:

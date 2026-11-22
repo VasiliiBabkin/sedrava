@@ -121,6 +121,13 @@ class If:
     no: tuple
 
 @dataclass(frozen=True)
+class Repeat:
+    """Statically bounded, half-open repetition with a scoped int counter."""
+    name: str
+    count: int
+    body: tuple
+
+@dataclass(frozen=True)
 class Program:
     name: str
     states: dict
@@ -167,13 +174,27 @@ def parse_expr(source, types):
         if expression_cost(node)>MAX_DERIVED_NODES:raise ValueError("Expression/function exceeds complexity limit")
     except ValueError as exc:
         unknown = next((item.id for item in ast.walk(node)
-                        if isinstance(item, ast.Name) and item.id not in types and item.id not in SIGNATURES and item.id not in QUERY_NAMES and item.id not in ('append','update','remove','get','has','count','next_id')), None)
+                        if isinstance(item, ast.Name) and item.id not in types and item.id not in SIGNATURES and item.id not in QUERY_NAMES and item.id not in ('append','update','remove','get','has','count','next_id','list_at','list_slice','list_clear')), None)
         if unknown is not None:
             raise ValueError(f"Unknown identifier: {unknown}") from exc
         raise
     return node
 
 def type_of(node, types):
+    if isinstance(node, ast.Subscript):
+        kind=type_of(node.value, types)
+        if kind is not str and not isinstance(kind, ListType):
+            raise ValueError("Indexed value must be text or a bounded record list")
+        node.subscript_kind=kind
+        if isinstance(node.slice, ast.Slice):
+            if (node.slice.lower is None or node.slice.upper is None or node.slice.step is not None
+                    or type_of(node.slice.lower,types) is not int
+                    or type_of(node.slice.upper,types) is not int):
+                raise ValueError("Slice requires explicit int start:end and no step")
+            return kind
+        if type_of(node.slice,types) is not int:
+            raise ValueError("Index must be int")
+        return str if kind is str else kind.record
     if isinstance(node, ast.Attribute):
         kind = type_of(node.value, types)
         if isinstance(kind, RecordType) and node.attr in dict(kind.fields): return dict(kind.fields)[node.attr]
@@ -199,15 +220,21 @@ def type_of(node, types):
             if node.keywords or len(node.args)!=len(parameters) or any(type_of(arg,types) is not kind for arg,kind in zip(node.args,parameters)):raise ValueError('Standard operation argument type/count mismatch')
             node.pure_builtin=name
             return result
-        if name in ('append', 'update', 'remove', 'get', 'has', 'count', 'next_id') and not node.keywords:
-            count = {'append': 2, 'update': 3, 'remove': 2, 'get': 2, 'has': 2, 'count': 1, 'next_id': 1}[name]
+        if name in ('append', 'update', 'remove', 'get', 'has', 'count', 'next_id',
+                    'list_at', 'list_slice', 'list_clear') and not node.keywords:
+            count = {'append': 2, 'update': 3, 'remove': 2, 'get': 2,
+                     'has': 2, 'count': 1, 'next_id': 1, 'list_at': 2,
+                     'list_slice': 3, 'list_clear': 1}[name]
             if len(node.args) != count: raise ValueError("Invalid operation arguments")
             kind = type_of(node.args[0], types)
             if not isinstance(kind, ListType): raise ValueError("Collection required")
             node.collection_type = kind
-            if name in ('get', 'has', 'remove', 'update') and type_of(node.args[1], types) is not int: raise ValueError("Identity must be int")
+            if name in ('get', 'has', 'remove', 'update', 'list_at', 'list_slice'):
+                if type_of(node.args[1], types) is not int: raise ValueError("Identity/index must be int")
+            if name == 'list_slice' and type_of(node.args[2], types) is not int:
+                raise ValueError("Collection slice end must be int")
             if name in ('append', 'update') and type_of(node.args[-1], types) != kind.record: raise ValueError("Wrong record type")
-            return kind.record if name == 'get' else bool if name == 'has' else int if name in ('count', 'next_id') else kind
+            return kind.record if name in ('get', 'list_at') else bool if name == 'has' else int if name in ('count', 'next_id') else kind
         raise ValueError("Unknown operation")
     if isinstance(node,ast.IfExp):
         if type_of(node.test,types) is not bool or type_of(node.body,types)!=type_of(node.orelse,types):raise ValueError('Conditional requires bool and matching branch types')
@@ -243,6 +270,20 @@ def evaluate(node, state):
 
 
 def _evaluate(node, state):
+    if isinstance(node, ast.Subscript):
+        base=evaluate(node.value,state)
+        if isinstance(node.slice,ast.Slice):
+            start=evaluate(node.slice.lower,state)
+            end=evaluate(node.slice.upper,state)
+            if type(base) is str:
+                from sedrava_stdlib import apply
+                return apply('text_slice',[base,start,end])
+            return operation('list_slice',[base,start,end])
+        index=evaluate(node.slice,state)
+        if type(base) is str:
+            from sedrava_stdlib import apply
+            return apply('text_at',[base,index])
+        return operation('list_at',[base,index])
     if isinstance(node, ast.Attribute):
         record = evaluate(node.value, state)
         return record.values[[k for k, _ in record.kind.fields].index(node.attr)]
@@ -327,7 +368,18 @@ def parse(source):
         except LiteralError as exc:
             raise ValueError(f"Line {line_number}: column {column + exc.offset}: {exc}") from exc
     def statement_count(body):
-        return sum(1 + (statement_count(stmt.yes) + statement_count(stmt.no) if isinstance(stmt, If) else 0) for stmt in body)
+        total=0
+        for stmt in body:
+            if isinstance(stmt, If):
+                weight=1+statement_count(stmt.yes)+statement_count(stmt.no)
+            elif isinstance(stmt, Repeat):
+                weight=1+stmt.count*statement_count(stmt.body)
+            else:
+                weight=1
+            total+=weight
+            if total>MAX_ACTION_STEPS:
+                return total
+        return total
     def block(pos, indent, nesting=0, known=None):
         known=dict(types if known is None else known)
         if nesting > MAX_BLOCK_DEPTH:
@@ -337,6 +389,17 @@ def parse(source):
             depth, line, number = lines[pos]
             if depth < indent or line == "else:": break
             if depth != indent: raise ValueError(f"Line {number}: indentation")
+            if line.startswith("repeat "):
+                # No unbounded loops: only a literal 0..count half-open range.
+                match = re.fullmatch(r"repeat ([A-Za-z][A-Za-z0-9_]*) in range\(0, ([0-9]{1,3})\):", line)
+                if (not match or match[1] in known or keyword.iskeyword(match[1])
+                        or match[1] in ('true','false') or not 1 <= int(match[2]) <= 100):
+                    raise ValueError(f"Line {number}: invalid bounded repeat (expected repeat name in range(0, 1..100):)")
+                if pos+1 >= len(lines) or lines[pos+1][0]<=indent:
+                    raise ValueError(f"Line {number}: empty repeat")
+                body, pos = block(pos+1,lines[pos+1][0],nesting+1,{**known,match[1]:int})
+                result.append(Repeat(match[1],int(match[2]),tuple(body)))
+                continue
             if line.startswith("if ") and line.endswith(":"):
                 condition = expression(line[3:-1], known, number, depth + 4)
                 if type_of(condition, known) is not bool: raise ValueError(f"Line {number}: condition must be bool")
@@ -360,7 +423,7 @@ def parse(source):
             m = re.fullmatch(r"([A-Za-z_][A-Za-z_0-9]*)\s*=\s*(.+)", line)
             if not m or m[1] not in states: raise ValueError(f"Line {number}: invalid assignment")
             node = expression(m[2], known, number, depth + m.start(2) + 1)
-            if type_of(node, known) != types[m[1]]: raise ValueError(f"Line {number}: type mismatch")
+            if type_of(node, known) != types[m[1]]: raise ValueError(f"Line {number}: column {depth+m.start(2)+1}: type mismatch")
             result.append(Assign(m[1], node))
             pos += 1
         return tuple(result), pos
@@ -371,7 +434,7 @@ def parse(source):
             if name is not None: raise ValueError(f"Line {number}: duplicate app")
             name = label(m[1], number, 5)
         elif m := re.fullmatch(r"fn ([A-Za-z][A-Za-z0-9_]*)\((.*?)\) -> (.+?) = (.+)",line):
-            if states or actions or m[1] in types or keyword.iskeyword(m[1]) or len(functions)>=32 or m[1] in SIGNATURES or m[1] in QUERY_NAMES or m[1] in ('true','false','append','update','remove','get','has','count','next_id'):raise ValueError(f'Line {number}: invalid pure function declaration')
+            if states or actions or m[1] in types or keyword.iskeyword(m[1]) or len(functions)>=32 or m[1] in SIGNATURES or m[1] in QUERY_NAMES or m[1] in ('true','false','append','update','remove','get','has','count','next_id','list_at','list_slice','list_clear'):raise ValueError(f'Line {number}: invalid pure function declaration')
             params=[]
             for param in m[2].split(',') if m[2].strip() else ():
                 spec=re.fullmatch(r'\s*([A-Za-z][A-Za-z0-9_]*)\s*:\s*(.+?)\s*',param)
@@ -386,7 +449,7 @@ def parse(source):
             function=FunctionType(m[1],tuple(params),result_type,body,expression_cost(body))
             functions[m[1]]=function;types[m[1]]=function
         elif m := re.fullmatch(r"record ([A-Za-z_][A-Za-z_0-9]*):", line):
-            if states or actions or len(records) >= 16 or m[1] in types or keyword.iskeyword(m[1]) or m[1] in ('true','false','append','update','remove','get','has','count','next_id'): raise ValueError(f"Line {number}: column 1: invalid record declaration")
+            if states or actions or len(records) >= 16 or m[1] in types or keyword.iskeyword(m[1]) or m[1] in ('true','false','append','update','remove','get','has','count','next_id','list_at','list_slice','list_clear'): raise ValueError(f"Line {number}: column 1: invalid record declaration")
             fields = []
             i += 1
             while i < len(lines) and lines[i][0] > 0:
@@ -627,8 +690,13 @@ def transition(program, state, action):
             elif isinstance(stmt, Assign):
                 candidate[stmt.name] = evaluate(stmt.expr, values)
                 resolve(candidate, program.derived)
-            else:
+            elif isinstance(stmt, Repeat):
+                for repeat_index in range(stmt.count):
+                    execute(stmt.body,{**local,stmt.name:repeat_index})
+            elif isinstance(stmt, If):
                 execute(stmt.yes if evaluate(stmt.condition, values) else stmt.no, local)
+            else:
+                raise ValueError("Unsupported action statement")
     execute(program.actions[action])
     values = resolve(candidate, program.derived)
     if program.records or program.has_navigation:

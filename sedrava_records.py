@@ -57,6 +57,19 @@ def operation(name, values):
     collection = values[0]
     if name == 'count': return len(collection.items)
     if name == 'next_id': return collection.next_id
+    if name == 'list_at':
+        index = values[1]
+        if type(index) is not int or not 0 <= index < len(collection.items):
+            raise ValueError('Collection positional index out of bounds')
+        return collection.items[index][1]
+    if name == 'list_slice':
+        start, end = values[1], values[2]
+        if (type(start) is not int or type(end) is not int
+                or not 0 <= start <= end <= len(collection.items)):
+            raise ValueError('Collection slice bounds invalid')
+        return validate(ListValue(collection.kind, collection.items[start:end], collection.next_id))
+    if name == 'list_clear':
+        return validate(ListValue(collection.kind, (), collection.next_id))
     if name == 'append':
         if len(collection.items) >= collection.kind.capacity: raise ValueError('Collection capacity exceeded')
         if collection.next_id == 2147483647: raise ValueError('Identity exhausted')

@@ -88,13 +88,17 @@ screen main:
             parse('app "Bad"\n# comment \ud800')
 
     def test_text_only_operations_are_equality_and_assignment(self):
-        for expr in ('"a" + "b"', '"a" * 2', '"a" < "b"', '"a"[0]', 'not "a"',
+        for expr in ('"a" + "b"', '"a" * 2', '"a" < "b"', 'not "a"',
                      '"a" == 1', '"a" == true', '"a" and true', '-"a"'):
             with self.subTest(expr=expr), self.assertRaises(ValueError):
                 parse_expr(expr, {})
         for assignment in ('name = 1', 'name = true', 'visits = "1"', 'saved = "true"', 'named = "x"'):
             with self.subTest(assignment=assignment), self.assertRaises(ValueError):
                 parse(PROFILE.replace('name = "Алиса 😀"', assignment))
+
+        # From experimental bounded core A1 onwards, Unicode scalar indexing
+        # is a permitted, strictly typed text operation.
+        self.assertEqual(evaluate(parse_expr('"a"[0]', {}), {}), "a")
 
     def test_mixed_action_rejection_is_atomic(self):
         p = parse(PROFILE)

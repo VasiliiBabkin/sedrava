@@ -6,13 +6,26 @@ import json
 from pathlib import Path
 from sedrava_records import plain
 from sedrava_records_codegen import js_runtime
-from sedrava_core import Assign, If, Require, Let, parse, run
+from sedrava_core import Assign, If, Require, Let, Repeat, parse, run
 
 def json_script(value, **kwargs):
     # HTML parses script end tags before JavaScript parses quoted strings.
     return json.dumps(value, **kwargs).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
 
 def js_expr(node, names):
+    if isinstance(node, ast.Subscript):
+        base=js_expr(node.value,names)
+        kind=node.subscript_kind
+        if isinstance(node.slice,ast.Slice):
+            start=js_expr(node.slice.lower,names)
+            end=js_expr(node.slice.upper,names)
+            if kind is str:
+                return 'sdrTextSlice('+','.join((base,start,end))+')'
+            return 'collectionOp("list_slice",'+str(kind.capacity)+','+','.join((base,start,end))+')'
+        index=js_expr(node.slice,names)
+        if kind is str:
+            return 'sdrTextAt('+','.join((base,index))+')'
+        return 'collectionOp("list_at",'+str(kind.capacity)+','+','.join((base,index))+')'
     if isinstance(node, ast.Attribute): return '(' + js_expr(node.value, names) + ')[' + json_script(node.attr) + ']'
     if isinstance(node, ast.Call):
         if hasattr(node,"collection_query"):
@@ -64,6 +77,11 @@ def statements(body, names, depth=4):
         elif isinstance(stmt, Assign):
             result.append(f"{pad}{names[stmt.name]} = {js_expr(stmt.expr, names)};")
             result.append(f"{pad}checkDerivedState(nextState);")
+        elif isinstance(stmt, Repeat):
+            local="_sdr_repeat_"+stmt.name
+            result.append(f"{pad}for (let {local}=0; {local}<{stmt.count}; {local}++) {{")
+            result.extend(statements(stmt.body,{**names,stmt.name:local},depth+2))
+            result.append(f"{pad}}}")
         elif isinstance(stmt, If):
             result.append(f"{pad}if ({js_expr(stmt.condition, names)}) {{")
             result.extend(statements(stmt.yes, names, depth + 2))

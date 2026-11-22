@@ -1,0 +1,18 @@
+# Experimental bounded core A1, not included in stable 0.11.0.
+app "Unicode and bounded loops"
+state greeting = "A😀Б"
+state total = 0
+derive emoji = greeting[1]
+derive part = greeting[1:3]
+derive index = text_index(greeting, "Б")
+derive codepoint = unicode_ord(emoji)
+derive from_codepoint = unicode_chr(codepoint)
+action tally:
+    repeat i in range(0, 5):
+        total = total + i
+test initial: -> part == "😀Б" and index == 2 and from_codepoint == "😀"
+test tally: tally -> total == 10
+screen main:
+    text "Unicode and bounded loops"
+    value emoji
+    value total
