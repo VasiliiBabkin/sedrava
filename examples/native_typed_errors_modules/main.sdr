@@ -1,0 +1,16 @@
+app "Imported nominal errors"
+import "errors.sdr"
+state number = 0
+state detail = ""
+action parse:
+    match parse_number(-1):
+        Ok(value):
+            number = value
+        Err(InvalidValue { supplied: bad }):
+            number = bad
+            detail = "Invalid value"
+screen main:
+    value number
+    value detail
+    button "Parse" -> parse
+test invalid: parse -> number == -1 and detail == "Invalid value"

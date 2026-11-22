@@ -150,6 +150,14 @@ internal fun encodeJson(value: Any?): String = when (value) {
         "items" to value.rows.map { row -> row.record.fields + ("id" to row.id) },
     ))
     is SdrRecord -> encodeJson(value.fields)
+    // Ephemeral error/result derives may be observed in diagnostics and
+    // differential Kotlin tests. They remain excluded from persistent state.
+    is SdrError -> encodeJson(mapOf(
+        "id" to value.id, "variant" to value.variant, "fields" to value.fields))
+    is SdrResult.Success -> encodeJson(mapOf(
+        "value" to value.value, "code" to "", "error" to null))
+    is SdrResult.Failure -> encodeJson(mapOf(
+        "code" to "", "error" to value.error))
     else -> throw IllegalArgumentException("Invalid snapshot value")
 }
 

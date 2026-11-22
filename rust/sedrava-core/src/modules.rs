@@ -71,9 +71,16 @@ fn permitted_module_line(line: &str) -> bool {
     if line.starts_with(char::is_whitespace) {
         return true; // validated under one of the top-level declarations
     }
-    ["import ", "component ", "style ", "record ", "fn "]
-        .iter()
-        .any(|prefix| source.starts_with(prefix))
+    [
+        "import ",
+        "component ",
+        "style ",
+        "record ",
+        "fn ",
+        "error ",
+    ]
+    .iter()
+    .any(|prefix| source.starts_with(prefix))
 }
 
 impl Expander {
@@ -157,6 +164,17 @@ impl Expander {
                 ))
             })?;
             for (index, line) in imported.lines().enumerate() {
+                // Flat source imports deliberately require explicit nominal IDs
+                // instead of silently assigning the entrypoint's identity to
+                // an imported error. Namespace aliases are not implemented.
+                if line.starts_with("error ") && !line.contains(" id \"") {
+                    return fail(format!(
+                        "Line {}: {}:{} imported errors require an explicit stable id",
+                        number + 1,
+                        spec,
+                        index + 1
+                    ));
+                }
                 if !permitted_module_line(line) {
                     return fail(format!(
                         "Line {}: {}:{} cannot export app state, actions, rules or tests",
@@ -267,6 +285,27 @@ mod tests {
         assert_eq!(expanded.imported_paths.len(), 1);
         assert!(expanded.source.contains("fn double(n: int) -> int = n * 2"));
     }
+    #[test]
+    fn imported_errors_require_explicit_stable_id() {
+        let dir = tempfile::tempdir().unwrap();
+        let main = dir.path().join("main.sdr");
+        let library = dir.path().join("errors.sdr");
+        fs::write(&main, "app \"T\"\nimport \"errors.sdr\"\nstate n = 0\n").unwrap();
+        fs::write(
+            &library,
+            "error closed Fault:\n    Bad:\n        code: int\n",
+        )
+        .unwrap();
+        assert!(expand_local_imports(&main).is_err());
+        fs::write(
+            &library,
+            "error closed Fault id \"example.Fault\":\n    Bad:\n        code: int\n",
+        )
+        .unwrap();
+        let result = expand_local_imports(&main).unwrap();
+        assert!(result.source.contains("example.Fault"));
+    }
+
     #[cfg(unix)]
     #[test]
     fn symlink_imports_are_rejected() {
