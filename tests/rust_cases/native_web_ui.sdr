@@ -1,0 +1,22 @@
+app "Native Web test"
+state count = 0
+state label = "Привет"
+derive double = count * 2
+derive visible = count > 0
+action add:
+    count = count + 1
+action reset:
+    count = 0
+rule count >= 0
+test initially: -> double == 0
+test increment: add -> double == 2
+screen main:
+    text "Test browser output"
+    text "State and inputs"
+    input count
+    input label
+    value count
+    value double
+    show visible : text "Count is positive"
+    button "Add" -> add
+    button "Reset" -> reset
