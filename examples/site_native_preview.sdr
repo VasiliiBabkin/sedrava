@@ -1,0 +1,27 @@
+# Experimental Rust-native Site subset. Unsupported 0.11 features fail explicitly.
+site "Native preview"
+
+page home at "/":
+    title "Sedrava Rust preview"
+    description "A small, safe subset of the original Site DSL."
+    navbar:
+        link "Home" to "/"
+        link "Guide" to "/guide/"
+    container:
+        column:
+            heading "Describe it. Build it."
+            paragraph "The static HTML comes from Rust, without calling Python."
+            row:
+                link "Read the guide" to "/guide/"
+                link "Source code" to "https://github.com/VasiliiBabkin/sedrava"
+            divider
+    footer:
+        paragraph "Experimental preview, not full 0.11 compatibility."
+
+page guide at "/guide/":
+    title "Guide"
+    container:
+        heading "A small native Site DSL"
+        paragraph "Unsupported declarations are rejected rather than omitted."
+        code "sedrava-native build site examples/site_native_preview.sdr --output /tmp/site-demo"
+        link "Back" to "/"
