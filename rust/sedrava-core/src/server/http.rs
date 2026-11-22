@@ -1,6 +1,6 @@
 //! Limited HTTP/1.1 framing for the local native preview.
 //! Each accepted TCP connection carries exactly one request; always close.
-use super::{reply_stateful, Server, Session, MAX_REQUEST_BODY};
+use super::{reply_stateful, transaction::parse_revision, Server, Session, MAX_REQUEST_BODY};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
@@ -15,6 +15,8 @@ pub struct Response {
     pub status: u16,
     pub body: Value,
     pub allow: Option<String>,
+    pub revision: Option<u32>,
+    pub replayed: bool,
 }
 
 impl Response {
@@ -23,6 +25,8 @@ impl Response {
             status,
             body,
             allow: None,
+            revision: None,
+            replayed: false,
         }
     }
     pub fn error(status: u16, code: &str) -> Self {
@@ -32,12 +36,22 @@ impl Response {
         self.allow = Some(methods);
         self
     }
+    pub fn with_revision(mut self, revision: u32) -> Self {
+        self.revision = Some(revision);
+        self
+    }
+    pub fn as_replay(mut self) -> Self {
+        self.replayed = true;
+        self
+    }
 }
 
 struct Request {
     method: String,
     path: String,
     content_type: Option<String>,
+    idempotency_key: Option<String>,
+    expected_revision: Option<u32>,
     body: Vec<u8>,
 }
 
@@ -169,10 +183,19 @@ fn parse_request(stream: &mut TcpStream) -> std::result::Result<Request, Respons
         }
         body.extend_from_slice(&buffer[..count]);
     }
+    let expected_revision = match headers.get("x-sedrava-if-revision") {
+        None => None,
+        Some(value) => Some(
+            parse_revision(value)
+                .ok_or_else(|| Response::error(400, "INVALID_REVISION_CONDITION"))?,
+        ),
+    };
     Ok(Request {
         method: method.into(),
         path: path.into(),
         content_type: headers.get("content-type").map(|s| (*s).to_string()),
+        idempotency_key: headers.get("idempotency-key").map(|s| (*s).to_string()),
+        expected_revision,
         body,
     })
 }
@@ -184,6 +207,10 @@ fn reason(status: u16) -> &'static str {
         202 => "Accepted",
         400 => "Bad Request",
         404 => "Not Found",
+        409 => "Conflict",
+        412 => "Precondition Failed",
+        428 => "Precondition Required",
+        507 => "Insufficient Storage",
         405 => "Method Not Allowed",
         413 => "Content Too Large",
         415 => "Unsupported Media Type",
@@ -205,13 +232,19 @@ fn write_response(stream: &mut TcpStream, response: Response) -> std::io::Result
     if let Some(allowed) = response.allow.as_deref() {
         write!(stream, "Allow: {allowed}\r\n")?;
     }
+    if let Some(revision) = response.revision {
+        write!(stream, "X-Sedrava-Revision: {revision}\r\n")?;
+    }
+    if response.replayed {
+        stream.write_all(b"X-Sedrava-Replayed: true\r\n")?;
+    }
     stream.write_all(b"\r\n")?;
     stream.write_all(&bytes)?;
     stream.flush()
 }
 
 pub(super) fn process(server: &Server, session: &mut Session, stream: &mut TcpStream) {
-    let response = match parse_request(stream) {
+    let mut response = match parse_request(stream) {
         Ok(request) => reply_stateful(
             server,
             session,
@@ -219,9 +252,16 @@ pub(super) fn process(server: &Server, session: &mut Session, stream: &mut TcpSt
             &request.path,
             &request.body,
             request.content_type.as_deref(),
+            request.idempotency_key.as_deref(),
+            request.expected_revision,
         ),
         Err(error) => error,
     };
+    if response.revision.is_none() {
+        if let Some(ledger) = session.ledger.as_ref() {
+            response.revision = Some(ledger.revision());
+        }
+    }
     // The peer may disappear. Never crash the process for a single socket.
     let _ = write_response(stream, response);
     // Large malformed headers may leave unread TCP bytes in the receive

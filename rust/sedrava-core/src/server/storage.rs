@@ -2,8 +2,9 @@
 //! No user-supplied filenames inside DSL; no server-side arbitrary IO.
 //! Crash-stale lock requires explicit operator recovery (not production).
 use super::state::{scalar_type, StateDef, Values};
+use super::transaction::{Ledger, Receipt, MAX_TRANSACTION_BYTES, SCHEMA as TX_SCHEMA};
 use crate::model::{fail, Error, Result};
-use serde::de::{self, MapAccess, Visitor};
+use serde::de::{self, MapAccess, SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer};
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
@@ -73,6 +74,19 @@ impl<'de> Deserialize<'de> for Strict {
             fn visit_string<E: de::Error>(self, v: String) -> std::result::Result<Self::Value, E> {
                 Ok(Strict(Value::String(v)))
             }
+            fn visit_seq<A: SeqAccess<'de>>(
+                self,
+                mut a: A,
+            ) -> std::result::Result<Self::Value, A::Error> {
+                let mut values = Vec::new();
+                while let Some(Strict(value)) = a.next_element::<Strict>()? {
+                    if values.len() > 32 {
+                        return Err(de::Error::custom("array bound exceeded"));
+                    }
+                    values.push(value);
+                }
+                Ok(Strict(Value::Array(values)))
+            }
             fn visit_map<A: MapAccess<'de>>(
                 self,
                 mut a: A,
@@ -127,6 +141,64 @@ fn decoded(raw: &[u8], expected: &str, defs: &BTreeMap<String, StateDef>) -> Res
     Ok(values)
 }
 
+fn decoded_transaction(
+    raw: &[u8],
+    expected: &str,
+    defs: &BTreeMap<String, StateDef>,
+) -> Result<(Values, Ledger)> {
+    if raw.len() > MAX_TRANSACTION_BYTES as usize {
+        return fail("E_SERVER_TRANSACTION: snapshot exceeds transaction limit");
+    }
+    let mut decoder = serde_json::Deserializer::from_slice(raw);
+    let Strict(value) = Strict::deserialize(&mut decoder)
+        .map_err(|_| Error("E_SERVER_TRANSACTION: invalid strict JSON".into()))?;
+    decoder
+        .end()
+        .map_err(|_| Error("E_SERVER_TRANSACTION: trailing bytes".into()))?;
+    let obj = value
+        .as_object()
+        .ok_or_else(|| Error("E_SERVER_TRANSACTION: invalid root".into()))?;
+    if obj.len() != 5
+        || obj.get("schema") != Some(&Value::String(TX_SCHEMA.into()))
+        || obj.get("signature") != Some(&Value::String(expected.into()))
+    {
+        return fail("E_SERVER_TRANSACTION: incompatible snapshot schema/signature");
+    }
+    let revision = obj
+        .get("revision")
+        .and_then(Value::as_i64)
+        .and_then(|n| u32::try_from(n).ok())
+        .ok_or_else(|| Error("E_SERVER_TRANSACTION: invalid revision".into()))?;
+    let items = obj
+        .get("receipts")
+        .and_then(Value::as_array)
+        .ok_or_else(|| Error("E_SERVER_TRANSACTION: missing receipt ledger".into()))?;
+    let receipts: Vec<Receipt> = serde_json::from_value(Value::Array(items.clone()))
+        .map_err(|_| Error("E_SERVER_TRANSACTION: invalid receipt shape".into()))?;
+    let ledger = Ledger { receipts };
+    if !ledger.valid() || ledger.revision() != revision {
+        return fail("E_SERVER_TRANSACTION: corrupt, inconsistent or exhausted receipts");
+    }
+    let states = obj
+        .get("state")
+        .and_then(Value::as_object)
+        .ok_or_else(|| Error("E_SERVER_TRANSACTION: missing state object".into()))?;
+    if states.len() != defs.len() {
+        return fail("E_SERVER_TRANSACTION: state keys mismatch");
+    }
+    let mut values = Values::new();
+    for (name, def) in defs {
+        let Some(value) = states.get(name) else {
+            return fail("E_SERVER_TRANSACTION: missing state field");
+        };
+        if scalar_type(value) != Some(def.kind) {
+            return fail("E_SERVER_TRANSACTION: invalid state field type");
+        }
+        values.insert(name.clone(), value.clone());
+    }
+    Ok((values, ledger))
+}
+
 #[cfg(unix)]
 mod unix {
     use super::*;
@@ -141,6 +213,7 @@ mod unix {
         lock_handle: File,
         signature: String,
         defs: BTreeMap<String, StateDef>,
+        transactional: bool,
     }
 
     fn metadata_regular(metadata: &fs::Metadata, uid: u32) -> bool {
@@ -195,7 +268,8 @@ mod unix {
             path: &Path,
             server_name: &str,
             defs: &BTreeMap<String, StateDef>,
-        ) -> Result<(Self, Values)> {
+            transactional: bool,
+        ) -> Result<(Self, Values, Ledger)> {
             if defs.is_empty() {
                 return fail("E_SERVER_STORAGE: persistence requires declared server states");
             }
@@ -229,13 +303,21 @@ mod unix {
                     .map_err(|_| Error("E_SERVER_STORAGE: cannot sync lock".into()))?;
                 let fingerprint = signature(server_name, defs)?;
                 let state_path = dir.join(FILE);
-                let values = match checked_file(&state_path, uid)? {
-                    None => defs
-                        .iter()
-                        .map(|(name, def)| (name.clone(), def.initial.clone()))
-                        .collect(),
+                let (values, ledger) = match checked_file(&state_path, uid)? {
+                    None => (
+                        defs.iter()
+                            .map(|(name, def)| (name.clone(), def.initial.clone()))
+                            .collect(),
+                        Ledger::default(),
+                    ),
                     Some(meta) => {
-                        if meta.len() > MAX_STATE_BYTES {
+                        if meta.len()
+                            > if transactional {
+                                MAX_TRANSACTION_BYTES
+                            } else {
+                                MAX_STATE_BYTES
+                            }
+                        {
                             return fail("E_SERVER_STORAGE: state file oversized");
                         }
                         let file = OpenOptions::new()
@@ -255,24 +337,30 @@ mod unix {
                             return fail("E_SERVER_STORAGE: state file changed during read");
                         }
                         let mut raw = Vec::new();
-                        file.take(MAX_STATE_BYTES + 1)
+                        file.take(MAX_TRANSACTION_BYTES + 1)
                             .read_to_end(&mut raw)
                             .map_err(|_| Error("E_SERVER_STORAGE: cannot read state".into()))?;
-                        decoded(&raw, &fingerprint, defs)?
+                        if transactional {
+                            decoded_transaction(&raw, &fingerprint, defs)?
+                        } else {
+                            (decoded(&raw, &fingerprint, defs)?, Ledger::default())
+                        }
                     }
                 };
-                Ok((fingerprint, values))
+                Ok((fingerprint, values, ledger))
             })();
             match result {
-                Ok((fingerprint, values)) => Ok((
+                Ok((fingerprint, values, ledger)) => Ok((
                     Self {
                         dir,
                         lock_inode,
                         lock_handle,
                         signature: fingerprint,
                         defs: defs.clone(),
+                        transactional,
                     },
                     values,
+                    ledger,
                 )),
                 Err(e) => {
                     if fs::symlink_metadata(&lock_path)
@@ -286,7 +374,59 @@ mod unix {
             }
         }
 
+        pub fn save_transaction(
+            &mut self,
+            values: &Values,
+            ledger: &Ledger,
+        ) -> std::result::Result<(), SaveFailure> {
+            let stage = (|| -> Result<()> {
+                if !self.transactional
+                    || values.len() != self.defs.len()
+                    || !ledger.valid()
+                    || ledger.receipts.is_empty()
+                {
+                    return fail("E_SERVER_TRANSACTION: invalid transaction mode/shape");
+                }
+                for (name, def) in &self.defs {
+                    if values.get(name).and_then(scalar_type) != Some(def.kind) {
+                        return fail("E_SERVER_TRANSACTION: state field type mismatch");
+                    }
+                }
+                let output = serde_json::to_vec(&json!({
+                    "schema":TX_SCHEMA, "signature":self.signature,
+                    "state":values,"revision":ledger.revision(),
+                    "receipts":ledger.receipts,
+                }))
+                .map_err(|_| Error("E_SERVER_TRANSACTION: encoding failed".into()))?;
+                if output.len() > MAX_TRANSACTION_BYTES as usize {
+                    return fail("E_SERVER_TRANSACTION: snapshot exceeds capacity");
+                }
+                let uid = rustix::process::geteuid().as_raw();
+                let path = self.dir.join(FILE);
+                checked_file(&path, uid)?;
+                let mut temp = tempfile::NamedTempFile::new_in(&self.dir).map_err(|_| {
+                    Error("E_SERVER_TRANSACTION: cannot allocate private temp".into())
+                })?;
+                temp.write_all(&output)
+                    .map_err(|_| Error("E_SERVER_TRANSACTION: write failure".into()))?;
+                temp.as_file()
+                    .sync_all()
+                    .map_err(|_| Error("E_SERVER_TRANSACTION: temp fsync failure".into()))?;
+                temp.persist(&path)
+                    .map_err(|_| Error("E_SERVER_TRANSACTION: atomic rename failure".into()))?;
+                Ok(())
+            })();
+            stage.map_err(|_| SaveFailure::RejectedBeforeCommit)?;
+            File::open(&self.dir)
+                .and_then(|d| d.sync_all())
+                .map_err(|_| SaveFailure::DurabilityUncertain)?;
+            Ok(())
+        }
+
         pub fn save(&mut self, values: &Values) -> std::result::Result<(), SaveFailure> {
+            if self.transactional {
+                return Err(SaveFailure::RejectedBeforeCommit);
+            }
             let stage = (|| -> Result<()> {
                 if values.len() != self.defs.len() {
                     return fail("E_SERVER_STORAGE: unexpected state shape");
@@ -355,8 +495,20 @@ pub use unix::Store;
 pub struct Store;
 #[cfg(not(unix))]
 impl Store {
-    pub fn open(_: &Path, _: &str, _: &BTreeMap<String, StateDef>) -> Result<(Self, Values)> {
+    pub fn open(
+        _: &Path,
+        _: &str,
+        _: &BTreeMap<String, StateDef>,
+        _: bool,
+    ) -> Result<(Self, Values, Ledger)> {
         fail("E_SERVER_STORAGE: file persistence currently requires Unix")
+    }
+    pub fn save_transaction(
+        &mut self,
+        _: &Values,
+        _: &Ledger,
+    ) -> std::result::Result<(), SaveFailure> {
+        Err(SaveFailure::RejectedBeforeCommit)
     }
     pub fn save(&mut self, _: &Values) -> std::result::Result<(), SaveFailure> {
         Err(SaveFailure::RejectedBeforeCommit)

@@ -15,10 +15,12 @@ use std::time::{Duration, Instant};
 mod http;
 mod state;
 mod storage;
+mod transaction;
 
 use state::{StateDef, Step, Values};
 use std::path::Path;
 use storage::{SaveFailure, Store};
+use transaction::{fingerprint, valid_key, Ledger, Receipt, MAX_RECEIPTS};
 
 pub const MAX_REQUEST_BODY: usize = 16_384;
 const MAX_SOURCE: usize = 32_768;
@@ -335,13 +337,18 @@ impl<'de> Deserialize<'de> for StrictObject {
 pub(crate) struct Session {
     values: Values,
     store: Option<Store>,
+    ledger: Option<Ledger>,
     poisoned: bool,
 }
 impl Session {
-    fn open(program: &Server, state_dir: Option<&Path>) -> Result<Self> {
-        let (store, values) = if let Some(dir) = state_dir {
-            let (store, values) = Store::open(dir, &program.name, &program.states)?;
-            (Some(store), values)
+    fn open(program: &Server, state_dir: Option<&Path>, transactional: bool) -> Result<Self> {
+        if transactional && state_dir.is_none() {
+            return fail("E_SERVER_TRANSACTION: --transactional requires --state-dir");
+        }
+        let (store, values, ledger) = if let Some(dir) = state_dir {
+            let (store, values, ledger) =
+                Store::open(dir, &program.name, &program.states, transactional)?;
+            (Some(store), values, ledger)
         } else {
             (
                 None,
@@ -350,11 +357,13 @@ impl Session {
                     .iter()
                     .map(|(name, def)| (name.clone(), def.initial.clone()))
                     .collect(),
+                Ledger::default(),
             )
         };
         Ok(Self {
             values,
             store,
+            ledger: transactional.then_some(ledger),
             poisoned: false,
         })
     }
@@ -368,8 +377,17 @@ pub(crate) fn reply(
     body: &[u8],
     content_type: Option<&str>,
 ) -> http::Response {
-    let mut session = Session::open(program, None).expect("in-memory state");
-    reply_stateful(program, &mut session, method, path, body, content_type)
+    let mut session = Session::open(program, None, false).expect("in-memory state");
+    reply_stateful(
+        program,
+        &mut session,
+        method,
+        path,
+        body,
+        content_type,
+        None,
+        None,
+    )
 }
 
 pub(crate) fn reply_stateful(
@@ -379,6 +397,8 @@ pub(crate) fn reply_stateful(
     path: &str,
     body: &[u8],
     content_type: Option<&str>,
+    idempotency_key: Option<&str>,
+    expected_revision: Option<u32>,
 ) -> http::Response {
     let Some(route) = program
         .routes
@@ -399,6 +419,41 @@ pub(crate) fn reply_stateful(
         }
         return http::Response::error(404, "NOT_FOUND");
     };
+    // Transactional replays must be resolved BEFORE evaluating user steps.
+    // The fingerprint includes the exact payload and optional CAS condition.
+    let mut transaction = None;
+    if let Some(ledger) = session.ledger.as_ref() {
+        if route.method != "GET" {
+            let Some(key) = idempotency_key else {
+                return http::Response::error(428, "IDEMPOTENCY_KEY_REQUIRED");
+            };
+            if !valid_key(key) {
+                return http::Response::error(400, "INVALID_IDEMPOTENCY_KEY");
+            }
+            let expected = expected_revision.map(|r| r.to_string());
+            let digest = fingerprint(method, path, content_type, body, expected.as_deref());
+            if let Some(prior) = ledger.get(key) {
+                if prior.fingerprint == digest {
+                    return http::Response::json(
+                        prior.status,
+                        Value::Object(prior.response.clone()),
+                    )
+                    .with_revision(prior.revision)
+                    .as_replay();
+                }
+                return http::Response::error(409, "IDEMPOTENCY_CONFLICT");
+            }
+            if ledger.receipts.len() >= MAX_RECEIPTS {
+                return http::Response::error(507, "TRANSACTION_LEDGER_FULL");
+            }
+            if expected_revision.is_some_and(|rev| rev != ledger.revision()) {
+                return http::Response::error(412, "REVISION_CONFLICT");
+            }
+            transaction = Some((key.to_owned(), digest));
+        } else if idempotency_key.is_some() || expected_revision.is_some() {
+            return http::Response::error(400, "READ_CANNOT_USE_TRANSACTION_HEADERS");
+        }
+    }
     let mut bindings = Map::new();
     if body.len() > MAX_REQUEST_BODY {
         return http::Response::error(413, "BODY_TOO_LARGE");
@@ -468,6 +523,35 @@ pub(crate) fn reply_stateful(
             Err(_) => return http::Response::error(500, "HANDLER_FAILED"),
         }
     }
+    if let Some((key, digest)) = transaction {
+        let ledger = session.ledger.as_ref().expect("transactional mode");
+        let revision = ledger.revision() + 1;
+        let receipt = Receipt {
+            key,
+            fingerprint: digest,
+            revision,
+            status: route.status,
+            response: output.clone(),
+        };
+        let Some(next) = ledger.append(receipt) else {
+            return http::Response::error(507, "TRANSACTION_LEDGER_FULL");
+        };
+        if let Some(store) = session.store.as_mut() {
+            match store.save_transaction(&candidate, &next) {
+                Ok(()) => {}
+                Err(SaveFailure::RejectedBeforeCommit) => {
+                    return http::Response::error(503, "STATE_WRITE_FAILED")
+                }
+                Err(SaveFailure::DurabilityUncertain) => {
+                    session.poisoned = true;
+                    return http::Response::error(503, "STATE_COMMIT_UNCERTAIN");
+                }
+            }
+        }
+        session.values = candidate;
+        session.ledger = Some(next);
+        return http::Response::json(route.status, Value::Object(output)).with_revision(revision);
+    }
     if candidate != session.values {
         if let Some(store) = session.store.as_mut() {
             match store.save(&candidate) {
@@ -485,12 +569,22 @@ pub(crate) fn reply_stateful(
         }
         session.values = candidate;
     }
-    http::Response::json(route.status, Value::Object(output))
+    let response = http::Response::json(route.status, Value::Object(output));
+    if let Some(ledger) = session.ledger.as_ref() {
+        response.with_revision(ledger.revision())
+    } else {
+        response
+    }
 }
 
 /// Single-threaded local preview: no listening on public interfaces,
 /// no long-lived keep-alive connections or concurrent state mutation.
-pub fn serve(program: &Server, options: RuntimeOptions, state_dir: Option<&Path>) -> Result<()> {
+pub fn serve(
+    program: &Server,
+    options: RuntimeOptions,
+    state_dir: Option<&Path>,
+    transactional: bool,
+) -> Result<()> {
     if options.max_requests == 0
         || options.max_requests > 10_000
         || options.idle_ms < 500
@@ -498,7 +592,7 @@ pub fn serve(program: &Server, options: RuntimeOptions, state_dir: Option<&Path>
     {
         return fail("E_SERVER_RUN: max_requests 1..10000 and idle_ms 500..120000 required");
     }
-    let mut session = Session::open(program, state_dir)?;
+    let mut session = Session::open(program, state_dir, transactional)?;
     let listener = TcpListener::bind(("127.0.0.1", options.port))
         .map_err(|e| Error(format!("E_SERVER_BIND: unable to bind loopback: {e}")))?;
     listener
