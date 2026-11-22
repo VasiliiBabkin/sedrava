@@ -84,6 +84,15 @@ pub fn validate_application_id(value: &str) -> Result<()> {
     Ok(())
 }
 pub fn generate(program: &Program, application_id: &str) -> Result<AndroidProject> {
+    if program.types.values().any(|k| {
+        matches!(
+            k,
+            crate::model::Kind::Error { .. } | crate::model::Kind::Result { .. }
+        )
+    }) {
+        return fail("Android typed Result/match backend not implemented yet");
+    }
+
     validate_application_id(application_id)?;
     if program.screens.is_empty() {
         return fail("Android requires at least one app screen");

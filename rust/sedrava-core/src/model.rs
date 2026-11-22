@@ -30,6 +30,18 @@ pub enum Kind {
         parameters: Vec<Kind>,
         result: Box<Kind>,
     },
+    /// Nominal immutable user error family. Not an OS fault or capability.
+    Error {
+        name: String,
+        id: String,
+        open: bool,
+        variants: Vec<(String, Vec<(String, Kind)>)>,
+    },
+    /// Ephemeral typed Result. It cannot appear as a persistent state.
+    Result {
+        success: Box<Kind>,
+        error: Box<Kind>,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -52,6 +64,16 @@ pub enum Value {
         items: Vec<ListItem>,
         next_id: i32,
     },
+    Error {
+        kind: Kind,
+        variant: String,
+        fields: BTreeMap<String, Value>,
+    },
+    Result {
+        kind: Kind,
+        ok: bool,
+        value: Box<Value>,
+    },
 }
 
 impl Value {
@@ -60,7 +82,10 @@ impl Value {
             Self::Int(_) => Kind::Int,
             Self::Bool(_) => Kind::Bool,
             Self::Text(_) => Kind::Text,
-            Self::Record { kind, .. } | Self::List { kind, .. } => kind.clone(),
+            Self::Record { kind, .. }
+            | Self::List { kind, .. }
+            | Self::Error { kind, .. }
+            | Self::Result { kind, .. } => kind.clone(),
         }
     }
 
@@ -75,6 +100,28 @@ impl Value {
                     .map(|(key, v)| (key.clone(), v.plain()))
                     .collect(),
             ),
+            Self::Error {
+                kind,
+                variant,
+                fields,
+            } => {
+                let Kind::Error { id, .. } = kind else {
+                    unreachable!("validated error kind")
+                };
+                serde_json::json!({
+                    "id":format!("{id}.{variant}"),
+                    "variant":variant,
+                    "fields":fields.iter().map(|(key,v)| (key.clone(),v.plain()))
+                        .collect::<serde_json::Map<_,_>>(),
+                })
+            }
+            Self::Result { ok, value, .. } => {
+                if *ok {
+                    serde_json::json!({"value":value.plain(),"code":"","error":null})
+                } else {
+                    serde_json::json!({"code":"","error":value.plain()})
+                }
+            }
             Self::List { items, next_id, .. } => {
                 let rows: Vec<_> = items
                     .iter()
@@ -130,6 +177,32 @@ pub fn validate(value: &Value, expected: &Kind) -> Result<()> {
             }
             Ok(())
         }
+        (
+            Value::Error {
+                variant, fields, ..
+            },
+            Kind::Error { variants, .. },
+        ) => {
+            let (_, schema) = variants
+                .iter()
+                .find(|(name, _)| name == variant)
+                .ok_or_else(|| Error("Unknown nominal error variant".into()))?;
+            if schema.len() != fields.len() {
+                return fail("Invalid error field count");
+            }
+            for (name, kind) in schema {
+                validate(
+                    fields
+                        .get(name)
+                        .ok_or_else(|| Error("Missing error field".into()))?,
+                    kind,
+                )?;
+            }
+            Ok(())
+        }
+        (Value::Result { ok, value, .. }, Kind::Result { success, error }) => {
+            validate(value, if *ok { success } else { error })
+        }
         (Value::Int(_), Kind::Int) | (Value::Bool(_), Kind::Bool) => Ok(()),
         _ => fail("Type mismatch"),
     }
@@ -181,6 +254,23 @@ pub enum Stmt {
     Let(String, Expr),
     Require(Expr),
     Branch(Expr, Vec<Stmt>, Vec<Stmt>),
+    Match(Expr, Vec<MatchArm>),
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub enum MatchPattern {
+    Ok(String),
+    Variant {
+        name: String,
+        bindings: Vec<(String, String)>,
+    },
+    Fallback(String),
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct MatchArm {
+    pub pattern: MatchPattern,
+    pub body: Vec<Stmt>,
 }
 
 #[derive(Clone, Debug, Serialize)]

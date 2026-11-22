@@ -22,6 +22,7 @@ pub mod runtime;
 pub mod site;
 pub mod snapshot;
 pub mod stdlib;
+pub mod typed_errors;
 pub mod web;
 
 pub use model::{Error, Kind, Program, Result, State, Value};

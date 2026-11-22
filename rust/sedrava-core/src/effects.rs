@@ -2,10 +2,7 @@
 //!
 //! An app-domain effect manifest is deliberately NOT a runtime permission grant,
 //! a security proof for UI/storage, or a Host/server capabilities manifest.
-use crate::{
-    expr,
-    model::{fail, Error, Expr, Kind, Program, PureFunction, Result},
-};
+use crate::model::{fail, Error, Expr, Kind, Program, PureFunction, Result};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
@@ -98,8 +95,22 @@ pub struct Manifest {
 }
 
 const PURE_COLLECTIONS: &[&str] = &[
-    "count", "next_id", "append", "update", "remove", "get", "has", "filter", "map", "find", "any",
-    "all", "sort", "sum",
+    "result_ok",
+    "result_or",
+    "count",
+    "next_id",
+    "append",
+    "update",
+    "remove",
+    "get",
+    "has",
+    "filter",
+    "map",
+    "find",
+    "any",
+    "all",
+    "sort",
+    "sum",
 ];
 const QUERY_OPERATORS: &[&str] = &["filter", "map", "find", "any", "all", "sort", "sum"];
 
@@ -144,7 +155,12 @@ impl Scanner<'_> {
                         return fail(format!("Unregistered primitive signature: {name}"));
                     }
                     self.direct.extend(effects.iter().cloned());
-                } else if crate::stdlib::signature(name).is_some()
+                } else if (matches!(name.as_str(), "Ok" | "Err" | "error_id")
+                    && !self.symbols.contains_key(name))
+                    || name.split_once('.').is_some_and(|(family, _)| {
+                        matches!(self.symbols.get(family), Some(Kind::Error { .. }))
+                    })
+                    || crate::stdlib::signature(name).is_some()
                     || PURE_COLLECTIONS.contains(&name.as_str())
                     || matches!(self.symbols.get(name), Some(Kind::Record { .. }))
                 {
@@ -250,9 +266,7 @@ pub fn infer(
         }
         // Recheck the expression against its signature. Reject unknown, untyped
         // and dynamic calls before traversing the call graph.
-        if expr::infer(&function.body, &types)? != function.result {
-            return fail("Function body violates its checked return type");
-        }
+        crate::typed_errors::validate_body(&function.body, &function.result, &types)?;
         let mut scanner = Scanner {
             symbols,
             functions,

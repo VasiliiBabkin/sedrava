@@ -320,8 +320,15 @@ impl Parser {
                     expr = self.build(Expr::Attr(Box::new(expr), field))?;
                 }
                 Tok::LParen => {
-                    let Expr::Ident(name) = expr else {
-                        return fail("Only declared named operations are callable");
+                    let name = match expr {
+                        Expr::Ident(name) => name,
+                        Expr::Attr(base, variant) if matches!(base.as_ref(), Expr::Ident(_)) => {
+                            let Expr::Ident(family) = *base else {
+                                unreachable!()
+                            };
+                            format!("{family}.{variant}")
+                        }
+                        _ => return fail("Only declared named operations are callable"),
                     };
                     self.next();
                     let mut args = Vec::new();
@@ -399,6 +406,7 @@ pub fn infer(expr: &Expr, types: &BTreeMap<String, Kind>) -> Result<Kind> {
                 .ok_or_else(|| Error(format!("Unknown identifier: {name}")))?;
             if matches!(&kind, Kind::Record{name:record_name,..} if name==record_name)
                 || matches!(kind, Kind::Function { .. })
+                || matches!(&kind, Kind::Error { name: family, .. } if family == name)
             {
                 return fail("Constructor or pure function requires a call");
             }
@@ -427,6 +435,13 @@ pub fn infer(expr: &Expr, types: &BTreeMap<String, Kind>) -> Result<Kind> {
             }
         }
         Expr::Call { name, args, kwargs } => {
+            if let Some(kind) =
+                crate::typed_errors::infer_constructor(name, args, kwargs, types, &|e| {
+                    infer(e, types)
+                })?
+            {
+                return Ok(kind);
+            }
             crate::collections::infer_call(name, args, kwargs, types, &|e| infer(e, types))
         }
         Expr::Unary(op, inner) => {
@@ -525,10 +540,23 @@ pub fn evaluate_full(
                     crate::model::validate(&value, expected)?;
                     params.insert(key.clone(), value);
                 }
-                let result = evaluate_full(&function.body, &params, types, functions)?;
+                let result = crate::typed_errors::evaluate_body(
+                    &function.body,
+                    &function.result,
+                    &params,
+                    types,
+                    functions,
+                )?;
                 crate::model::validate(&result, &function.result)?;
                 Ok(result)
             } else {
+                if let Some(value) =
+                    crate::typed_errors::construct(name, args, kwargs, types, &|e| {
+                        evaluate_full(e, values, types, functions)
+                    })?
+                {
+                    return Ok(value);
+                }
                 crate::collections::evaluate_call(name, args, kwargs, types, functions, &|e| {
                     evaluate_full(e, values, types, functions)
                 })

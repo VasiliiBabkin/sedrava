@@ -13,6 +13,9 @@ fn kotlin_type(kind: &Kind) -> Result<&'static str> {
         Kind::Record { .. } => Ok("SdrRecord"),
         Kind::List { .. } => Ok("SdrList"),
         Kind::Function { .. } => fail("Android cannot use a function as a value"),
+        Kind::Error { .. } | Kind::Result { .. } => {
+            fail("Android typed Result/match backend requires native completion")
+        }
     }
 }
 
@@ -29,6 +32,9 @@ fn spec(kind: &Kind) -> Result<String> {
             format!("SdrType.Collection({}, {capacity})", quote(name))
         }
         Kind::Function { .. } => return fail("No runtime value type for function"),
+        Kind::Error { .. } | Kind::Result { .. } => {
+            return fail("Android typed Result backend not implemented")
+        }
     })
 }
 
@@ -229,6 +235,7 @@ fn statements(
                 locals.insert(name.clone(), local);
             }
             Stmt::Require(expr) => writeln!(out, "{pad}require({})", compile(expr)?).unwrap(),
+            Stmt::Match(_, _) => return fail("Android match backend not implemented yet"),
             Stmt::Branch(cond, yes, no) => {
                 writeln!(out, "{pad}if ({}) {{", compile(cond)?).unwrap();
                 statements(out, yes, &types, &locals, depth + 4, index)?;

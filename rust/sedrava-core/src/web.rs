@@ -68,6 +68,31 @@ pub(crate) fn expr_js(expr: &Expr, scope: &BTreeMap<String, String>) -> Result<S
             expr_js(no, scope)?
         ),
         Expr::Call { name, args, kwargs } => {
+            if let Some((family, variant)) = name.split_once('.') {
+                let stable = scope
+                    .get(&format!("@errorid:{family}"))
+                    .ok_or_else(|| crate::model::Error("Unregistered nominal error type".into()))?;
+                if !args.is_empty() {
+                    return fail("Error constructor requires only named fields");
+                }
+                let sequence = scope
+                    .get(&format!("@errorfields:{name}"))
+                    .ok_or_else(|| crate::model::Error("Unregistered error variant".into()))?;
+                let fields = sequence.split(',').filter(|f| !f.is_empty());
+                let mut parts = Vec::new();
+                for field in fields {
+                    let Some((_, expr)) = kwargs.iter().find(|(k, _)| k == field) else {
+                        return fail("Missing error constructor field");
+                    };
+                    parts.push(format!("[{}]:{}", json(field), expr_js(expr, scope)?));
+                }
+                return Ok(format!(
+                    "({{id:{},variant:{},fields:{{{}}}}})",
+                    json(&format!("{stable}.{variant}")),
+                    json(variant),
+                    parts.join(",")
+                ));
+            }
             if !kwargs.is_empty() {
                 if !args.is_empty() {
                     return fail("Record constructors require named fields only");
@@ -96,6 +121,18 @@ pub(crate) fn expr_js(expr: &Expr, scope: &BTreeMap<String, String>) -> Result<S
                 .collect::<Result<Vec<_>>>()?;
             let first = emit.first().map(String::as_str).unwrap_or("");
             let second = emit.get(1).map(String::as_str).unwrap_or("undefined");
+            if !scope.contains_key(&format!("@fn:{name}"))
+                && !scope.contains_key(&format!("@record:{name}"))
+            {
+                match name.as_str() {
+                    "Ok" if args.len() == 1 => {
+                        return Ok(format!("({{value:{first},code:'',error:null}})"))
+                    }
+                    "Err" if args.len() == 1 => return Ok(format!("({{code:'',error:{first}}})")),
+                    "error_id" if args.len() == 1 => return Ok(format!("({first}).id")),
+                    _ => (),
+                }
+            }
             match name.as_str() {
                 "text_length" => format!("Array.from({first}).length"),
                 "trim" => format!("({first}).replace(/^[ \\t\\r\\n]+|[ \\t\\r\\n]+$/g, '')"),
@@ -105,6 +142,10 @@ pub(crate) fn expr_js(expr: &Expr, scope: &BTreeMap<String, String>) -> Result<S
                 "is_date" => format!("sdrIsDate({first})"),
                 "date_days" => format!("sdrDateDays({first})"),
                 "date_add" => format!("sdrDateAdd({first},{second})"),
+                "result_ok" => format!("({first}).error===null"),
+                "result_or" => format!(
+                    "((_r,_fallback)=>_r.error===null?_r.value:_fallback)({first},{second})"
+                ),
                 "count" | "next_id" | "append" | "get" | "has" | "remove" | "update" => {
                     let cap = if name == "append" {
                         if let Some(Expr::Ident(var)) = args.first() {
@@ -203,6 +244,22 @@ fn scope_for(program: &Program, state_ref: &str) -> BTreeMap<String, String> {
         if let Kind::List { capacity, .. } = kind {
             scope.insert(format!("@capacity:{name}"), capacity.to_string());
         }
+        if let Kind::Error { id, variants, .. } = kind {
+            scope.insert(format!("@errorid:{name}"), id.clone());
+            for (variant, fields) in variants {
+                scope.insert(
+                    format!("@errorfields:{name}.{variant}"),
+                    fields
+                        .iter()
+                        .map(|(n, _)| n.as_str())
+                        .collect::<Vec<_>>()
+                        .join(","),
+                );
+            }
+        }
+        if matches!(kind, Kind::Record { .. }) {
+            scope.insert(format!("@record:{name}"), "true".into());
+        }
     }
     scope
 }
@@ -234,6 +291,49 @@ fn statements_js(
                 out.push_str(&format!(
                     "{pad}if (!({})) throw Error('Action requirement rejected');\n",
                     expr_js(e, &env)?
+                ));
+            }
+            Stmt::Match(subject, arms) => {
+                use crate::model::MatchPattern;
+                *counter += 1;
+                let identity = format!("_result_{}", counter);
+                out.push_str(&format!(
+                    "{pad}const {identity}={};\n",
+                    expr_js(subject, &env)?
+                ));
+                for (i, arm) in arms.iter().enumerate() {
+                    let mut locals = env.clone();
+                    let condition = match &arm.pattern {
+                        MatchPattern::Ok(name) => {
+                            locals.insert(name.clone(), format!("{identity}.value"));
+                            format!("{identity}.error===null")
+                        }
+                        MatchPattern::Variant { name, bindings } => {
+                            for (field, binder) in bindings {
+                                locals.insert(
+                                    binder.clone(),
+                                    format!("{identity}.error.fields[{}]", json(field)),
+                                );
+                            }
+                            format!("{identity}.error?.variant==={}", json(name))
+                        }
+                        MatchPattern::Fallback(name) => {
+                            locals.insert(name.clone(), format!("{identity}.error"));
+                            format!("{identity}.error!==null")
+                        }
+                    };
+                    out.push_str(&format!(
+                        "{pad}{} ({condition}) {{\n",
+                        if i == 0 { "if" } else { "else if" }
+                    ));
+                    statements_js(&arm.body, &locals, out, counter, depth + 2)?;
+                    out.push_str(&format!("{pad}}}\n"));
+                }
+                // Even though Rust statically verifies exhaustiveness,
+                // an unexpected JS runtime shape must never silently execute
+                // the remainder of an action as if the branch succeeded.
+                out.push_str(&format!(
+                    "{pad}else {{throw Error('E_MATCH: unreachable runtime variant');}}\n"
                 ));
             }
             Stmt::Branch(condition, yes, no) => {
@@ -686,7 +786,7 @@ const pureFunctions=Object.create(null);
             args.join(",")
         ));
     }
-    let mut names = BTreeMap::new();
+    let mut names = scope_for(program, "r");
     for name in program.functions.keys() {
         names.insert(
             format!("@fn:{name}"),
