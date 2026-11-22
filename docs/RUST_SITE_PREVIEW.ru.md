@@ -1,45 +1,77 @@
-# Экспериментальный нативный Site DSL на Rust
+# Экспериментальные Site и WebApp на Rust
 
-**Статус:** проверенный экспериментальный фрагмент задачи #65 (см. [отчёт](../evidence/rust-core/2026-11-22-stage7-site.md)). На точном SHA 0c95a31 прошли Cargo fmt/build, 43 Rust-теста, Site CLI smoke и документационная проверка. Это **частичный перенос**, а не совместимый генератор Sedrava Site 0.11.
-
-## Что добавлено
-
-Экспериментальная команда:
+Нативный генератор поддерживает многостраничный Site и автономный WebApp из
+Sedrava 0.11. Python 0.11 остаётся эталоном совместимости. Для каждого
+запуска генератора укажите новый каталог назначения.
 
 ~~~sh
 cargo build --manifest-path rust/Cargo.toml --locked --bin sedrava-native
-./rust/target/debug/sedrava-native check examples/site_native_preview.sdr
-./rust/target/debug/sedrava-native build site examples/site_native_preview.sdr --output build/native-site-preview
+./rust/target/debug/sedrava-native check examples/platform_site.sdr
+./rust/target/debug/sedrava-native build site examples/platform_site.sdr --output build/native-site
+./rust/target/debug/sedrava-native check examples/webapp_011_tasks.sdr
+./rust/target/debug/sedrava-native build webapp examples/webapp_011_tasks.sdr --output build/native-tasks
+python3 -m http.server --bind 127.0.0.1 --directory build 8080
 ~~~
 
-Только на новом, ранее не существовавшем каталоге output. Генератор не должен менять существующие файлы. Результат — index.html и guide/index.html с экранированными пользовательскими строками. Python для генерации HTML не вызывается.
+Сервис раздаёт `/native-site/index.html` и `/native-tasks/index.html` по
+loopback HTTP для проверки в браузере. Для WebApp это даёт нормальный origin
+для загрузки скрипта и работы `localStorage`. Компиляция обеих целей выполняется
+в нативном бинарнике.
 
-Поддерживаемая **строгая ограниченная грамматика**:
+## Что входит в срез
 
-- site "name" и page identifier at "/path/":; обязательный title, необязательный description.
-- Блочные элементы container:, row:, column:, grid:, card:, navbar:, footer:, callout:. Отступы строго по 4 пробела.
-- heading "...", paragraph "...", code "...", divider, link "..." to "/path/", button "..." to "/path/".
-- Внутренние ссылки на страницы и якоря, внешние https://-ссылки; экранирование HTML в тексте и атрибутах.
-- Неподдерживаемые параметры и директивы приводят к ошибке, а не к частичной невидимой потере содержимого.
-- Ограничения на число страниц, глубину и размер исходника.
+- Site с темами, именованными стилями, адаптивными свойствами, семантическими
+  элементами, относительными ссылками, проверяемыми якорями, изображениями,
+  локальными CSS/шрифтами, лицензиями, метаданными, sitemap и robots.
+- Локальные импорты компонентов и стилей, в WebApp также функций и типов record.
+  Компоненты разворачиваются с типизированными аргументами и одним слотом.
+  Импорты ограничены исходным каталогом. Symlink, циклы и выход за корень
+  отклоняются.
+- WebApp с проверяемым состоянием, вычисляемыми значениями, действиями, вводом,
+  флажками, списками, шаблонами строк, таблицами, формами, диалогами и
+  именованными темами. Маршруты поддерживают целочисленные параметры,
+  булевы guards, переходы назад и прямые ссылки по fragment URL.
+- WebApp использует общий с app-mode генератор логики и код схемы 1. Состояние
+  изменяется после проверки типов, правил и, при наличии `persist`, записи
+  сохранения. Ошибка записи или повреждённое сохранение блокируют изменение.
+  HTML, CSS, JavaScript и локальные ресурсы записываются в отдельные файлы.
+  Генерация завершает проверку до публикации каталога.
 
-## Что не поддерживается
+## Границы совместимости
 
-**Не компилирует** существующие полные примеры web_ui_011_landing.sdr или platform_site.sdr: ещё нет тем, стилей, компонентов/макросов, import, assets, изображений, метаданных origin/robots, markdown, responsive props, классов, форм, виджетов и продвинутых HTML-возможностей.
+HTTP-декларации и связанные WebApp-виджеты пока отклоняются. Поэтому
+`platform_catalog.sdr` по-прежнему требует Python. Пакеты, locks, сетевой
+импорт, Host API, полный Android и диагностика уровня Python остаются
+за пределами этого переноса. Для нативного CLI требуется новый каталог.
+Управляемая перегенерация и файлы-манифесты Python пока отсутствуют.
 
-Это намеренное поведение: генератор никогда не должен притворяться совместимым, незаметно пропуская неподдерживаемые конструкции. Прежний Python Site остаётся эталоном.
+Нативный WebApp использует собственный ключ `localStorage` и для скалярных
+программ пишет схему 1. Автоматическая миграция браузерных данных Python
+отсутствует. Сравнение старого значения перед записью обнаруживает изменения
+из другой вкладки, но не обеспечивает атомарную многовкладочную транзакцию.
+Проверки файлового ввода и публикации выполнены в Linux. Для macOS,
+Windows, Firefox и WebKit требуется отдельная приёмка.
 
-## Проверки после установки Rust/Cargo
+## Проверки
 
 ~~~sh
 cargo fmt --manifest-path rust/Cargo.toml --all -- --check
 cargo test --manifest-path rust/Cargo.toml --locked --all-targets
 cargo build --manifest-path rust/Cargo.toml --locked --bin sedrava-native
 python3 scripts/verify_native_site.py
+python3 scripts/verify_native_web.py
+python3 scripts/verify_native_web_011.py
 python3 scripts/verify_rust_core.py --random-cases 24
+python3 scripts/verify_rust_snapshot.py
 python3 -m unittest discover -s tests -q
 ~~~
 
-Проверки выполнены 22.11.2026 на изолированной установке Rust/Cargo 1.100.0 на VDS Linux. Подтверждены 43 Rust-теста, 390 выборочных сравнений Python/Rust (без найденных расхождений), 14 snapshot-проверок и 274 Python-теста (5 skipped). Сравнения не доказывают полного соответствия языка. GitHub Actions не запускались намеренно.
+Для `verify_native_web_011.py` нужны установленный Python Playwright и
+Chromium. При необходимости путь к браузеру задаётся через
+`SEDRAVA_CHROMIUM`. Скрипт собирает оригинальные примеры обоими
+компиляторами, поднимает loopback HTTP и проверяет один набор ожидаемых
+результатов для обеих сборок. Включены адаптивные сетки, переходы,
+встроенный шрифт, отказ правила, CRUD, сохранение, формы, таблицы,
+модальные диалоги, смена темы и отрицательные сценарии безопасности.
 
-**Дальнейшая приёмка:** проверить расширение Site/WebApp на оригинальных примерах 0.11 и реальных браузерах, провести независимую проверку безопасности. Не считать #65 закрытой.
+Полная матрица остаётся в [карте миграции](RUST_FULL_MIGRATION.ru.md).

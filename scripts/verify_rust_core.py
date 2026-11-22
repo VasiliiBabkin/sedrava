@@ -118,10 +118,10 @@ def main() -> int:
         if len(mismatches) >= 20:
             break
 
-    unsupported = execute(rust, "check", "examples/platform_tasks.sdr", [])
-    unsupported_correctly_rejected = unsupported[0] != 0
+    unsupported = execute(rust, "check", "examples/platform_catalog.sdr", [])
+    unsupported_correctly_rejected = unsupported[0] != 0 and "Unsupported native WebApp declaration service" in unsupported[2]
     if not unsupported_correctly_rejected:
-        mismatches.append({"source": "examples/platform_tasks.sdr", "problem": "unsupported webapp UI accepted"})
+        mismatches.append({"source": "examples/platform_catalog.sdr", "problem": "unsupported WebApp HTTP service did not receive the expected rejection"})
 
     summary = {
         "schema": "sedrava-rust-differential-v1",
@@ -130,7 +130,7 @@ def main() -> int:
         "comparisons": total,
         "python_accepted": accepted,
         "python_rejected": rejected,
-        "unsupported_webapp_ui_rejected": unsupported_correctly_rejected,
+        "unsupported_webapp_http_rejected": unsupported_correctly_rejected,
         "mismatch_count": len(mismatches),
         "mismatches": mismatches,
          "note": "Comparable outcomes are limited to listed scalar, record, collection, pure function, standard library and navigation examples; same rejection does not prove identical failure semantics.",

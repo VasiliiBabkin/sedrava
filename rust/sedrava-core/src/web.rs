@@ -4,7 +4,7 @@
 use crate::model::{fail, Binary, Expr, Kind, Program, Result, Stmt, Unary, Widget};
 use std::collections::BTreeMap;
 
-fn json<T: serde::Serialize>(value: &T) -> String {
+pub(crate) fn json<T: serde::Serialize + ?Sized>(value: &T) -> String {
     // Escape HTML-sensitive characters even inside script tags.
     serde_json::to_string(value)
         .expect("Serializable typed compiler output")
@@ -252,10 +252,7 @@ fn statements_js(
     Ok(())
 }
 
-fn scalar_only(program: &Program) -> Result<()> {
-    if program.screens.is_empty() {
-        return fail("Missing native Web screen");
-    }
+fn validate_state_types(program: &Program) -> Result<()> {
     for key in program.states.keys() {
         match program.types.get(key) {
             Some(Kind::Int | Kind::Bool | Kind::Text) => {}
@@ -270,8 +267,9 @@ fn scalar_only(program: &Program) -> Result<()> {
 /// Throws a clear error on unsupported features instead of producing a
 /// misleading, incomplete application.
 pub fn generate_web(program: &Program) -> Result<String> {
-    scalar_only(program)?;
-    let scope = scope_for(program, "next");
+    if program.screens.is_empty() {
+        return fail("Missing native Web screen");
+    }
     let mut output = String::new();
     output.push_str("<!doctype html>\n<html lang=\"ru\"><head><meta charset=\"utf-8\">");
     output.push_str("<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">");
@@ -358,6 +356,151 @@ pub fn generate_web(program: &Program) -> Result<String> {
     }
     output
         .push_str("<p id=\"sedrava-error\" role=\"alert\" hidden></p>\n<script>\n'use strict';\n");
+    let names = append_domain(program, &mut output, None)?;
+    output.push_str("function screenVisible(name,next){try{const r=resolved(next);switch(name){\n");
+    for (name, screen) in &program.screens {
+        let expression = if let Some(guard) = &screen.guard {
+            expr_js(guard, &names)?
+        } else {
+            "true".into()
+        };
+        output.push_str(&format!("case {}:return !!({expression});\n", json(name)));
+    }
+    output.push_str("default:return false;}}catch(_){return false;}}\n");
+    output.push_str("function normalizeStack(){while(screenStack.length>1 && !screenVisible(screenStack[screenStack.length-1],state))screenStack.pop();}\n");
+    output.push_str(
+        r#"
+const errorEl=document.getElementById('sedrava-error');
+function showError(message){errorEl.textContent=message;errorEl.hidden=!message;}
+function renderCollections(){
+    document.querySelectorAll('[data-list]').forEach(el=>{
+        el.replaceChildren();
+        for(const row of state[el.dataset.list].items){
+            const item=document.createElement('li');
+            item.dataset.id=String(row.id);
+            const label=document.createElement('span');
+            label.textContent=Object.entries(row).filter(([key])=>key!=='id')
+                .map(([key,value])=>key+': '+String(value)).join(' · ');
+            item.append(label);
+            const button=document.createElement('button');
+            button.type='button';button.textContent='Select';
+            button.setAttribute('aria-label','Select '+row.id);
+            button.onclick=()=>{
+                const next={...state,[el.dataset.select]:row.id};
+                if(!validate(next)){showError('Selection rejected');return;}
+                if(el.dataset.open) {
+                    dispatch(el.dataset.open,next);
+                } else if(saveSnapshot(next)) {
+                    state=next;normalizeStack();showError('');render();
+                }
+            };
+            item.append(button);
+            el.append(item);
+        }
+    });
+}
+function render(){
+    normalizeStack();
+    const active=screenStack[screenStack.length-1];
+    document.querySelectorAll('[data-screen]').forEach(el=>{el.hidden=el.dataset.screen!==active;});
+    const r=resolved(state);
+    document.querySelectorAll('[data-state]').forEach(el=>{
+        el.textContent=String(r[el.dataset.state]);
+    });
+    document.querySelectorAll('[data-show]').forEach(el=>{
+        el.hidden=!r[el.dataset.show];
+    });
+    document.querySelectorAll('[data-input]').forEach(el=>{
+        if (document.activeElement!==el) el.value=String(state[el.dataset.input]);
+    });
+    renderCollections();
+"#,
+    );
+    let mut display = 0;
+    for (name, screen) in &program.screens {
+        for widget in &screen.widgets {
+            if let Widget::Display(expr) = widget {
+                let code = expr_js(expr, &names)?;
+                output.push_str(&format!(
+                    "    if(screenStack[screenStack.length-1]==={})document.querySelectorAll('[data-display]')[{}].textContent=String({code});\n",
+                    json(name),display
+                ));
+                display += 1;
+            }
+        }
+    }
+    output.push_str(
+        r#"}
+function dispatch(command, selectedState){
+    try {
+        let proposed=selectedState||state;
+        let stack=[...screenStack];
+        if(command==='$back'){
+            if(stack.length>1)stack.pop();
+        } else if(Object.hasOwn(navigationRoutes,command)){
+            const route=navigationRoutes[command];
+            if(route.action!==null){
+                if(!Object.hasOwn(actions,route.action))throw Error('Unknown domain action');
+                const next=actions[route.action](proposed);
+                if(next===proposed)throw Error('Domain action rejected');
+                proposed=next;
+            }
+            if(route.target==='pop'){
+                if(stack.length>1)stack.pop();
+            }else{
+                if(stack.length>=32||!screenVisible(route.target,proposed))
+                    throw Error('Target screen unavailable');
+                stack.push(route.target);
+            }
+        } else if(Object.hasOwn(actions,command)){
+            const next=actions[command](proposed);
+            if(next===proposed)throw Error('Action rejected by declared rules');
+            proposed=next;
+        } else{
+            throw Error('Unknown action or navigation command');
+        }
+        if(!validate(proposed))throw Error('State invariant rejected');
+        if(!saveSnapshot(proposed))return;
+        state=proposed;
+        screenStack=stack;
+        normalizeStack();
+        showError('');
+        render();
+    } catch(error){
+        showError('Action rejected: '+error.message);
+    }
+}
+document.querySelectorAll('[data-action]').forEach(el=>{
+    el.addEventListener('click',()=>dispatch(el.dataset.action));
+});
+document.querySelectorAll('[data-input]').forEach(el=>{
+    el.addEventListener('change',()=>{
+        const key=el.dataset.input, input=el.value;
+        const number=Number(input);
+        const value=typeof state[key]==='number'
+            ? (/^-?[0-9]+$/.test(input.trim()) && Number.isInteger(number) ? number : NaN)
+            : input;
+        const next={...state,[key]:value};
+        if (!validate(next)){showError('Invalid input or rule violation');return;}
+        if(saveSnapshot(next)) {state=next;normalizeStack();showError('');render();}
+    });
+});
+if(!validate(state)) showError('Invalid initial state');
+else {restoreSaved();render();}
+
+</script></body></html>
+"#,
+    );
+    Ok(output)
+}
+
+pub(crate) fn append_domain(
+    program: &Program,
+    output: &mut String,
+    namespace: Option<&str>,
+) -> Result<BTreeMap<String, String>> {
+    validate_state_types(program)?;
+    let scope = scope_for(program, "next");
     output.push_str(&format!(
         "const initialState = JSON.parse({});\n",
         json(
@@ -553,7 +696,7 @@ const pureFunctions=Object.create(null);
     for key in program.states.keys() {
         names.insert(key.clone(), format!("r[{}]", json(key)));
     }
-    output.push_str("function resolved(next){\n  const r={...next};\n");
+    output.push_str("function resolved(next){\n  const r={__proto__:null,...next};\n");
     for (name, expr) in &program.derives {
         output.push_str(&format!(
             "  r[{}]={};\n",
@@ -597,8 +740,12 @@ const pureFunctions=Object.create(null);
             "true"
         }
     ));
-    output.push_str(r#"
-const storageKey = 'sedrava-native:' + (typeof location !== 'undefined' ? location.pathname : '/') + ':' + JSON.stringify(snapshotSignature);
+    output.push_str("const storageKey = 'sedrava-native:' + (typeof location !== 'undefined' ? location.pathname : '/') + ':' + ");
+    if let Some(namespace) = namespace {
+        output.push_str(&format!("{} + ':' + ", json(namespace)));
+    }
+    output.push_str(
+        r#"JSON.stringify(snapshotSignature);
 let previousRaw = null;
 let restoreBlocked = false;
 function own(obj, key) { return Object.hasOwn(obj, key); }
@@ -697,7 +844,7 @@ function saveSnapshot(next) {
             throw Error('Storage changed externally; reload before editing');
         }
         if (!validate(next)) throw Error('Invalid state');
-        const retained = {};
+        const retained = Object.create(null);
         for (const key of persistKeys) retained[key] = next[key];
         const raw = JSON.stringify({schema:1, signature:snapshotSignature,state:retained});
         if (raw.length > 200000) throw Error('Snapshot exceeds browser size limit');
@@ -709,18 +856,8 @@ function saveSnapshot(next) {
         return false;
     }
 }
-"#);
-    output.push_str("function screenVisible(name,next){try{const r=resolved(next);switch(name){\n");
-    for (name, screen) in &program.screens {
-        let expression = if let Some(guard) = &screen.guard {
-            expr_js(guard, &names)?
-        } else {
-            "true".into()
-        };
-        output.push_str(&format!("case {}:return !!({expression});\n", json(name)));
-    }
-    output.push_str("default:return false;}}catch(_){return false;}}\n");
-    output.push_str("function normalizeStack(){while(screenStack.length>1 && !screenVisible(screenStack[screenStack.length-1],state))screenStack.pop();}\n");
+"#,
+    );
     output.push_str("const actions = Object.create(null);\n");
     let mut counter = 0;
     for (name, body) in &program.actions {
@@ -728,133 +865,10 @@ function saveSnapshot(next) {
             "actions[{}]=function(state){{\n  const next={{...state}};\n",
             json(name)
         ));
-        statements_js(body, &scope, &mut output, &mut counter, 2)?;
+        statements_js(body, &scope, output, &mut counter, 2)?;
         output.push_str("  return validate(next) ? next : state;\n};\n");
     }
-    output.push_str(
-        r#"
-const errorEl=document.getElementById('sedrava-error');
-function showError(message){errorEl.textContent=message;errorEl.hidden=!message;}
-function renderCollections(){
-    document.querySelectorAll('[data-list]').forEach(el=>{
-        el.replaceChildren();
-        for(const row of state[el.dataset.list].items){
-            const item=document.createElement('li');
-            item.dataset.id=String(row.id);
-            const label=document.createElement('span');
-            label.textContent=Object.entries(row).filter(([key])=>key!=='id')
-                .map(([key,value])=>key+': '+String(value)).join(' · ');
-            item.append(label);
-            const button=document.createElement('button');
-            button.type='button';button.textContent='Select';
-            button.setAttribute('aria-label','Select '+row.id);
-            button.onclick=()=>{
-                const next={...state,[el.dataset.select]:row.id};
-                if(!validate(next)){showError('Selection rejected');return;}
-                if(el.dataset.open) {
-                    dispatch(el.dataset.open,next);
-                } else if(saveSnapshot(next)) {
-                    state=next;normalizeStack();showError('');render();
-                }
-            };
-            item.append(button);
-            el.append(item);
-        }
-    });
-}
-function render(){
-    normalizeStack();
-    const active=screenStack[screenStack.length-1];
-    document.querySelectorAll('[data-screen]').forEach(el=>{el.hidden=el.dataset.screen!==active;});
-    const r=resolved(state);
-    document.querySelectorAll('[data-state]').forEach(el=>{
-        el.textContent=String(r[el.dataset.state]);
-    });
-    document.querySelectorAll('[data-show]').forEach(el=>{
-        el.hidden=!r[el.dataset.show];
-    });
-    document.querySelectorAll('[data-input]').forEach(el=>{
-        if (document.activeElement!==el) el.value=String(state[el.dataset.input]);
-    });
-    renderCollections();
-"#,
-    );
-    let mut display = 0;
-    for (name, screen) in &program.screens {
-        for widget in &screen.widgets {
-            if let Widget::Display(expr) = widget {
-                let code = expr_js(expr, &names)?;
-                output.push_str(&format!(
-                    "    if(screenStack[screenStack.length-1]==={})document.querySelectorAll('[data-display]')[{}].textContent=String({code});\n",
-                    json(name),display
-                ));
-                display += 1;
-            }
-        }
-    }
-    output.push_str(
-        r#"}
-function dispatch(command, selectedState){
-    try {
-        let proposed=selectedState||state;
-        let stack=[...screenStack];
-        if(command==='$back'){
-            if(stack.length>1)stack.pop();
-        } else if(Object.hasOwn(navigationRoutes,command)){
-            const route=navigationRoutes[command];
-            if(route.action!==null){
-                if(!Object.hasOwn(actions,route.action))throw Error('Unknown domain action');
-                const next=actions[route.action](proposed);
-                if(next===proposed)throw Error('Domain action rejected');
-                proposed=next;
-            }
-            if(route.target==='pop'){
-                if(stack.length>1)stack.pop();
-            }else{
-                if(stack.length>=32||!screenVisible(route.target,proposed))
-                    throw Error('Target screen unavailable');
-                stack.push(route.target);
-            }
-        } else if(Object.hasOwn(actions,command)){
-            const next=actions[command](proposed);
-            if(next===proposed)throw Error('Action rejected by declared rules');
-            proposed=next;
-        } else{
-            throw Error('Unknown action or navigation command');
-        }
-        if(!validate(proposed))throw Error('State invariant rejected');
-        if(!saveSnapshot(proposed))return;
-        state=proposed;
-        screenStack=stack;
-        normalizeStack();
-        showError('');
-        render();
-    } catch(error){
-        showError('Action rejected: '+error.message);
-    }
-}
-document.querySelectorAll('[data-action]').forEach(el=>{
-    el.addEventListener('click',()=>dispatch(el.dataset.action));
-});
-document.querySelectorAll('[data-input]').forEach(el=>{
-    el.addEventListener('change',()=>{
-        const key=el.dataset.input, input=el.value;
-        const number=Number(input);
-        const value=typeof state[key]==='number'
-            ? (/^-?[0-9]+$/.test(input.trim()) && Number.isInteger(number) ? number : NaN)
-            : input;
-        const next={...state,[key]:value};
-        if (!validate(next)){showError('Invalid input or rule violation');return;}
-        if(saveSnapshot(next)) {state=next;normalizeStack();showError('');render();}
-    });
-});
-if(!validate(state)) showError('Invalid initial state');
-else {restoreSaved();render();}
-
-</script></body></html>
-"#,
-    );
-    Ok(output)
+    Ok(names)
 }
 
 #[cfg(test)]

@@ -1,384 +1,610 @@
-//! Native static Site DSL preview. The subset is deliberately narrow:
-//! unknown directives and modifiers fail, rather than silently disappearing.
-//! This is NOT a replacement for the Python 0.11 Site compiler.
+//! Native static Site DSL, using the Python 0.11 presentation contract as reference.
+mod assets;
+mod properties;
+mod render;
+mod syntax;
+pub mod webapp;
 
-use crate::model::{fail, Error, Result, MAX_SOURCE_CHARS};
-use std::collections::BTreeMap;
-
-const MAX_PAGES: usize = 32;
-const MAX_NESTING: usize = 20;
-
-#[derive(Debug, Clone)]
-struct Line {
-    number: usize,
-    indent: usize,
-    text: String,
-}
+use crate::model::{fail, Error, Result};
+use properties::{Props, THEME};
+use regex::Regex;
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    path::Path,
+    sync::LazyLock,
+};
+use syntax::{identifier, Line, Token};
+use url::Url;
 
 #[derive(Debug)]
 pub struct StaticSite {
-    /// Safe, relative file names only; the caller stages the directory atomically.
-    pub files: BTreeMap<String, String>,
+    /// Relative files to stage together before publication.
+    pub files: BTreeMap<String, Vec<u8>>,
 }
 
-fn error<T>(line: usize, message: &str) -> Result<T> {
-    fail(format!("Line {line}: {message}"))
+struct Node {
+    kind: String,
+    props: Props,
+    children: Vec<Node>,
+    line: Line,
 }
 
-fn lines(source: &str) -> Result<Vec<Line>> {
-    if source.chars().count() > MAX_SOURCE_CHARS {
-        return fail("Site source exceeds size limit");
-    }
-    let mut result = Vec::new();
-    for (index, raw) in source.lines().enumerate() {
-        let number = index + 1;
-        if raw.starts_with('\u{feff}') {
-            return error(number, "UTF-8 BOM is unsupported");
+struct Page {
+    route: String,
+    title: String,
+    description: String,
+    lang: String,
+    nodes: Vec<Node>,
+    ids: BTreeSet<String>,
+}
+
+#[derive(Default)]
+struct Settings {
+    stylesheets: Vec<String>,
+    licenses: Vec<String>,
+    images: BTreeMap<String, String>,
+    origin: Option<String>,
+    robots: Option<bool>,
+}
+
+struct Site {
+    pages: Vec<Page>,
+    theme: Props,
+    settings: Settings,
+}
+
+type Styles = BTreeMap<String, BTreeMap<String, Token>>;
+
+pub fn generate(source: &str) -> Result<StaticSite> {
+    generate_at(source, None)
+}
+
+pub fn generate_at(source: &str, root: Option<&Path>) -> Result<StaticSite> {
+    let root = canonical_root(root)?;
+    let lines = syntax::expand(source, root.as_deref(), false)?;
+    let site = parse(&lines, true)?.0;
+    render::generate(site, root.as_deref())
+}
+
+fn canonical_root(root: Option<&Path>) -> Result<Option<std::path::PathBuf>> {
+    root.map(Path::canonicalize)
+        .transpose()
+        .map_err(|err| Error(format!("Cannot resolve Web source directory: {err}")))
+}
+
+fn parse(lines: &[Line], require_pages: bool) -> Result<(Site, Styles)> {
+    let mut i = 0;
+    if require_pages {
+        let first = lines
+            .first()
+            .ok_or_else(|| Error("Missing site declaration".into()))?;
+        match &syntax::tokens(first, &first.text)?[..] {
+            [Token::Word(key), Token::Text(name)]
+                if first.depth == 0 && key == "site" && !name.trim().is_empty() => {}
+            _ => return Err(first.error("Expected site and a nonempty quoted name")),
         }
-        let indent = raw
-            .chars()
-            .take_while(|ch| *ch == ' ' || *ch == '\t')
-            .count();
-        if raw.chars().take(indent).any(|ch| ch == '\t') {
-            return error(number, "Tabs in indentation are unsupported");
+        i = 1;
+    }
+    let mut theme: Props = THEME.iter().map(|&(k, v)| (k.into(), v.into())).collect();
+    let mut styles = Styles::new();
+    let mut settings = Settings::default();
+    let mut headers = Vec::new();
+    let mut seen_theme = false;
+    while i < lines.len() {
+        let start = i;
+        let line = &lines[i];
+        if line.depth != 0 {
+            return Err(line.error("Expected top-level Site declaration"));
         }
-        let value = raw.trim();
-        if value.is_empty() || value.starts_with('#') {
-            continue;
+        i += 1;
+        while i < lines.len() && lines[i].depth > 0 {
+            i += 1;
         }
-        if indent % 4 != 0 {
-            return error(number, "Indentation must use multiples of four spaces");
+        let body = &lines[start + 1..i];
+        let args = syntax::tokens(line, &line.text)?;
+        match &args[..] {
+            [Token::Word(keyword), Token::Colon] if keyword == "theme" => {
+                if seen_theme || body.is_empty() {
+                    return Err(line.error("Expected a unique nonempty theme block"));
+                }
+                seen_theme = true;
+                let mut keys = BTreeSet::new();
+                for row in body {
+                    let items = syntax::tokens(row, &row.text)?;
+                    let [Token::Word(key), Token::Text(value)] = &items[..] else {
+                        return Err(row.error("Expected theme token and quoted hex color"));
+                    };
+                    let color = properties::color(value).filter(|c| c.starts_with('#'));
+                    if row.depth != 1
+                        || !theme.contains_key(key)
+                        || !keys.insert(key.clone())
+                        || color.is_none()
+                    {
+                        return Err(row.error("Invalid or duplicate theme token"));
+                    }
+                    theme.insert(key.clone(), color.unwrap());
+                }
+            }
+            [Token::Word(keyword), Token::Word(name) | Token::Text(name), Token::Colon]
+                if keyword == "style" =>
+            {
+                if !identifier(name) || body.is_empty() || styles.contains_key(name) {
+                    return Err(line.error("Invalid, empty or duplicate style"));
+                }
+                let mut style = BTreeMap::new();
+                for row in body {
+                    let parsed = properties::props(&syntax::tokens(row, &row.text)?, row)?;
+                    if row.depth != 1 || parsed.len() != 1 {
+                        return Err(row.error("Expected one indented style property"));
+                    }
+                    for (key, value) in parsed {
+                        properties::validate(&key, &value, None, row)?;
+                        if style.insert(key, value).is_some() {
+                            return Err(row.error("Duplicate style property"));
+                        }
+                    }
+                }
+                styles.insert(name.clone(), style);
+            }
+            [Token::Word(keyword), Token::Word(name) | Token::Text(name), Token::Word(at), Token::Text(route), Token::Colon]
+                if keyword == "page" && at == "at" =>
+            {
+                if !identifier(name) || !valid_route(route) {
+                    return Err(line.error("Invalid page name or route"));
+                }
+                if headers.len() >= 32 || headers.iter().any(|(n, r, _, _)| n == name || r == route)
+                {
+                    return Err(line.error("Duplicate page name or route, or too many pages"));
+                }
+                headers.push((name.clone(), route.clone(), line, body));
+            }
+            [Token::Word(key), Token::Text(value)] if body.is_empty() => {
+                let group = match key.as_str() {
+                    "stylesheet" => &mut settings.stylesheets,
+                    "license" => &mut settings.licenses,
+                    "favicon" | "social-image" => {
+                        if settings.images.insert(key.clone(), value.clone()).is_some() {
+                            return Err(line.error("Duplicate Site image directive"));
+                        }
+                        continue;
+                    }
+                    "origin" => {
+                        let parsed = external(value, true).filter(|url| {
+                            url.scheme() == "https"
+                                && url.path() == "/"
+                                && url.query().is_none()
+                                && url.fragment().is_none()
+                        });
+                        if settings.origin.is_some()
+                            || parsed.is_none()
+                            || !value.starts_with("https://")
+                        {
+                            return Err(
+                                line.error("Expected a unique bare HTTPS publishing origin")
+                            );
+                        }
+                        settings.origin = Some(value.trim_end_matches('/').to_owned());
+                        continue;
+                    }
+                    _ => return Err(line.error(format!("Unsupported Site directive {key}"))),
+                };
+                if group.len() >= 8 {
+                    return Err(line.error("Too many Site presentation directives"));
+                }
+                group.push(value.clone());
+            }
+            [Token::Word(key), Token::Bool(value)] if body.is_empty() && key == "robots" => {
+                if settings.robots.replace(*value).is_some() {
+                    return Err(line.error("Duplicate robots directive"));
+                }
+            }
+            _ => return Err(line.error("Expected theme, style, page or supported Site directive")),
         }
-        result.push(Line {
-            number,
-            indent,
-            text: value.to_owned(),
-        });
     }
-    Ok(result)
+    if settings.robots.is_some() && settings.origin.is_none() {
+        return fail("robots requires an explicit publishing origin");
+    }
+    let pages = headers
+        .into_iter()
+        .map(|(_, route, line, body)| parse_page(route, line, body, &styles))
+        .collect::<Result<Vec<_>>>()?;
+    if require_pages && !pages.iter().any(|p| p.route == "/") {
+        return fail("Site requires a page at /");
+    }
+    let routes = pages
+        .iter()
+        .map(|page| (page.route.as_str(), &page.ids))
+        .collect::<BTreeMap<_, _>>();
+    for page in &pages {
+        links(&page.nodes, page, &routes)?;
+    }
+    Ok((
+        Site {
+            pages,
+            theme,
+            settings,
+        },
+        styles,
+    ))
 }
 
-fn quoted(input: &str, line: usize) -> Result<(String, &str)> {
-    if !input.starts_with('"') {
-        return error(line, "Expected a JSON-compatible quoted string");
-    }
-    let mut escaped = false;
-    for (offset, ch) in input.char_indices().skip(1) {
-        if escaped {
-            escaped = false;
-            continue;
+fn valid_route(route: &str) -> bool {
+    route == "/"
+        || (route.starts_with('/')
+            && route.ends_with('/')
+            && !route.contains("//")
+            && route[1..route.len() - 1].split('/').all(|word| {
+                !word.is_empty()
+                    && word
+                        .bytes()
+                        .all(|b| b.is_ascii_alphanumeric() || b"_-".contains(&b))
+            }))
+}
+
+fn parse_page(route: String, header: &Line, body: &[Line], styles: &Styles) -> Result<Page> {
+    static LANG: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$").unwrap());
+    let mut meta = BTreeMap::new();
+    let mut index = 0;
+    for line in body {
+        let key = line.text.split(' ').next().unwrap_or("");
+        if line.depth != 1 || !matches!(key, "title" | "description" | "lang") {
+            break;
         }
-        if ch == '\\' {
-            escaped = true;
-        } else if ch == '"' {
-            let value = serde_json::from_str::<String>(&input[..=offset])
-                .map_err(|_| Error(format!("Line {line}: Invalid quoted string")))?;
-            return Ok((value, input[offset + 1..].trim_start()));
+        let args = syntax::tokens(line, &line.text)?;
+        let value = match &args[..] {
+            [_, Token::Text(value)] => value,
+            [_, Token::Word(value)] if key == "lang" => value,
+            _ => return Err(line.error("Invalid page metadata")),
+        };
+        if meta.insert(key, value.clone()).is_some() {
+            return Err(line.error("Duplicate page metadata"));
         }
+        index += 1;
     }
-    error(line, "Unclosed string literal")
+    let title = meta
+        .remove("title")
+        .filter(|s| !s.trim().is_empty())
+        .ok_or_else(|| header.error("Page requires a title"))?;
+    let description = meta.remove("description").unwrap_or_default();
+    let lang = meta.remove("lang").unwrap_or_else(|| "en".into());
+    if lang.len() > 35 || !LANG.is_match(&lang) {
+        return Err(header.error("Invalid page language"));
+    }
+    let mut nodes = parse_nodes(body, &mut index, 1, styles, None)?;
+    let mut ids = BTreeSet::from(["content".into()]);
+    let (mut previous, mut h1) = (0, 0);
+    let len = nodes.len();
+    for (i, node) in nodes.iter_mut().enumerate() {
+        if (node.kind == "navbar" && i != 0) || (node.kind == "footer" && i + 1 != len) {
+            return Err(node
+                .line
+                .error("Navbar and footer must be the first and last top-level components"));
+        }
+        validate_tree(node, false, &mut ids, &mut previous, &mut h1, true)?;
+    }
+    if h1 != 1 {
+        return Err(header.error("Each page requires exactly one h1"));
+    }
+    Ok(Page {
+        route,
+        title,
+        description,
+        lang,
+        nodes,
+        ids,
+    })
 }
 
-fn only_quoted(input: &str, line: usize) -> Result<String> {
-    let (value, remaining) = quoted(input, line)?;
-    if !remaining.is_empty() {
-        return error(
-            line,
-            "Unexpected modifiers (not supported in native Site preview)",
-        );
-    }
-    Ok(value)
-}
-
-fn html(raw: &str) -> String {
-    raw.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&#39;")
-}
-
-fn valid_href(value: &str) -> bool {
-    if value.is_empty()
-        || value.contains('\\')
-        || value.chars().any(|c| c.is_control() || c.is_whitespace())
-    {
-        return false;
-    }
-    if let Some(host_path) = value.strip_prefix("https://") {
-        let host = host_path.split(&['/', '?', '#'][..]).next().unwrap_or("");
-        return !host.is_empty()
-            && !host.starts_with('.')
-            && !host.contains('@')
-            && host
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || ".-:".contains(c));
-    }
-    if value.starts_with("//") || value.contains("..") {
-        return false;
-    }
-    value.starts_with('/') || (value.starts_with('#') && value.len() > 1)
-}
-
-fn output_path(route: &str, line: usize) -> Result<String> {
-    if route == "/" {
-        return Ok("index.html".to_owned());
-    }
-    if !route.starts_with('/') || !route.ends_with('/') || route.contains("//") {
-        return error(line, "Page route must be / or /safe/segments/");
-    }
-    let pieces: Vec<_> = route.trim_matches('/').split('/').collect();
-    if pieces.is_empty()
-        || pieces.iter().any(|segment| {
-            segment.is_empty()
-                || segment == &"."
-                || segment == &".."
-                || !segment
-                    .chars()
-                    .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
-        })
-    {
-        return error(line, "Unsafe page route");
-    }
-    Ok(format!("{}/index.html", pieces.join("/")))
-}
-
-fn parse_nodes(lines: &[Line], index: &mut usize, indent: usize, depth: usize) -> Result<String> {
-    if depth > MAX_NESTING {
-        return fail("Site layout nesting exceeds limit");
-    }
-    let mut out = String::new();
-    while *index < lines.len() && lines[*index].indent >= indent {
-        let current = &lines[*index];
-        if current.indent != indent {
-            return error(current.number, "Unexpected indentation in layout");
+fn parse_nodes(
+    lines: &[Line],
+    index: &mut usize,
+    depth: usize,
+    styles: &Styles,
+    domain: Option<&crate::model::Program>,
+) -> Result<Vec<Node>> {
+    let mut out = Vec::new();
+    while let Some(line) = lines.get(*index).filter(|l| l.depth >= depth) {
+        if line.depth != depth {
+            return Err(line.error("Unexpected indentation in Site layout"));
         }
         *index += 1;
-        if let Some(block) = current.text.strip_suffix(':') {
-            let (tag, class) = match block {
-                "container" => ("main", "site-container"),
-                "column" => ("div", "site-column"),
-                "row" => ("div", "site-row"),
-                "grid" => ("div", "site-grid"),
-                "card" => ("section", "site-card"),
-                "navbar" => ("nav", "site-nav"),
-                "footer" => ("footer", "site-footer"),
-                "callout" => ("aside", "site-callout"),
-                _ => return error(current.number, "Unsupported Site layout or modifiers"),
-            };
-            out.push_str(&format!("<{tag} class=\"{class}\">\n"));
-            if *index >= lines.len() || lines[*index].indent <= indent {
-                return error(current.number, "Layout block requires a child");
+        let args = syntax::tokens(line, &line.text)?;
+        let Some(Token::Word(kind)) = args.first() else {
+            return Err(line.error("Expected Site component name"));
+        };
+        let widget = domain.and_then(|_| webapp::widget(kind));
+        let block = match kind.as_str() {
+            "container" | "row" | "column" | "grid" | "card" | "navbar" | "footer" | "callout" => {
+                true
             }
-            out.push_str(&parse_nodes(lines, index, indent + 4, depth + 1)?);
-            out.push_str(&format!("</{tag}>\n"));
-        } else if let Some(rest) = current.text.strip_prefix("heading ") {
-            out.push_str(&format!(
-                "<h1>{}</h1>\n",
-                html(&only_quoted(rest, current.number)?)
-            ));
-        } else if let Some(rest) = current.text.strip_prefix("paragraph ") {
-            out.push_str(&format!(
-                "<p>{}</p>\n",
-                html(&only_quoted(rest, current.number)?)
-            ));
-        } else if let Some(rest) = current.text.strip_prefix("code ") {
-            out.push_str(&format!(
-                "<pre><code>{}</code></pre>\n",
-                html(&only_quoted(rest, current.number)?)
-            ));
-        } else if current.text == "divider" {
-            out.push_str("<hr>\n");
-        } else if let Some(rest) = current
-            .text
-            .strip_prefix("link ")
-            .or_else(|| current.text.strip_prefix("button "))
-        {
-            let (label, remainder) = quoted(rest, current.number)?;
-            let href_src = remainder.strip_prefix("to ").ok_or_else(|| {
-                Error(format!(
-                    "Line {}: Expected 'to' after link label",
-                    current.number
-                ))
-            })?;
-            let destination = only_quoted(href_src, current.number)?;
-            if !valid_href(&destination) {
-                return error(current.number, "Unsafe or unsupported link destination");
-            }
-            out.push_str(&format!(
-                "<a href=\"{}\">{}</a>\n",
-                html(&destination),
-                html(&label)
-            ));
-        } else {
-            return error(current.number, "Unsupported Site node or modifier");
+            "heading" | "paragraph" | "link" | "button" | "image" | "spacer" | "divider"
+            | "code" => false,
+            _ if widget.is_some() => widget.unwrap().block,
+            _ => return Err(line.error(format!("Unsupported Site/WebApp component {kind}"))),
+        };
+        if block != (args.last() == Some(&Token::Colon)) {
+            return Err(line.error("Invalid block or leaf component"));
         }
+        let positional = match kind.as_str() {
+            "heading" | "paragraph" | "link" | "button" | "code" => Some("text"),
+            "image" => Some("src"),
+            _ => None,
+        };
+        let positional = widget.and_then(|widget| widget.positional).or(positional);
+        let state_argument = widget.is_some_and(|w| w.state_argument);
+        let has_pos = if state_argument {
+            matches!(args.get(1), Some(Token::Word(_)))
+        } else {
+            positional.is_some() && matches!(args.get(1), Some(Token::Text(_)))
+        };
+        if state_argument && !has_pos {
+            return Err(line.error("Expected a state, collection or row field identifier"));
+        }
+        let validate = |key: &str, value: &Token| {
+            if let Some(widget) = widget {
+                if kind == "button" && matches!(key, "to" | "target") {
+                    return Err(line.error(format!("Unknown WebApp button property {key}")));
+                }
+                if let Some(result) = widget.property(key, value, line) {
+                    return result;
+                }
+            }
+            properties::validate(key, value, Some(kind), line)
+        };
+        let mut tokens = properties::props(
+            &args[1 + usize::from(has_pos)..args.len() - usize::from(block)],
+            line,
+        )?;
+        if has_pos
+            && tokens
+                .insert(positional.unwrap().into(), args[1].clone())
+                .is_some()
+        {
+            return Err(line.error("Duplicate positional property"));
+        }
+        let mut props = properties::defaults(kind);
+        if kind == "submit" {
+            props.insert("variant".into(), "primary".into());
+        }
+        for (key, value) in &tokens {
+            props.insert(key.clone(), validate(key, value)?);
+        }
+        if let Some(style) = props.remove("style") {
+            let style = styles
+                .get(&style)
+                .ok_or_else(|| line.error(format!("Unknown style {style}")))?;
+            for (key, value) in style {
+                let validated = validate(key, value)?;
+                if !tokens.contains_key(key) {
+                    props.insert(key.clone(), validated);
+                }
+            }
+        }
+        if positional.is_some_and(|p| !props.contains_key(p))
+            || (widget.is_none()
+                && matches!(kind.as_str(), "link" | "button")
+                && !props.contains_key("to"))
+            || (kind == "image" && !props.contains_key("alt"))
+        {
+            return Err(line.error("Missing required Site component property"));
+        }
+        if matches!(kind.as_str(), "heading" | "link" | "button" | "code")
+            && props["text"].trim().is_empty()
+        {
+            return Err(line.error("Accessible text must not be empty"));
+        }
+        let mut children = Vec::new();
+        if block {
+            children = parse_nodes(lines, index, depth + 1, styles, domain)?;
+            if children.is_empty() {
+                return Err(line.error("Empty Site component block"));
+            }
+        }
+        if let (Some(widget), Some(domain)) = (widget, domain) {
+            widget.validate(kind, &mut props, &children, domain, line)?;
+        }
+        out.push(Node {
+            kind: kind.clone(),
+            props,
+            children,
+            line: line.clone(),
+        });
     }
     Ok(out)
 }
 
-pub fn generate(source: &str) -> Result<StaticSite> {
-    let source_lines = lines(source)?;
-    let first = source_lines
-        .first()
-        .ok_or_else(|| Error("Empty Site source".to_owned()))?;
-    if first.indent != 0 {
-        return error(first.number, "Expected site declaration at column 1");
+fn validate_tree(
+    node: &mut Node,
+    nested: bool,
+    ids: &mut BTreeSet<String>,
+    previous: &mut i32,
+    h1: &mut usize,
+    site_landmarks: bool,
+) -> Result<()> {
+    if site_landmarks && nested && matches!(node.kind.as_str(), "navbar" | "footer") {
+        return Err(node
+            .line
+            .error("Navbar and footer must be top-level components"));
     }
-    let site_name = first
-        .text
-        .strip_prefix("site ")
-        .ok_or_else(|| Error("Expected site declaration".to_owned()))?;
-    let name = only_quoted(site_name, first.number)?;
-    if name.is_empty() {
-        return error(first.number, "Empty site name");
+    if let Some(id) = node.props.get("id") {
+        if !ids.insert(id.clone()) {
+            return Err(node.line.error(format!("Duplicate or reserved id {id}")));
+        }
     }
-    let mut index = 1;
-    let mut files = BTreeMap::new();
-    while index < source_lines.len() {
-        let header = &source_lines[index];
-        if header.indent != 0 {
-            return error(header.number, "Expected top-level page declaration");
+    if node.kind == "heading" {
+        let level = node
+            .props
+            .get("level")
+            .map_or(if *previous == 0 { 1 } else { 2 }, |level| {
+                level.parse().unwrap()
+            });
+        if level > *previous + 1 {
+            return Err(node.line.error("Heading levels must not skip a level"));
         }
-        let page_header = header
-            .text
-            .strip_prefix("page ")
-            .and_then(|s| s.strip_suffix(':'))
-            .ok_or_else(|| {
-                Error(format!(
-                    "Line {}: Native Site preview only supports page declarations",
-                    header.number
-                ))
-            })?;
-        let (slug, route_text) = page_header.split_once(" at ").ok_or_else(|| {
-            Error(format!(
-                "Line {}: Expected 'page name at \"/\":'",
-                header.number
-            ))
-        })?;
-        if slug.is_empty()
-            || !slug
-                .chars()
-                .next()
-                .is_some_and(|ch| ch.is_ascii_alphabetic())
-            || !slug
-                .chars()
-                .all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
-        {
-            return error(header.number, "Invalid page identifier");
-        }
-        let route = only_quoted(route_text, header.number)?;
-        let file = output_path(&route, header.number)?;
-        if files.contains_key(&file) {
-            return error(header.number, "Duplicate page route");
-        }
-        if files.len() >= MAX_PAGES {
-            return error(header.number, "Too many site pages");
-        }
-        index += 1;
-        let mut title = None;
-        let mut description = None;
-        while index < source_lines.len() && source_lines[index].indent == 4 {
-            let meta = &source_lines[index];
-            if let Some(rest) = meta.text.strip_prefix("title ") {
-                if title.is_some() {
-                    return error(meta.number, "Duplicate page title");
+        node.props.insert("level".into(), level.to_string());
+        *previous = level;
+        *h1 += usize::from(level == 1);
+    }
+    for child in &mut node.children {
+        validate_tree(child, true, ids, previous, h1, site_landmarks)?;
+    }
+    Ok(())
+}
+
+fn safe_url(value: &str) -> bool {
+    let mut decoded = value.to_owned();
+    for _ in 0..3 {
+        let mut bytes = Vec::new();
+        let mut i = 0;
+        while i < decoded.len() {
+            let b = decoded.as_bytes()[i];
+            if b == b'%' {
+                if let Some(hex) = decoded.get(i + 1..i + 3) {
+                    if hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+                        let v = u8::from_str_radix(hex, 16).expect("two hexadecimal digits");
+                        bytes.push(v);
+                        i += 3;
+                        continue;
+                    }
                 }
-                title = Some(only_quoted(rest, meta.number)?);
-            } else if let Some(rest) = meta.text.strip_prefix("description ") {
-                if description.is_some() {
-                    return error(meta.number, "Duplicate page description");
-                }
-                description = Some(only_quoted(rest, meta.number)?);
-            } else {
-                break;
             }
-            index += 1;
+            bytes.push(b);
+            i += 1;
         }
-        let title = title
-            .ok_or_else(|| Error(format!("Line {}: Page must include title", header.number)))?;
-        if title.is_empty() {
-            return error(header.number, "Page title cannot be empty");
-        }
-        let body = parse_nodes(&source_lines, &mut index, 4, 0)?;
-        if body.is_empty() {
-            return error(header.number, "Page must contain visible content");
-        }
-        let description_tag = description
-            .map(|value| format!("<meta name=\"description\" content=\"{}\">\n", html(&value)))
-            .unwrap_or_default();
-        let document = format!(
-            "<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>{}</title>\n{}<style>body{{font:1rem/1.6 system-ui,sans-serif;margin:0;color:#202030;background:#fff}}\
-            .site-container{{max-width:68rem;margin:auto;padding:1.5rem}}\
-            .site-column{{display:flex;flex-direction:column;gap:1rem}}\
-            .site-row{{display:flex;flex-wrap:wrap;gap:1rem}}\
-            .site-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,16rem),1fr));gap:1rem}}\
-            .site-card,.site-callout{{padding:1.25rem;border:1px solid #ddd;border-radius:.75rem}}\
-            .site-nav,.site-footer{{padding:1rem}}a{{color:#1855aa}}\
-            pre{{overflow:auto;white-space:pre-wrap}}:focus-visible{{outline:3px solid #1855aa;outline-offset:3px}}</style>\n\
-            </head>\n<body>\n{}\n</body>\n</html>\n",
-            html(&title),
-            description_tag,
-            body
-        );
-        files.insert(file, document);
+        decoded = match String::from_utf8(bytes) {
+            Ok(s) => s,
+            Err(_) => return false,
+        };
     }
-    if files.is_empty() {
-        return fail("Site requires at least one page");
+    !decoded.is_empty()
+        && !decoded.starts_with("//")
+        && !decoded.contains(['\\', '<', '>', '"', '\''])
+        && !decoded.chars().any(|c| c.is_whitespace() || c.is_control())
+        && !decoded
+            .split(['?', '#'])
+            .next()
+            .unwrap_or("")
+            .split('/')
+            .any(|p| matches!(p, "." | ".."))
+}
+
+fn external(value: &str, image: bool) -> Option<Url> {
+    if !safe_url(value) {
+        return None;
     }
-    Ok(StaticSite { files })
+    let url = Url::parse(value).ok()?;
+    match url.scheme() {
+        "https" | "http" if !image || url.scheme() == "https" => {
+            let (_, rest) = value.split_once("://")?;
+            let host = rest.split(['/', '?', '#']).next()?;
+            (!host.is_empty() && !host.contains(['@', '%']) && url.host().is_some()).then_some(url)
+        }
+        "mailto" if !image => {
+            static MAIL: LazyLock<Regex> =
+                LazyLock::new(|| Regex::new(r"^[^@?\s]+@[^@?\s]+\.[^@?\s]+$").unwrap());
+            (MAIL.is_match(url.path()) && url.query().is_none()).then_some(url)
+        }
+        "tel" if !image => {
+            static TEL: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\+?[0-9()-]+$").unwrap());
+            TEL.is_match(url.path()).then_some(url)
+        }
+        _ => None,
+    }
+}
+
+fn links(nodes: &[Node], page: &Page, routes: &BTreeMap<&str, &BTreeSet<String>>) -> Result<()> {
+    for node in nodes {
+        if let Some(value) = node.props.get("to") {
+            if external(value, false).is_none() {
+                let (path, suffix) = split_target(value);
+                let target = if path.is_empty() { &page.route } else { path };
+                let anchor = suffix.split_once('#').map(|(_, anchor)| anchor);
+                if !safe_url(value)
+                    || !(value.starts_with('/') || value.starts_with('#'))
+                    || value.contains(':')
+                {
+                    return Err(node.line.error("Unsafe or unsupported link destination"));
+                }
+                let ids = routes
+                    .get(target)
+                    .ok_or_else(|| node.line.error(format!("Unknown site route {target}")))?;
+                if let Some(anchor) = anchor.filter(|s| !s.is_empty()) {
+                    if !ids.contains(anchor) {
+                        return Err(node.line.error(format!("Unknown anchor {anchor}")));
+                    }
+                }
+            }
+        }
+        if let Some(src) = node.props.get("src") {
+            if external(src, true).is_none()
+                && (!safe_url(src) || src.starts_with('/') || src.contains([':', '%', '#', '?']))
+            {
+                return Err(node.line.error("Unsafe or unsupported image URL"));
+            }
+        }
+        links(&node.children, page, routes)?;
+    }
+    Ok(())
+}
+
+fn split_target(value: &str) -> (&str, &str) {
+    value.split_at(value.find(['?', '#']).unwrap_or(value.len()))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    const HOME: &str =
+        "site \"Demo\"\npage home at \"/\":\n    title \"Home\"\n    heading \"<Rust>\"\n";
+
     #[test]
-    fn generates_two_pages_with_escaped_text() {
-        let input = r#"site "Example"
-page home at "/":
-    title "Hello & World"
-    description "<safe>"
-    container:
-        column:
-            heading "Hello <Rust>"
-            paragraph "Native Site"
-            link "Guide" to "/guide/"
-page guide at "/guide/":
-    title "Guide"
-    paragraph "Second page"
-"#;
-        let site = generate(input).unwrap();
-        assert_eq!(site.files.len(), 2);
-        let html = &site.files["index.html"];
-        assert!(html.contains("<h1>Hello &lt;Rust&gt;</h1>"));
-        assert!(html.contains("Hello &amp; World"));
-        assert!(html.contains("content=\"&lt;safe&gt;\""));
-        assert!(html.contains("href=\"/guide/\""));
-        assert!(site.files["guide/index.html"].contains("Second page"));
+    fn emits_escaped_semantic_html_and_relative_routes() {
+        let source = format!(
+            "{HOME}    link \"Go\" to \"/guide/#info\"\npage guide at \"/guide/\":\n    title \"Guide\"\n    heading \"Info\" id info\n    link \"Back\" to \"/\"\n"
+        );
+        let site = generate(&source).unwrap();
+        let index = std::str::from_utf8(&site.files["index.html"]).unwrap();
+        assert!(index.contains("&lt;Rust&gt;</h1>"));
+        assert!(index.contains("href=\"guide/index.html#info\""));
+        let guide = std::str::from_utf8(&site.files["guide/index.html"]).unwrap();
+        assert!(guide.contains("href=\"../index.html\""));
     }
 
     #[test]
-    fn rejects_unsupported_syntax_and_unsafe_routes() {
-        for source in [
-            "site \"x\"\npage home at \"/../\":\n    title \"T\"\n    heading \"H\"\n",
-            "site \"x\"\npage a at \"/\":\n    title \"T\"\n    paragraph \"Good\"\n    script \"bad\"\n",
-            "site \"x\"\npage a at \"/\":\n    title \"T\"\n    link \"bad\" to \"javascript:alert(1)\"\n",
-            "site \"x\"\npage a at \"/\":\n    title \"T\"\n    paragraph \"ok\" variant lead\n",
-            "site \"x\"\npage a at \"/\":\n    title \"T\"\n    paragraph \"ok\"\npage b at \"/\":\n    title \"T\"\n    paragraph \"bad\"\n",
+    fn rejects_unsafe_or_unresolved_site_markup() {
+        for suffix in [
+            "    script \"bad\"\n",
+            "    link \"unsafe\" to \"javascript:void(0)\"\n",
+            "    link \"unsafe\" to \"/%252e%252e/\"\n",
+            "    link \"missing\" to \"/#unknown\"\n",
+            "    paragraph \"duplicate\" id content\n",
+            "    paragraph \"unsafe color\" color \"#fff;display:none\"\n",
+            "  paragraph \"bad indentation\"\n",
+            "    paragraph \"\\uZZZZ\"\n",
+            "page home at \"/guide/\":\n    title \"Guide\"\n    heading \"Duplicate\"\n",
         ] {
-            assert!(generate(source).is_err(), "Unexpected acceptance: {source}");
+            assert!(generate(&format!("{HOME}{suffix}")).is_err(), "{suffix}");
         }
     }
 
     #[test]
-    fn invalid_json_literal_and_bad_indentation_fail() {
-        assert!(
-            generate("site \"x\"\npage h at \"/\":\n    title \"T\"\n  heading \"H\"\n").is_err()
-        );
-        assert!(generate(
-            "site \"x\"\npage h at \"/\":\n    title \"T\"\n    heading \"\\uZZZZ\"\n"
-        )
-        .is_err());
+    fn component_expansion_preserves_slot_depth_and_escapes_arguments() {
+        let source = r#"site "Demo"
+component Card(title: text):
+    card:
+        heading $title level 2
+        slot
+page home at "/":
+    title "Home"
+    heading "Home"
+    use Card title "<Safe>":
+        paragraph "Slotted"
+"#;
+        let site = generate(source).unwrap();
+        let html = std::str::from_utf8(&site.files["index.html"]).unwrap();
+        assert!(html.contains("&lt;Safe&gt;</h2><p"));
+        assert!(html.contains(">Slotted</p></article>"));
     }
 }

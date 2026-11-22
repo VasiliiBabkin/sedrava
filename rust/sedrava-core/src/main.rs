@@ -8,7 +8,7 @@ use sedrava_core::{parse, run_tests, Error, Result};
 use serde_json::json;
 use std::env;
 use std::fs;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 fn usage() {
@@ -23,15 +23,62 @@ fn usage() {
            sedrava-native expand FILE
            sedrava-native build web FILE [--output PATH]
            sedrava-native build site FILE --output DIR
+           sedrava-native build webapp FILE --output DIR
            sedrava-native build android FILE --output DIR --application-id ID\n\
          Supports typed records, bounded lists, pure functions, navigation,\n\
          snapshot persistence and experimental typed IR export.\n\
          Full Site/WebApp and Android generators remain incomplete.
          Native Android preview requires explicit application ID.
-         Not supported: complete native site/webapp, component expansion,\n\
-         Host Effects or the full 0.11 language.\n\
-         See docs/RUST_CORE_MIGRATION.ru.md. Do not use for production."
+         WebApp HTTP services, Host Effects and other 0.11 features remain incomplete.\n\
+         See docs/RUST_FULL_MIGRATION.ru.md. Do not use for production."
     );
+}
+
+fn source_dir(source: &str) -> &Path {
+    Path::new(source)
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or(Path::new("."))
+}
+
+fn read_source(path: &str) -> Result<String> {
+    let max_bytes = (sedrava_core::model::MAX_SOURCE_CHARS as u64) * 4;
+    let read_error = |err| Error(format!("Cannot read {path}: {err}"));
+    let metadata = fs::metadata(path).map_err(read_error)?;
+    if !metadata.is_file() || metadata.len() > max_bytes {
+        return Err(Error(
+            "Source must be a regular file within the size limit".into(),
+        ));
+    }
+    let mut raw = String::new();
+    fs::File::open(path)
+        .map_err(read_error)?
+        .take(max_bytes + 1)
+        .read_to_string(&mut raw)
+        .map_err(read_error)?;
+    if raw.len() as u64 > max_bytes {
+        return Err(Error("Source file exceeds size limit".into()));
+    }
+    Ok(raw)
+}
+
+#[cfg(any(target_os = "linux", target_vendor = "apple"))]
+fn publish_web_directory(staged: &Path, output: &Path) -> std::io::Result<()> {
+    use rustix::fs::{renameat_with, RenameFlags, CWD};
+    renameat_with(CWD, staged, CWD, output, RenameFlags::NOREPLACE)?;
+    Ok(())
+}
+
+#[cfg(not(any(target_os = "linux", target_vendor = "apple")))]
+fn publish_web_directory(staged: &Path, output: &Path) -> std::io::Result<()> {
+    match fs::symlink_metadata(output) {
+        Ok(_) => Err(std::io::Error::new(
+            std::io::ErrorKind::AlreadyExists,
+            "Output already exists",
+        )),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => fs::rename(staged, output),
+        Err(e) => Err(e),
+    }
 }
 
 fn load(path: &str) -> Result<sedrava_core::Program> {
@@ -123,33 +170,35 @@ fn run() -> Result<()> {
     if is_build
         && !matches!(
             args.get(2).map(String::as_str),
-            Some("web" | "android" | "site")
+            Some("web" | "android" | "site" | "webapp")
         )
     {
         return Err(Error(
-            "Native build supports only experimental web, site and android targets".into(),
+            "Native build supports only experimental web, site, webapp and android targets".into(),
         ));
     }
     let source_index = if is_build { 3 } else { 2 };
     let source = args
         .get(source_index)
         .ok_or_else(|| Error("Expected a command, target and .sdr file".into()))?;
-    if is_build && args[2] == "site" {
+    if is_build && matches!(args[2].as_str(), "site" | "webapp") {
         if args.len() != 6 || args[4] != "--output" {
-            return Err(Error("Expected build site FILE --output DIR".into()));
+            return Err(Error(format!(
+                "Expected build {} FILE --output DIR",
+                args[2]
+            )));
         }
         let output = PathBuf::from(&args[5]);
         if fs::symlink_metadata(&output).is_ok() {
-            return Err(Error("Site output directory must not already exist".into()));
+            return Err(Error("Web output directory must not already exist".into()));
         }
-        let metadata =
-            fs::metadata(source).map_err(|e| Error(format!("Cannot stat {source}: {e}")))?;
-        if metadata.len() > (sedrava_core::model::MAX_SOURCE_CHARS as u64) * 4 {
-            return Err(Error("Site source exceeds size limit".into()));
-        }
-        let raw = fs::read_to_string(source)
-            .map_err(|e| Error(format!("Cannot read Site source: {e}")))?;
-        let site = sedrava_core::site::generate(&raw)?;
+        let raw = read_source(source)?;
+        let root = Some(source_dir(source));
+        let site = if args[2] == "webapp" {
+            sedrava_core::site::webapp::generate(&raw, root)?
+        } else {
+            sedrava_core::site::generate_at(&raw, root)?
+        };
         let parent = output
             .parent()
             .filter(|p| !p.as_os_str().is_empty())
@@ -157,12 +206,12 @@ fn run() -> Result<()> {
         fs::create_dir_all(parent)
             .map_err(|e| Error(format!("Cannot create output parent: {e}")))?;
         let staging = tempfile::tempdir_in(parent)
-            .map_err(|e| Error(format!("Cannot stage Site directory: {e}")))?;
+            .map_err(|e| Error(format!("Cannot stage Web directory: {e}")))?;
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
             fs::set_permissions(staging.path(), fs::Permissions::from_mode(0o755))
-                .map_err(|e| Error(format!("Cannot set Site directory permissions: {e}")))?;
+                .map_err(|e| Error(format!("Cannot set Web directory permissions: {e}")))?;
         }
         for (name, content) in &site.files {
             let relative = Path::new(name);
@@ -171,7 +220,7 @@ fn run() -> Result<()> {
                     .components()
                     .any(|part| !matches!(part, std::path::Component::Normal(_)))
             {
-                return Err(Error("Unsafe generated Site path".into()));
+                return Err(Error("Unsafe generated Web path".into()));
             }
             let target = staging.path().join(relative);
             let mut directory = staging.path().to_path_buf();
@@ -179,30 +228,30 @@ fn run() -> Result<()> {
                 for component in relative_parent.components() {
                     directory.push(component);
                     fs::create_dir_all(&directory)
-                        .map_err(|e| Error(format!("Cannot create Site subdirectory: {e}")))?;
+                        .map_err(|e| Error(format!("Cannot create Web subdirectory: {e}")))?;
                     #[cfg(unix)]
                     {
                         use std::os::unix::fs::PermissionsExt;
                         fs::set_permissions(&directory, fs::Permissions::from_mode(0o755))
                             .map_err(|e| {
-                                Error(format!("Cannot set Site subdirectory permissions: {e}"))
+                                Error(format!("Cannot set Web subdirectory permissions: {e}"))
                             })?;
                     }
                 }
             }
             fs::write(&target, content)
-                .map_err(|e| Error(format!("Cannot write Site page: {e}")))?;
+                .map_err(|e| Error(format!("Cannot write Web file: {e}")))?;
             #[cfg(unix)]
             {
                 use std::os::unix::fs::PermissionsExt;
                 fs::set_permissions(&target, fs::Permissions::from_mode(0o644))
-                    .map_err(|e| Error(format!("Cannot set Site page permissions: {e}")))?;
+                    .map_err(|e| Error(format!("Cannot set Web file permissions: {e}")))?;
             }
         }
         let temp = staging.keep();
-        if let Err(e) = fs::rename(&temp, &output) {
+        if let Err(e) = publish_web_directory(&temp, &output) {
             let _ = fs::remove_dir_all(&temp);
-            return Err(Error(format!("Cannot publish Site directory: {e}")));
+            return Err(Error(format!("Cannot publish Web directory: {e}")));
         }
         println!("{}", output.display());
         return Ok(());
@@ -305,23 +354,26 @@ fn run() -> Result<()> {
         print!("{}", expanded.source);
         return Ok(());
     }
-    // Site sources are a separate DSL from app-mode. Never silently parse them as apps.
+    // Use the matching presentation generator to check native Web sources and assets.
     if command == "check" && args.len() == 3 {
-        let metadata =
-            fs::metadata(source).map_err(|e| Error(format!("Cannot stat {source}: {e}")))?;
-        if metadata.len() > (sedrava_core::model::MAX_SOURCE_CHARS as u64) * 4 {
-            return Err(Error("Source file exceeds size limit".into()));
-        }
-        let raw =
-            fs::read_to_string(source).map_err(|e| Error(format!("Cannot read source: {e}")))?;
-        if raw
+        let raw = read_source(source)?;
+        let mode = raw
             .lines()
             .map(str::trim)
             .find(|s| !s.is_empty() && !s.starts_with('#'))
-            .is_some_and(|first| first.starts_with("site "))
-        {
-            let _ = sedrava_core::site::generate(&raw)?;
-            println!("OK: {source} (experimental native Site subset)");
+            .and_then(|line| line.split_whitespace().next());
+        let root = Some(source_dir(source));
+        match mode {
+            Some("site") => {
+                sedrava_core::site::generate_at(&raw, root)?;
+            }
+            Some("webapp") => {
+                sedrava_core::site::webapp::generate(&raw, root)?;
+            }
+            _ => {}
+        }
+        if matches!(mode, Some("site" | "webapp")) {
+            println!("OK: {source} (experimental native {})", mode.unwrap());
             return Ok(());
         }
     }
