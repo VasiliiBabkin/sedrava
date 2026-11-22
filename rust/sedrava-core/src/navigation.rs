@@ -38,11 +38,15 @@ fn normalize(program: &Program, state: State, mut stack: Vec<String>) -> Session
 }
 
 pub fn initial(program: &Program) -> Result<Session> {
-    if !valid_state(program, &program.states) {
+    initial_from(program, &program.states)
+}
+
+pub fn initial_from(program: &Program, state: &State) -> Result<Session> {
+    if !valid_state(program, state) {
         return Err(Error("Invalid initial session state".into()));
     }
     Ok(Session {
-        state: program.states.clone(),
+        state: state.clone(),
         stack: vec![program.initial_screen.clone()],
     })
 }
@@ -102,7 +106,16 @@ pub fn dispatch(program: &Program, session: &Session, command: &str) -> (Session
 }
 
 pub fn run_session(program: &Program, actions: &[String]) -> Result<(State, Vec<String>)> {
-    let mut session = initial(program)?;
+    let (state, stack) = run_session_from(program, &program.states, actions)?;
+    Ok((resolve(program, &state)?, stack))
+}
+
+pub fn run_session_from(
+    program: &Program,
+    state: &State,
+    actions: &[String],
+) -> Result<(State, Vec<String>)> {
+    let mut session = initial_from(program, state)?;
     for action in actions {
         let (next, accepted) = dispatch(program, &session, action);
         if !accepted {
@@ -112,7 +125,8 @@ pub fn run_session(program: &Program, actions: &[String]) -> Result<(State, Vec<
         }
         session = next;
     }
-    Ok((resolve(program, &session.state)?, session.stack))
+    // Return canonical state only; resolved derives are a view, not persisted fields.
+    Ok((session.state, session.stack))
 }
 
 #[cfg(test)]

@@ -137,13 +137,13 @@ pub fn validate(value: &Value, expected: &Kind) -> Result<()> {
 
 pub type State = BTreeMap<String, Value>;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 pub enum Unary {
     Neg,
     Not,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 pub enum Binary {
     Add,
     Sub,
@@ -158,7 +158,7 @@ pub enum Binary {
     Or,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub enum Expr {
     Int(i64),
     Bool(bool),
@@ -175,7 +175,7 @@ pub enum Expr {
     Binary(Binary, Box<Expr>, Box<Expr>),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub enum Stmt {
     Assign(String, Expr),
     Let(String, Expr),
@@ -183,14 +183,14 @@ pub enum Stmt {
     Branch(Expr, Vec<Stmt>, Vec<Stmt>),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct EmbeddedTest {
     pub name: String,
     pub actions: Vec<String>,
     pub expected: Expr,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct PureFunction {
     pub name: String,
     pub parameters: Vec<(String, Kind)>,
@@ -198,7 +198,7 @@ pub struct PureFunction {
     pub body: Expr,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct Screen {
     pub name: String,
     pub guard: Option<Expr>,
@@ -206,17 +206,30 @@ pub struct Screen {
     pub requires_navigation: bool,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct Navigation {
     pub name: String,
     pub target: String,
     pub action: Option<String>,
 }
 
+/// Top-level declaration source position. Expression-level spans are not yet covered.
+#[derive(Clone, Debug, Serialize)]
+pub struct SourceSpan {
+    pub line: usize,
+    pub column: usize,
+}
+
 #[derive(Clone, Debug)]
 pub struct Program {
     pub name: String,
     pub states: State,
+    /// Declaration order is part of the Python 0.11 snapshot signature.
+    pub state_order: Vec<String>,
+    /// Partial source mapping for top-level declarations only.
+    pub declaration_spans: BTreeMap<String, SourceSpan>,
+    /// Names explicitly marked with \`persist\` in the source.
+    pub persistent: BTreeSet<String>,
     pub types: BTreeMap<String, Kind>,
     pub derives: Vec<(String, Expr)>,
     pub functions: BTreeMap<String, PureFunction>,

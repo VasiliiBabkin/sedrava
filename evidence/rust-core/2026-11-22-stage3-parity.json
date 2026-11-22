@@ -1,0 +1,12 @@
+{
+  "schema": "sedrava-rust-differential-v1",
+  "seed": 90210,
+  "random_cases_per_source": 24,
+  "comparisons": 390,
+  "python_accepted": 227,
+  "python_rejected": 163,
+  "unsupported_webapp_ui_rejected": true,
+  "mismatch_count": 0,
+  "mismatches": [],
+  "note": "Comparable outcomes are limited to listed scalar, record, collection, pure function, standard library and navigation examples; same rejection does not prove identical failure semantics."
+}

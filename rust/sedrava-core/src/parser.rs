@@ -6,8 +6,8 @@
 use crate::expr;
 use crate::model::{
     fail, EmbeddedTest, Error, Expr, Kind, Navigation, Program, PureFunction, Result, Screen,
-    State, Stmt, Value, MAX_ACTION_STEPS, MAX_BLOCK_DEPTH, MAX_COLLECTIONS, MAX_RECORDS,
-    MAX_SOURCE_CHARS,
+    SourceSpan, State, Stmt, Value, MAX_ACTION_STEPS, MAX_BLOCK_DEPTH, MAX_COLLECTIONS,
+    MAX_RECORDS, MAX_SOURCE_CHARS,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -353,6 +353,8 @@ pub fn parse(source: &str) -> Result<Program> {
     let mut lines = source_lines(source)?;
     let mut name: Option<String> = None;
     let mut states = State::new();
+    let mut state_order = Vec::new();
+    let mut declaration_spans = BTreeMap::new();
     let mut types = BTreeMap::new();
     let mut derives = Vec::new();
     let mut functions = BTreeMap::new();
@@ -427,6 +429,13 @@ pub fn parse(source: &str) -> Result<Program> {
             if fields.is_empty() || fields.len() > 16 {
                 return line_error(current.number, "Record must have 1..16 fields");
             }
+            declaration_spans.insert(
+                format!("record:{record_name}"),
+                SourceSpan {
+                    line: current.number,
+                    column: 1,
+                },
+            );
             types.insert(
                 record_name.to_string(),
                 Kind::Record {
@@ -508,6 +517,13 @@ pub fn parse(source: &str) -> Result<Program> {
                 parameters: parameters.iter().map(|(_, v)| v.clone()).collect(),
                 result: Box::new(result_kind.clone()),
             };
+            declaration_spans.insert(
+                format!("fn:{name}"),
+                SourceSpan {
+                    line: current.number,
+                    column: 1,
+                },
+            );
             functions.insert(
                 name.into(),
                 PureFunction {
@@ -557,6 +573,14 @@ pub fn parse(source: &str) -> Result<Program> {
                     record: Box::new(record.clone()),
                     capacity: cap,
                 };
+                declaration_spans.insert(
+                    format!("state:{key}"),
+                    SourceSpan {
+                        line: current.number,
+                        column: 1,
+                    },
+                );
+                state_order.push(key.to_owned());
                 states.insert(
                     key.to_string(),
                     Value::List {
@@ -581,6 +605,14 @@ pub fn parse(source: &str) -> Result<Program> {
             let (expr, kind) = checked_expression(value, &BTreeMap::new(), current.number)?;
             let initial = expr::evaluate(&expr, &State::new())
                 .map_err(|e| Error(format!("Line {}: {e}", current.number)))?;
+            state_order.push(key.to_owned());
+            declaration_spans.insert(
+                format!("state:{key}"),
+                SourceSpan {
+                    line: current.number,
+                    column: 1,
+                },
+            );
             states.insert(key.into(), initial);
             types.insert(key.into(), kind);
         } else if let Some(key) = text.strip_prefix("persist ") {
@@ -597,6 +629,13 @@ pub fn parse(source: &str) -> Result<Program> {
             }
             let (expr, kind) = checked_expression(value, &types, current.number)?;
             types.insert(key.into(), kind);
+            declaration_spans.insert(
+                format!("derive:{key}"),
+                SourceSpan {
+                    line: current.number,
+                    column: 1,
+                },
+            );
             derives.push((key.into(), expr));
         } else if let Some(rest) = text.strip_prefix("action ") {
             seen_action_or_after = true;
@@ -638,6 +677,13 @@ pub fn parse(source: &str) -> Result<Program> {
             if statements.is_empty() {
                 return line_error(current.number, "Empty action");
             }
+            declaration_spans.insert(
+                format!("action:{action}"),
+                SourceSpan {
+                    line: current.number,
+                    column: 1,
+                },
+            );
             actions.insert(action.into(), statements);
             continue;
         } else if let Some(rest) = text.strip_prefix("rule ") {
@@ -655,6 +701,13 @@ pub fn parse(source: &str) -> Result<Program> {
             {
                 return line_error(current.number, "Invalid or duplicate test");
             }
+            declaration_spans.insert(
+                format!("test:{test_name}"),
+                SourceSpan {
+                    line: current.number,
+                    column: 1,
+                },
+            );
             tests.push(EmbeddedTest {
                 name: test_name.into(),
                 actions: sequences
@@ -712,6 +765,13 @@ pub fn parse(source: &str) -> Result<Program> {
             if count == 0 {
                 return line_error(current.number, "Empty screen");
             }
+            declaration_spans.insert(
+                format!("screen:{screen_name}"),
+                SourceSpan {
+                    line: current.number,
+                    column: 1,
+                },
+            );
             screens.insert(
                 screen_name.to_owned(),
                 Screen {
@@ -764,6 +824,13 @@ pub fn parse(source: &str) -> Result<Program> {
                             return line_error(next.number, "Invalid action");
                         }
                     }
+                    declaration_spans.insert(
+                        format!("navigation:{command}"),
+                        SourceSpan {
+                            line: next.number,
+                            column: 5,
+                        },
+                    );
                     navigation.insert(
                         command.into(),
                         Navigation {
@@ -882,6 +949,9 @@ pub fn parse(source: &str) -> Result<Program> {
     let program = Program {
         name,
         states,
+        state_order,
+        declaration_spans,
+        persistent: persisted,
         types,
         derives,
         functions,

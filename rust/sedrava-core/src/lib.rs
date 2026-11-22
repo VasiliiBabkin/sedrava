@@ -7,10 +7,12 @@
 
 pub mod collections;
 pub mod expr;
+pub mod ir;
 pub mod model;
 pub mod navigation;
 pub mod parser;
 pub mod runtime;
+pub mod snapshot;
 pub mod stdlib;
 
 pub use model::{Error, Kind, Program, Result, State, Value};
