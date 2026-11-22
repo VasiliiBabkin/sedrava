@@ -2,6 +2,7 @@
 mod assets;
 mod properties;
 mod render;
+mod services;
 mod syntax;
 pub mod webapp;
 
@@ -320,6 +321,7 @@ fn parse_nodes(
             }
             "heading" | "paragraph" | "link" | "button" | "image" | "spacer" | "divider"
             | "code" => false,
+            "remote" if widget.is_some() => args.last() == Some(&Token::Colon),
             _ if widget.is_some() => widget.unwrap().block,
             _ => return Err(line.error(format!("Unsupported Site/WebApp component {kind}"))),
         };

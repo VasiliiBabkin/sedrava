@@ -22,7 +22,7 @@ fn html(value: &str) -> String {
         .replace('\'', "&#39;")
 }
 
-fn expr_js(expr: &Expr, scope: &BTreeMap<String, String>) -> Result<String> {
+pub(crate) fn expr_js(expr: &Expr, scope: &BTreeMap<String, String>) -> Result<String> {
     let compiled = match expr {
         Expr::Int(v) => v.to_string(),
         Expr::Bool(v) => v.to_string(),
@@ -758,6 +758,7 @@ function isPlainRecord(value) {
 function strictJSON(raw){
     if(typeof raw!=='string'||raw.length>200000)throw Error('Snapshot too large');
     let index=0;
+    const primitive=/(?:true|false|null|-?(?:0|[1-9][0-9]*))/y;
     function ws(){
         while(index<raw.length&&' \n\r\t'.includes(raw[index]))index++;
     }
@@ -796,7 +797,8 @@ function strictJSON(raw){
                 if(separator!==',')throw Error('Invalid JSON array');
             }
         }
-        const matched=/^(?:true|false|null|-?(?:0|[1-9][0-9]*))/.exec(raw.slice(index));
+        primitive.lastIndex=index;
+        const matched=primitive.exec(raw);
         if(!matched)throw Error('Invalid JSON number or literal');
         index+=matched[0].length;
         return JSON.parse(matched[0]);

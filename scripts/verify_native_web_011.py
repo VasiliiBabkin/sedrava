@@ -241,12 +241,7 @@ def negative(root):
             invoke(engine, "build", mode, path, "--output", output, reject=True)
             assert not output.exists(), (engine, index)
 
-    catalog = ROOT / "examples/platform_catalog.sdr"
-    output = folder / "catalog"
-    for command in [("check", catalog), ("build", "webapp", catalog, "--output", output)]:
-        assert "Unsupported native WebApp declaration service" in invoke("rust", *command, reject=True)
-    assert not output.exists()
-    print(f"PASS: {len(cases)} shared rejections and explicit Rust HTTP service rejection")
+    print(f"PASS: {len(cases)} shared rejections")
 
 
 def main():

@@ -2,12 +2,13 @@
 //!
 //! This crate deliberately rejects unsupported constructs, rather than silently
 //! changing their meaning. It is not a drop-in replacement for the Python 0.11
-//! compiler: full site/webapp modes, full UI generation, imports and host effects
-//! remain in Python until native conformance is demonstrated.
+//! compiler. See docs/RUST_FULL_MIGRATION.ru.md for native coverage and limits.
 
 pub mod android;
 pub mod collections;
 pub mod expr;
+#[cfg(unix)]
+pub mod host;
 pub mod ir;
 pub mod model;
 pub mod modules;

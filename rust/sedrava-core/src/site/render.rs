@@ -98,9 +98,11 @@ impl Render<'_> {
         let dynamic = self.webapp && super::webapp::widget(kind).is_some();
         let tag = match kind {
             "button" if dynamic => "button",
-            "submit" | "open" | "close" | "navigate" | "back" | "pick" => "button",
+            "submit" | "open" | "close" | "navigate" | "back" | "pick" | "request" | "cancel" => {
+                "button"
+            }
             "form" | "dialog" | "select" | "option" => kind,
-            "when" | "each" | "row-when" => "section",
+            "when" | "each" | "row-when" | "remote" => "section",
             "field" => "output",
             "list" => "ul",
             "heading" => {
@@ -125,7 +127,9 @@ impl Render<'_> {
             .unwrap_or("default");
         let extra = match kind {
             "input" => " s-field",
-            "submit" | "open" | "close" | "navigate" | "back" | "pick" => " s-button",
+            "submit" | "open" | "close" | "navigate" | "back" | "pick" | "request" | "cancel" => {
+                " s-button"
+            }
             _ => "",
         };
         if matches!(kind, "input" | "select") {
@@ -219,7 +223,8 @@ impl Render<'_> {
             write!(out, " {key}=\"{}\"", html(value)).unwrap();
         };
         match kind {
-            "button" | "open" | "close" | "back" | "navigate" | "submit" | "pick" => {
+            "button" | "open" | "close" | "back" | "navigate" | "submit" | "pick" | "request"
+            | "cancel" => {
                 attr(
                     out,
                     "type",
@@ -230,6 +235,8 @@ impl Render<'_> {
                     "open" => attr(out, "data-open-dialog", p("to")),
                     "close" => attr(out, "data-close-dialog", p("to")),
                     "back" => attr(out, "data-back", "true"),
+                    "request" => attr(out, "data-request", p("service")),
+                    "cancel" => attr(out, "data-cancel-request", p("service")),
                     "pick" => attr(out, "data-pick", "true"),
                     "navigate" => {
                         attr(out, "data-navigate", p("to"));
@@ -289,6 +296,30 @@ impl Render<'_> {
             "dialog" => attr(out, "data-dialog", p("id")),
             "field" => attr(out, "data-row-field", p("field")),
             "row-when" => attr(out, "data-row-when", p("field")),
+            "remote" => {
+                attr(out, "data-remote", p("service"));
+                for (key, data) in [
+                    ("search", "data-remote-search"),
+                    ("title", "data-remote-title"),
+                ] {
+                    if let Some(value) = props.get(key) {
+                        attr(out, data, value);
+                    }
+                }
+                if !props.contains_key("label") {
+                    attr(out, "aria-label", p("service"));
+                }
+                out.push('>');
+                if !node.children.is_empty() {
+                    out.push_str("<template>");
+                    for child in &node.children {
+                        self.node(child, page, out)?;
+                    }
+                    out.push_str("</template>");
+                }
+                out.push_str("<p data-remote-status role=\"status\" aria-live=\"polite\">idle</p><div class=\"s-remote-grid\" data-remote-results></div></section>");
+                return Ok(());
+            }
             "list" | "table" | "each" => {
                 attr(
                     out,
@@ -507,6 +538,7 @@ pub(super) fn webapp(
     palettes: &BTreeMap<String, Props>,
     views: &[super::webapp::View],
     script: String,
+    http_enabled: bool,
     root: Option<&Path>,
 ) -> Result<StaticSite> {
     let mut render = Render {
@@ -517,10 +549,11 @@ pub(super) fn webapp(
     };
     let light = light_theme(&presentation.theme);
     let scheme = if light { "light" } else { "dark" };
+    let connect = if http_enabled { "'self'" } else { "'none'" };
     let mut out = format!(
         r#"<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="{scheme}"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' https:; base-uri 'none'; connect-src 'none'; form-action 'none'">
+<meta name="color-scheme" content="{scheme}"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' https:; base-uri 'none'; connect-src {connect}; form-action 'none'">
 <title>{}</title><link rel="stylesheet" href="app.css"><script src="app.js" defer></script>"#,
         html(title)
     );

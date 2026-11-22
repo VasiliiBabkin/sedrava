@@ -9,6 +9,7 @@ from urllib.parse import urlsplit
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import shutil
+import subprocess
 import sys
 import tempfile
 import threading
@@ -18,8 +19,24 @@ sys.path.insert(0,str(ROOT))
 from sedrava_webapp import build_webapp
 from playwright.sync_api import sync_playwright
 
+def build_example(mode, source, output, text=None):
+    native = os.environ.get("SEDRAVA_NATIVE")
+    if text is not None:
+        source = output.with_suffix(".sdr")
+        source.write_text(text, encoding="utf-8")
+    if not native:
+        if mode == "webapp":
+            build_webapp(source.read_text(encoding="utf-8"), output, source)
+        else:
+            from site_codegen import build_site
+            build_site(source.read_text(), output, source)
+        return
+    subprocess.run([native, "build", mode, str(source), "--output", str(output)],
+                   check=True, timeout=30)
+
+
 class Quiet(SimpleHTTPRequestHandler):
-    mode='normal';calls=[];rows=[{'id':1,'title':'A public product','available':True}]
+    mode='normal';calls=[];headers=[];rows=[{'id':1,'title':'A public product','available':True}]
     def reply(self,data,status=200):
         payload=(data if isinstance(data,str) else json.dumps(data)).encode()
         self.send_response(status);self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(payload)));self.end_headers()
@@ -34,6 +51,18 @@ class Quiet(SimpleHTTPRequestHandler):
             return self.reply({'id':identity,'title':'Product '+str(identity),'available':True})
         if urlsplit(self.path).path!='/api/products':return super().do_GET()
         Quiet.calls.append(('GET',self.path,None))
+        Quiet.headers.append(dict(self.headers))
+        if Quiet.mode=='redirect':
+            self.send_response(302);self.send_header('Location','/api/products/999');self.end_headers();return
+        if Quiet.mode=='deep':return self.reply('['*40+'0'+']'*40)
+        if Quiet.mode=='float':return self.reply('[{"id":1.0,"title":"bad","available":true}]')
+        if Quiet.mode=='items':return self.reply(Quiet.rows*101)
+        if Quiet.mode=='encoding':
+            self.send_response(200);self.send_header('Content-Type','application/json');self.end_headers()
+            self.wfile.write(b'\xff');return
+        if Quiet.mode=='mime':
+            self.send_response(200);self.send_header('Content-Type','text/plain');self.end_headers()
+            self.wfile.write(b'[]');return
         if Quiet.mode in ('slow','timeout'):time.sleep(.5 if Quiet.mode=='slow' else 1.5)
         if Quiet.mode=='error':return self.reply({'error':'unavailable'},500)
         if Quiet.mode=='invalid':return self.reply([{'id':True,'title':'bad','available':True}])
@@ -43,6 +72,7 @@ class Quiet(SimpleHTTPRequestHandler):
     def mutation(self):
         size=int(self.headers.get('Content-Length','0'));data=json.loads(self.rfile.read(size)) if size else None
         Quiet.calls.append((self.command,self.path,data))
+        if Quiet.mode=='no-body':return self.reply('',204)
         if self.command=='DELETE':Quiet.rows=[];return self.reply('',204)
         row={'id':1,**data};Quiet.rows=[row];return self.reply(row)
     do_POST=mutation
@@ -56,16 +86,17 @@ class Platform(unittest.TestCase):
     def setUpClass(cls):
         cls.folder=tempfile.TemporaryDirectory();cls.root=Path(cls.folder.name)
         source=ROOT/'examples/platform_tasks.sdr'
-        build_webapp(source.read_text(),cls.root/'tasks',source)
+        build_example('webapp',source,cls.root/'tasks')
         source=ROOT/'examples/platform_catalog.sdr'
-        build_webapp(source.read_text(),cls.root/'catalog',source)
-        from site_codegen import build_site
-        source=ROOT/'examples/platform_site.sdr';build_site(source.read_text(),cls.root/'site',source)
-        source=ROOT/'examples/platform_crm.sdr';build_webapp(source.read_text(),cls.root/'crm',source)
+        build_example('webapp',source,cls.root/'catalog')
+        bounded = source.read_text().replace('max-bytes 16384', 'max-bytes 20')
+        build_example('webapp',source,cls.root/'bounded',bounded)
+        source=ROOT/'examples/platform_site.sdr';build_example('site',source,cls.root/'site')
+        source=ROOT/'examples/platform_crm.sdr';build_example('webapp',source,cls.root/'crm')
         dynamic='webapp "Parameter cache"\nstate target=1\nservice product:\n    origin self\n    path "/api/products/:target"\n    auto true\n    cache true\n    response one:\n        id int32\n        title text\n        available bool\nview main:\n    heading "Parameter cache"\n    input target label "Product ID"\n    request "Reload" service product\n    remote product title title label "Product"\n'
-        build_webapp(dynamic,cls.root/'dynamic',ROOT/'examples/platform_catalog.sdr')
+        build_example('webapp',None,cls.root/'dynamic',dynamic)
         routing='webapp "Pairs"\nstate a=0\nstate b=0\nrule a==b\nview main:\n    heading "Home"\nview pair at "/pair/:a/:b":\n    heading "Pair"\n    value a label "A"\n    value b label "B"\n    back "Home"\n'
-        build_webapp(routing,cls.root/'routing',ROOT/'examples/platform_catalog.sdr')
+        build_example('webapp',None,cls.root/'routing',routing)
         cls.server=ThreadingHTTPServer(('127.0.0.1',0),functools.partial(Quiet,directory=cls.folder.name))
         cls.thread=threading.Thread(target=cls.server.serve_forever,daemon=True);cls.thread.start()
         cls.driver=sync_playwright().start();cls.engine=os.environ.get('SEDRAVA_BROWSER','chromium')
@@ -73,13 +104,13 @@ class Platform(unittest.TestCase):
         options={'executable_path':os.environ.get('SEDRAVA_CHROMIUM') or shutil.which('chromium'),'args':['--no-sandbox']} if cls.engine=='chromium' else {}
         cls.browser=browser.launch(**options)
         cls.url='http://127.0.0.1:'+str(cls.server.server_port)
-        cls.evidence=ROOT/'build/platform-evidence';cls.evidence.mkdir(parents=True,exist_ok=True)
+        cls.evidence=ROOT/('build/native-platform-evidence' if os.environ.get('SEDRAVA_NATIVE') else 'build/platform-evidence');cls.evidence.mkdir(parents=True,exist_ok=True)
         (cls.evidence/'browser-toolchain.json').write_text(json.dumps({'engine':cls.engine,'browser_version':cls.browser.version,'playwright':importlib.metadata.version('playwright')},indent=2)+'\n')
     @classmethod
     def tearDownClass(cls):
         cls.browser.close();cls.driver.stop();cls.server.shutdown();cls.server.server_close();cls.thread.join();cls.folder.cleanup()
     def setUp(self):
-        Quiet.mode='normal';Quiet.calls=[];Quiet.rows=[{'id':1,'title':'A public product','available':True}]
+        Quiet.mode='normal';Quiet.calls=[];Quiet.headers=[];Quiet.rows=[{'id':1,'title':'A public product','available':True}]
         self.context=self.browser.new_context();self.page=self.context.new_page();self.errors=[]
         self.context.on('page',lambda p:p.on('pageerror',lambda e:self.errors.append(str(e))))
         self.page.on('pageerror',lambda e:self.errors.append(str(e)))
@@ -163,6 +194,56 @@ class Platform(unittest.TestCase):
         p.get_by_role('button',name='Back to catalog',exact=True).click();p.wait_for_url('**#/')
         Quiet.mode='error';p.reload();self.assertIn('A public product',p.locator('[data-remote="catalog"]').inner_text())
         (self.evidence/'http-calls.json').write_text(json.dumps(Quiet.calls,indent=2))
+
+    def test_http_response_boundaries_and_redirects(self):
+        page = self.page
+        self.context.add_cookies([{"name": "test_cookie", "value": "must-not-send", "url": self.url}])
+        page.goto(self.url + '/catalog/index.html')
+        status = page.locator('[data-remote="catalog"] [data-remote-status]')
+        status.get_by_text('success', exact=True).wait_for()
+        refresh = page.get_by_role('button', name='Refresh catalog', exact=True)
+        for mode, message in [('deep', 'nesting'), ('items', 'collection'), ('mime', 'Expected JSON')]:
+            Quiet.mode = mode
+            refresh.click()
+            status.filter(has_text=re.compile(message, re.I)).wait_for()
+        for mode in ('float', 'encoding', 'redirect'):
+            Quiet.mode = mode
+            refresh.click()
+            status.filter(has_text='error:').wait_for()
+        assert all('/999' not in path for _, path, _ in Quiet.calls)
+        assert Quiet.headers and all(
+            'Cookie' not in headers and 'Referer' not in headers for headers in Quiet.headers
+        )
+        self.assertIn('A public product', page.locator('[data-remote="catalog"]').inner_text())
+
+    def test_http_rejects_large_request_and_empty_single_record(self):
+        page = self.page
+        page.goto(self.url + '/bounded/index.html#/manage')
+        page.get_by_label('Product name', exact=True).fill('A product name')
+        page.get_by_role('button', name='Create product', exact=True).click()
+        status = page.locator('[data-remote="create_product"] [data-remote-status]')
+        status.filter(has_text='Request exceeds byte limit').wait_for()
+        self.assertEqual(Quiet.calls, [])
+        page.goto(self.url + '/catalog/index.html#/manage')
+        page.get_by_label('Product name', exact=True).fill('A product name')
+        Quiet.mode = 'no-body'
+        page.get_by_role('button', name='Create product', exact=True).click()
+        status.filter(has_text='Empty response requires a many schema').wait_for()
+        self.assertEqual(page.get_by_label('Product name', exact=True).input_value(), 'A product name')
+        self.assertEqual(Quiet.calls, [('POST', '/api/products', {'title': 'A product name', 'available': True})])
+
+    @unittest.skipUnless(os.environ.get("SEDRAVA_NATIVE"), "native HTTP budget")
+    def test_http_request_budget(self):
+        page = self.page
+        page.goto(self.url + '/catalog/index.html')
+        status = page.locator('[data-remote="catalog"] [data-remote-status]')
+        status.get_by_text('success', exact=True).wait_for()
+        for _ in range(59):
+            page.get_by_role('button', name='Refresh catalog', exact=True).click()
+            status.get_by_text('success', exact=True).wait_for()
+        page.get_by_role('button', name='Refresh catalog', exact=True).click()
+        status.filter(has_text='request budget exhausted').wait_for()
+        self.assertEqual(len(Quiet.calls), 60)
 
     def test_correlated_route_parameters_commit_together(self):
         p=self.page;p.goto(self.url+'/routing/index.html#/pair/3/3')

@@ -15,6 +15,8 @@ fn usage() {
     println!(
         "Sedrava native Rust core (EXPERIMENTAL)\n\
          Usage:\n\
+           sedrava-native host check FILE
+           sedrava-native host run FILE --root DIR --trusted [--allow-read] [--allow-write]
            sedrava-native check FILE\n\
            sedrava-native test FILE\n\
            sedrava-native run FILE [ACTION ...] [--state-file PATH]\n\
@@ -29,7 +31,7 @@ fn usage() {
          snapshot persistence and experimental typed IR export.\n\
          Full Site/WebApp and Android generators remain incomplete.
          Native Android preview requires explicit application ID.
-         WebApp HTTP services, Host Effects and other 0.11 features remain incomplete.\n\
+         WebApp HTTP uses same-origin capabilities. Native Host supports trusted local text files.\n\
          See docs/RUST_FULL_MIGRATION.ru.md. Do not use for production."
     );
 }
@@ -151,6 +153,69 @@ fn run_options(args: &[String]) -> Result<(Vec<String>, Option<PathBuf>)> {
     Ok((actions, state_file))
 }
 
+#[cfg(unix)]
+fn host_command(args: &[String]) -> Result<()> {
+    use sedrava_core::host::{self, Outcome, Policy, Status};
+    if let [command, source] = args {
+        if command == "check" {
+            host::parse(&read_source(source)?)?;
+            println!("OK: {source} (native Host)");
+            return Ok(());
+        }
+    }
+    if args.first().map(String::as_str) != Some("run") {
+        return Err(Error(
+            "Expected host check FILE or host run FILE with an explicit policy".into(),
+        ));
+    }
+    let outcome = (|| {
+        let (source, options) = args.get(1..)?.split_first()?;
+        let mut policy = Policy::new(PathBuf::new());
+        let mut supplied = Vec::new();
+        let mut seen = std::collections::BTreeSet::new();
+        let mut options = options.iter();
+        while let Some(flag) = options.next() {
+            if flag != "--arg" && !seen.insert(flag) {
+                return None;
+            }
+            match flag.as_str() {
+                "--root" => policy.root = PathBuf::from(options.next()?),
+                "--trusted" => policy.trusted = true,
+                "--allow-read" => policy.allow_read = true,
+                "--allow-write" => policy.allow_write = true,
+                "--read-scope" => policy.read_scope = options.next()?.clone(),
+                "--write-scope" => policy.write_scope = options.next()?.clone(),
+                "--arg" if supplied.len() < 16 => supplied.push(options.next()?.clone()),
+                "--result-protocol" if options.next()?.as_str() == "v1" => {}
+                _ => return None,
+            }
+        }
+        if policy.root.as_os_str().is_empty() {
+            return None;
+        }
+        let program = host::parse(&read_source(source).ok()?).ok()?;
+        Some(host::run(&program, &policy, &supplied))
+    })()
+    .unwrap_or_else(Outcome::rejected);
+    let raw = serde_json::to_string(&outcome).map_err(|e| Error(e.to_string()))?;
+    writeln!(std::io::stdout().lock(), "{raw}")
+        .map_err(|e| Error(format!("Cannot deliver Host result: {e}")))?;
+    if outcome.status == Status::Success {
+        Ok(())
+    } else {
+        Err(Error(
+            "Host execution did not succeed; see the v1 outcome".into(),
+        ))
+    }
+}
+
+#[cfg(not(unix))]
+fn host_command(_args: &[String]) -> Result<()> {
+    Err(Error(
+        "Native Host execution requires POSIX descriptor-relative filesystem APIs".into(),
+    ))
+}
+
 fn run() -> Result<()> {
     let args: Vec<String> = env::args().collect();
     if args.len() == 1 || args.get(1).is_some_and(|s| s == "--help" || s == "-h") {
@@ -166,6 +231,9 @@ fn run() -> Result<()> {
         return Err(Error("Expected a command and a .sdr file".into()));
     }
     let command = &args[1];
+    if command == "host" {
+        return host_command(&args[2..]);
+    }
     let is_build = command == "build";
     if is_build
         && !matches!(

@@ -19,7 +19,7 @@ function invalidInput() {
 
 function syncButtons() {
     const disabled = invalidInput();
-    document.querySelectorAll('[data-action], [data-list] button, [data-each] button, button[type=submit], [data-navigate]')
+    document.querySelectorAll('[data-action], [data-list] button, [data-each] button, button[type=submit], [data-navigate], [data-request]')
         .forEach(button => { button.disabled = disabled; });
 }
 
@@ -161,6 +161,13 @@ function renderList(owner, rows) {
     owner.replaceChildren(fragment);
 }
 
+function fillRow(item, row, values) {
+    item.querySelectorAll('[data-row-field]').forEach(el => { el.textContent = String(row[el.dataset.rowField]); });
+    item.querySelectorAll('[data-row-when]').forEach(el => { el.hidden = !row[el.dataset.rowWhen]; });
+    item.querySelectorAll('[data-state]').forEach(el => { el.textContent = String(values[el.dataset.state]); });
+    item.querySelectorAll('[data-when]').forEach(el => { el.hidden = !values[el.dataset.when]; });
+}
+
 function renderEach(owner, rows, values) {
     const template = owner.querySelector('template');
     const list = owner.querySelector('[data-each-items]');
@@ -170,10 +177,7 @@ function renderEach(owner, rows, values) {
         item.setAttribute('role', 'listitem');
         item.dataset.rowId = String(row.id);
         item.append(template.content.cloneNode(true));
-        item.querySelectorAll('[data-row-field]').forEach(el => { el.textContent = String(row[el.dataset.rowField]); });
-        item.querySelectorAll('[data-row-when]').forEach(el => { el.hidden = !row[el.dataset.rowWhen]; });
-        item.querySelectorAll('[data-state]').forEach(el => { el.textContent = String(values[el.dataset.state]); });
-        item.querySelectorAll('[data-when]').forEach(el => { el.hidden = !values[el.dataset.when]; });
+        fillRow(item, row, values);
         const buttons = [...item.querySelectorAll('[data-action], [data-pick]')];
         for (const [index, button] of buttons.entries()) {
             const label = owner.dataset.titleField ? rowLabel(row, owner.dataset.titleField) : String(row.id);
@@ -255,6 +259,7 @@ function render() {
     }
     for (const owner of templates) renderEach(owner, queryRows(owner, values), values);
     showViews(values);
+    if (typeof syncServiceViews === "function") syncServiceViews();
     syncButtons();
 }
 
@@ -366,4 +371,5 @@ if (!validate(state)) {
         window.addEventListener('popstate', restoreRoute);
         restoreRoute();
     } else render();
+    if (typeof setupServices === "function") setupServices();
 }
