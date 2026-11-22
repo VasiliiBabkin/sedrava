@@ -1,0 +1,4 @@
+error closed ParseFault id "example.alias.ParseFault":
+    Invalid:
+        supplied: int
+fn parse_positive(value: int) -> Result<int, ParseFault> = Ok(value) if value > 0 else Err(ParseFault.Invalid(supplied=value))

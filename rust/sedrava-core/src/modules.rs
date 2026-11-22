@@ -3,6 +3,8 @@
 //! No network access, symlinks, traversal, arbitrary code execution or implicit
 //! filesystem discovery. This is import expansion only; component/style macro
 //! expansion and full Site/WebApp parsing remain separate migration work.
+mod aliases;
+
 use crate::model::{fail, Error, Result, MAX_SOURCE_CHARS};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
@@ -22,6 +24,8 @@ pub struct ExpandedSource {
 struct Expander {
     root: PathBuf,
     files: BTreeSet<PathBuf>,
+    used_aliases: BTreeSet<String>,
+    raw_generated_name_seen: bool,
     verified: Option<BTreeMap<PathBuf, String>>,
 }
 
@@ -94,7 +98,14 @@ impl Expander {
         if source.chars().count() > MAX_SOURCE_CHARS || depth > MAX_IMPORT_DEPTH {
             return fail("Expanded source or import depth exceeds limit");
         }
+        if aliases::reserved_identifier(source) {
+            // Never silently accept collisions with generated namespace names
+            // when any alias import is present. Expanded (already lowered)
+            // standalone sources without aliases remain valid inputs.
+            self.raw_generated_name_seen = true;
+        }
         let mut result = Vec::new();
+        let mut namespace_exports = aliases::AliasMap::new();
         for (number, line) in source.lines().enumerate() {
             if line.trim_start().starts_with("import ") && !line.starts_with("import ") {
                 return fail(format!(
@@ -102,7 +113,12 @@ impl Expander {
                     number + 1
                 ));
             }
-            let Some(spec) = path_from_import(line) else {
+            let parsed_alias = aliases::alias_spec(line)?;
+            let spec = match parsed_alias {
+                Some((path, _)) => Some(path),
+                None => path_from_import(line),
+            };
+            let Some(spec) = spec else {
                 result.push(line.to_owned());
                 continue;
             };
@@ -185,9 +201,20 @@ impl Expander {
                 }
             }
             self.files.insert(resolved.clone());
-            let mut next_stack = stack.to_vec();
-            next_stack.push(resolved.clone());
-            let expanded = self.expand(&imported, &resolved, &next_stack, depth + 1)?;
+            let expanded = if let Some((_, alias)) = parsed_alias {
+                if namespace_exports.contains_key(alias)
+                    || !self.used_aliases.insert(alias.to_string())
+                {
+                    return fail(format!("E_IMPORT_ALIAS: duplicate namespace {alias}"));
+                }
+                let (lowered, exports) = aliases::lower(&imported, alias)?;
+                namespace_exports.insert(alias.to_string(), exports);
+                lowered
+            } else {
+                let mut next_stack = stack.to_vec();
+                next_stack.push(resolved.clone());
+                self.expand(&imported, &resolved, &next_stack, depth + 1)?
+            };
             result.extend(expanded.lines().map(str::to_owned));
             if result
                 .iter()
@@ -198,7 +225,7 @@ impl Expander {
                 return fail("Expanded imports exceed source limit");
             }
         }
-        let output = result.join("\n");
+        let output = aliases::qualified(&result.join("\n"), &namespace_exports)?;
         if output.chars().count() > MAX_SOURCE_CHARS {
             return fail("Expanded imports exceed source limit");
         }
@@ -228,9 +255,14 @@ pub fn expand_local_imports(entrypoint: &Path) -> Result<ExpandedSource> {
     let mut expander = Expander {
         root,
         files: BTreeSet::new(),
+        used_aliases: BTreeSet::new(),
+        raw_generated_name_seen: false,
         verified,
     };
     let output = expander.expand(&source, &canonical, &[canonical.clone()], 0)?;
+    if !expander.used_aliases.is_empty() && expander.raw_generated_name_seen {
+        return fail("E_IMPORT_ALIAS: original source cannot forge compiler namespace symbols");
+    }
     Ok(ExpandedSource {
         source: output,
         imported_paths: expander.files,
