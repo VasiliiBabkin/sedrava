@@ -1,0 +1,6 @@
+[package]
+name = "example.locked.app"
+version = "0.1.0"
+
+[dependencies]
+"example.math" = { path = "vendor/example.math", version = "1.0.0" }

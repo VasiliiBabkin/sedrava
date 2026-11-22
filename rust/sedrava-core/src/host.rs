@@ -1,4 +1,5 @@
 //! Experimental trusted local Host A1 file effects and A3 execution outcomes.
+use crate::host_json::{self, Document, Key};
 use crate::{
     expr,
     model::{ensure_text, fail, Error, Expr, Kind, Result, State, Value, MAX_SOURCE_CHARS},
@@ -10,8 +11,9 @@ use rustix::{
     io::Errno,
 };
 use serde::Serialize;
+use serde_json::Value as JsonValue;
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     io::{Read, Write},
     path::PathBuf,
     sync::{
@@ -26,16 +28,55 @@ const MAX_STEPS: usize = 64;
 enum Step {
     Let(String, Expr),
     Read(String, Expr),
+    ReadJson(String, Expr),
+    ListDir(String, Expr),
+    JsonGet(String, String, Expr, JsonTarget),
+    JsonCount(String, String),
+    JsonObject(String),
+    JsonSet(String, String, JsonInput),
     Write(Expr, Expr),
+    WriteJson(Expr, String),
+    Mkdir(Expr),
+    Rmdir(Expr),
     Emit(Expr),
+    EmitJson(String),
+}
+
+enum JsonTarget {
+    Text,
+    Int,
+    Bool,
+    Json,
+}
+enum JsonInput {
+    Scalar(Expr),
+    Document(String),
+}
+
+enum Pending {
+    Write(String, String),
+    Mkdir(String),
+    Rmdir(String),
+}
+impl Pending {
+    fn path(&self) -> &str {
+        match self {
+            Self::Write(p, _) | Self::Mkdir(p) | Self::Rmdir(p) => p,
+        }
+    }
 }
 
 pub struct HostProgram {
     arguments: BTreeMap<String, Kind>,
     types: BTreeMap<String, Kind>,
     steps: Vec<Step>,
+    json_arguments: BTreeSet<String>,
+    json_bindings: BTreeSet<String>,
     reads: bool,
+    lists: bool,
     writes: bool,
+    mkdirs: bool,
+    rmdirs: bool,
 }
 
 pub struct Policy {
@@ -43,8 +84,12 @@ pub struct Policy {
     pub trusted: bool,
     pub allow_read: bool,
     pub allow_write: bool,
+    pub allow_list: bool,
+    pub allow_mkdir: bool,
+    pub allow_rmdir: bool,
     pub read_scope: String,
     pub write_scope: String,
+    pub list_scope: String,
 }
 
 impl Policy {
@@ -54,8 +99,12 @@ impl Policy {
             trusted: false,
             allow_read: false,
             allow_write: false,
+            allow_list: false,
+            allow_mkdir: false,
+            allow_rmdir: false,
             read_scope: ".".into(),
             write_scope: ".".into(),
+            list_scope: ".".into(),
         }
     }
 }
@@ -97,6 +146,8 @@ enum Code {
     FileExists,
     InvalidEncoding,
     InvalidPath,
+    InvalidJson,
+    DirectoryNotEmpty,
     ResourceTooLarge,
     TextTooLong,
     #[serde(rename = "IO_FAILURE")]
@@ -149,7 +200,7 @@ impl Outcome {
         }
     }
 
-    fn success(result: Value, written: Option<String>) -> Self {
+    fn success(result: JsonValue, written: Option<String>) -> Self {
         let committed = written.is_some();
         Self {
             protocol: "sedrava.host.execution.v1",
@@ -164,7 +215,7 @@ impl Outcome {
             } else {
                 CommitState::NotApplicable
             },
-            result: Some(serde_json::json!({"result": result.plain(), "written": written})),
+            result: Some(serde_json::json!({"result": result, "written": written})),
             error: None,
         }
     }
@@ -236,15 +287,23 @@ pub fn parse(source: &str) -> Result<HostProgram> {
         arguments: BTreeMap::new(),
         types: BTreeMap::new(),
         steps: Vec::new(),
+        json_arguments: BTreeSet::new(),
+        json_bindings: BTreeSet::new(),
         reads: false,
+        lists: false,
         writes: false,
+        mkdirs: false,
+        rmdirs: false,
     };
     let mut read_count = 0;
     for (index, (line, raw)) in lines.enumerate() {
         let invalid = |reason| Error(format!("Line {}: {reason}", line + 1));
         if index >= MAX_STEPS
             || raw.starts_with(char::is_whitespace)
-            || matches!(program.steps.last(), Some(Step::Emit(_)))
+            || matches!(
+                program.steps.last(),
+                Some(Step::Emit(_) | Step::EmitJson(_))
+            )
         {
             return Err(invalid(
                 "Host statement limit, indentation or final emit violated",
@@ -257,6 +316,7 @@ pub fn parse(source: &str) -> Result<HostProgram> {
         let binding = |value: &str| {
             if BINDING.is_match(value)
                 && !program.types.contains_key(value)
+                && !program.json_bindings.contains(value)
                 && matches!(expr::parse(value), Ok(Expr::Ident(_)))
             {
                 Ok(value.to_owned())
@@ -265,11 +325,19 @@ pub fn parse(source: &str) -> Result<HostProgram> {
             }
         };
         let step = match keyword {
-            "arg" if program.steps.is_empty() && program.arguments.len() < 16 => {
+            "arg"
+                if program.steps.is_empty()
+                    && program.arguments.len() + program.json_arguments.len() < 16 =>
+            {
                 let (key, kind) = rest
                     .split_once(": ")
                     .ok_or_else(|| invalid("Expected a typed Host argument"))?;
                 let key = binding(key)?;
+                if kind == "json" {
+                    program.json_arguments.insert(key.clone());
+                    program.json_bindings.insert(key);
+                    continue;
+                }
                 let kind = match kind {
                     "text" => Kind::Text,
                     "int" => Kind::Int,
@@ -300,6 +368,134 @@ pub fn parse(source: &str) -> Result<HostProgram> {
                 program.types.insert(key.clone(), Kind::Text);
                 Step::Read(key, path)
             }
+            "read_json" if read_count < 8 => {
+                let (key, path) = rest
+                    .split_once(" from ")
+                    .ok_or_else(|| invalid("Expected read_json name from path"))?;
+                let key = binding(key)?;
+                let path = path_expr(path, &program.types)?;
+                read_count += 1;
+                program.reads = true;
+                program.json_bindings.insert(key.clone());
+                Step::ReadJson(key, path)
+            }
+            "list_dir" if read_count < 8 => {
+                let (key, path) = rest
+                    .split_once(" from ")
+                    .ok_or_else(|| invalid("Expected list_dir name from path"))?;
+                let key = binding(key)?;
+                let path = if rest.ends_with(" from \".\"") {
+                    text_expr(path, &program.types)?
+                } else {
+                    path_expr(path, &program.types)?
+                };
+                read_count += 1;
+                program.lists = true;
+                program.json_bindings.insert(key.clone());
+                Step::ListDir(key, path)
+            }
+            kind if kind.starts_with("json_get_") => {
+                let target_kind = match kind {
+                    "json_get_text" => JsonTarget::Text,
+                    "json_get_int" => JsonTarget::Int,
+                    "json_get_bool" => JsonTarget::Bool,
+                    "json_get_json" => JsonTarget::Json,
+                    _ => return Err(invalid("Unsupported JSON getter type")),
+                };
+                let (target, source_key) = rest
+                    .split_once(" from ")
+                    .ok_or_else(|| invalid("Expected json_get target from source at key"))?;
+                let (source, key) = source_key
+                    .split_once(" at ")
+                    .ok_or_else(|| invalid("Expected JSON lookup key"))?;
+                let target = binding(target)?;
+                if !program.json_bindings.contains(source) {
+                    return Err(invalid("JSON source document is missing"));
+                }
+                let (key_expr, key_kind) = checked(key, &program.types, None)?;
+                if !matches!(key_kind, Kind::Int | Kind::Text) {
+                    return Err(invalid("JSON getter needs int or text key"));
+                }
+                match target_kind {
+                    JsonTarget::Json => {
+                        program.json_bindings.insert(target.clone());
+                    }
+                    JsonTarget::Text => {
+                        program.types.insert(target.clone(), Kind::Text);
+                    }
+                    JsonTarget::Int => {
+                        program.types.insert(target.clone(), Kind::Int);
+                    }
+                    JsonTarget::Bool => {
+                        program.types.insert(target.clone(), Kind::Bool);
+                    }
+                }
+                Step::JsonGet(target, source.to_owned(), key_expr, target_kind)
+            }
+            "json_count" => {
+                let (target, source) = rest
+                    .split_once(" from ")
+                    .ok_or_else(|| invalid("Expected json_count name from document"))?;
+                let target = binding(target)?;
+                if !program.json_bindings.contains(source) {
+                    return Err(invalid("JSON count requires a document"));
+                }
+                program.types.insert(target.clone(), Kind::Int);
+                Step::JsonCount(target, source.to_owned())
+            }
+            "json_object" => {
+                let target = binding(rest)?;
+                program.json_bindings.insert(target.clone());
+                Step::JsonObject(target)
+            }
+            "json_set" => {
+                let (left, value) = rest
+                    .split_once(" = ")
+                    .ok_or_else(|| invalid("Expected json_set object.field = value"))?;
+                let (target, field) = left
+                    .split_once('.')
+                    .ok_or_else(|| invalid("Expected JSON object.field"))?;
+                if !program.json_bindings.contains(target) || !BINDING.is_match(field) {
+                    return Err(invalid(
+                        "JSON field assignment requires an object and valid key",
+                    ));
+                }
+                let value = if program.json_bindings.contains(value) {
+                    JsonInput::Document(value.to_owned())
+                } else {
+                    let (expr, kind) = checked(value, &program.types, None)?;
+                    if !matches!(kind, Kind::Text | Kind::Int | Kind::Bool) {
+                        return Err(invalid("JSON field must be a scalar or JSON document"));
+                    }
+                    JsonInput::Scalar(expr)
+                };
+                Step::JsonSet(target.to_owned(), field.to_owned(), value)
+            }
+            "write_json" if !program.writes => {
+                let (path, document) = write_parts(rest)
+                    .ok_or_else(|| invalid("Expected write_json path = document"))?;
+                if !program.json_bindings.contains(document) {
+                    return Err(invalid("JSON write requires a document"));
+                }
+                program.writes = true;
+                Step::WriteJson(path_expr(path, &program.types)?, document.to_owned())
+            }
+            "mkdir" if !program.writes => {
+                program.writes = true;
+                program.mkdirs = true;
+                Step::Mkdir(path_expr(rest, &program.types)?)
+            }
+            "rmdir" if !program.writes => {
+                program.writes = true;
+                program.rmdirs = true;
+                Step::Rmdir(path_expr(rest, &program.types)?)
+            }
+            "emit_json" => {
+                if !program.json_bindings.contains(rest) {
+                    return Err(invalid("emit_json requires a JSON document"));
+                }
+                Step::EmitJson(rest.to_owned())
+            }
             "write" if !program.writes => {
                 let (path, value) =
                     write_parts(rest).ok_or_else(|| invalid("Expected write path = text"))?;
@@ -314,20 +510,34 @@ pub fn parse(source: &str) -> Result<HostProgram> {
         };
         program.steps.push(step);
     }
-    if !matches!(program.steps.last(), Some(Step::Emit(_))) {
-        return fail("Host requires a final scalar emit");
+    if !matches!(
+        program.steps.last(),
+        Some(Step::Emit(_) | Step::EmitJson(_))
+    ) {
+        return fail("Host requires a final emit or emit_json");
     }
     Ok(program)
 }
 
-fn arguments(program: &HostProgram, supplied: &[String]) -> Option<State> {
+fn arguments(
+    program: &HostProgram,
+    supplied: &[String],
+) -> Option<(State, BTreeMap<String, Document>)> {
     static INTEGER: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^-?(0|[1-9][0-9]*)$").unwrap());
-    if supplied.len() != program.arguments.len() {
+    if supplied.len() != program.arguments.len() + program.json_arguments.len() {
         return None;
     }
     let mut values = State::new();
+    let mut documents = BTreeMap::new();
     for argument in supplied {
         let (key, raw) = argument.split_once('=')?;
+        if program.json_arguments.contains(key) {
+            let value = host_json::parse(raw).ok()?;
+            if documents.insert(key.to_owned(), value).is_some() {
+                return None;
+            }
+            continue;
+        }
         let value = match program.arguments.get(key)? {
             Kind::Text if ensure_text(raw).is_ok() => Value::Text(raw.into()),
             Kind::Int if raw.len() <= 11 && INTEGER.is_match(raw) => Value::Int(raw.parse().ok()?),
@@ -338,7 +548,7 @@ fn arguments(program: &HostProgram, supplied: &[String]) -> Option<State> {
             return None;
         }
     }
-    Some(values)
+    Some((values, documents))
 }
 
 fn path_parts(path: &str) -> std::result::Result<Vec<&str>, Code> {
@@ -361,6 +571,7 @@ fn classify(err: Errno) -> Code {
         Errno::NOENT => Code::FileNotFound,
         Errno::ACCESS | Errno::PERM => Code::PermissionDenied,
         Errno::EXIST => Code::FileExists,
+        Errno::NOTEMPTY => Code::DirectoryNotEmpty,
         Errno::IO | Errno::NOSPC | Errno::INTR | Errno::STALE | Errno::AGAIN => Code::IoFailure,
         _ => Code::IoFault,
     }
@@ -394,12 +605,11 @@ fn regular(stat: fs::Stat) -> std::result::Result<(), Code> {
     Ok(())
 }
 
-fn read(root: &OwnedFd, path: &str) -> std::result::Result<Value, Code> {
+fn read_raw(root: &OwnedFd, path: &str) -> std::result::Result<Vec<u8>, Code> {
     let parts = path_parts(path)?;
     let (name, parents) = parts.split_last().unwrap();
     let parent = relative_dir(root, parents)?;
-    // Check the directory entry and recheck the opened inode, without following links.
-    // The trusted-workspace contract excludes concurrent hostile directory renames.
+    // Directory-descriptor-relative access, no symlinks and no multiply linked files.
     regular(fs::statat(&parent, *name, AtFlags::SYMLINK_NOFOLLOW).map_err(classify)?)?;
     let file = fs::openat(&parent, *name, OPEN, Mode::empty()).map_err(classify)?;
     regular(fs::fstat(&file).map_err(classify)?)?;
@@ -414,9 +624,71 @@ fn read(root: &OwnedFd, path: &str) -> std::result::Result<Value, Code> {
     if bytes.len() > MAX_FILE_BYTES {
         return Err(Code::ResourceTooLarge);
     }
-    let value = String::from_utf8(bytes).map_err(|_| Code::InvalidEncoding)?;
+    Ok(bytes)
+}
+
+fn read(root: &OwnedFd, path: &str) -> std::result::Result<Value, Code> {
+    let value = String::from_utf8(read_raw(root, path)?).map_err(|_| Code::InvalidEncoding)?;
     ensure_text(&value).map_err(|_| Code::TextTooLong)?;
     Ok(Value::Text(value))
+}
+
+fn read_json(root: &OwnedFd, path: &str) -> std::result::Result<Document, Code> {
+    let raw = String::from_utf8(read_raw(root, path)?).map_err(|_| Code::InvalidEncoding)?;
+    host_json::parse(&raw).map_err(|_| Code::InvalidJson)
+}
+
+fn list_dir(root: &OwnedFd, path: &str) -> std::result::Result<Document, Code> {
+    let subdir = if path == "." {
+        relative_dir(root, &[])?
+    } else {
+        relative_dir(root, &path_parts(path)?)?
+    };
+    let entries = fs::Dir::read_from(&subdir).map_err(classify)?;
+    let mut rows = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(classify)?;
+        let name = entry.file_name().to_str().map_err(|_| Code::InvalidPath)?;
+        if matches!(name, "." | "..") {
+            continue;
+        }
+        path_parts(name)?;
+        if rows.len() >= 32 {
+            return Err(Code::ResourceTooLarge);
+        }
+        let info = fs::statat(&subdir, name, AtFlags::SYMLINK_NOFOLLOW).map_err(classify)?;
+        let kind = match FileType::from_raw_mode(info.st_mode) {
+            FileType::Directory => "directory",
+            FileType::RegularFile => {
+                regular(info)?;
+                "file"
+            }
+            _ => return Err(Code::PolicyViolation),
+        };
+        rows.push(serde_json::json!({"name":name,"kind":kind}));
+    }
+    rows.sort_by(|a, b| a["name"].as_str().cmp(&b["name"].as_str()));
+    host_json::validate(JsonValue::Array(rows)).map_err(|_| Code::ResourceTooLarge)
+}
+
+fn mkdir(root: &OwnedFd, path: &str) -> std::result::Result<(), Code> {
+    let parts = path_parts(path)?;
+    let (name, parents) = parts.split_last().unwrap();
+    let parent = relative_dir(root, parents)?;
+    fs::mkdirat(&parent, *name, Mode::RWXU).map_err(classify)?;
+    fs::fsync(&parent).map_err(classify)
+}
+
+fn rmdir(root: &OwnedFd, path: &str) -> std::result::Result<(), Code> {
+    let parts = path_parts(path)?;
+    let (name, parents) = parts.split_last().unwrap();
+    let parent = relative_dir(root, parents)?;
+    let info = fs::statat(&parent, *name, AtFlags::SYMLINK_NOFOLLOW).map_err(classify)?;
+    if FileType::from_raw_mode(info.st_mode) != FileType::Directory {
+        return Err(Code::PolicyViolation);
+    }
+    fs::unlinkat(&parent, *name, AtFlags::REMOVEDIR).map_err(classify)?;
+    fs::fsync(&parent).map_err(classify)
 }
 
 fn write(root: &OwnedFd, path: &str, data: &str) -> std::result::Result<(), Code> {
@@ -456,11 +728,14 @@ fn write(root: &OwnedFd, path: &str, data: &str) -> std::result::Result<(), Code
 pub fn run(program: &HostProgram, policy: &Policy, supplied: &[String]) -> Outcome {
     if !policy.trusted
         || (program.reads && !policy.allow_read)
+        || (program.lists && !policy.allow_list)
         || (program.writes && !policy.allow_write)
+        || (program.mkdirs && !policy.allow_mkdir)
+        || (program.rmdirs && !policy.allow_rmdir)
     {
         return Outcome::rejected();
     }
-    let Some(mut values) = arguments(program, supplied) else {
+    let Some((mut values, mut documents)) = arguments(program, supplied) else {
         return Outcome::rejected();
     };
     let scopes = (|| {
@@ -474,9 +749,13 @@ pub fn run(program: &HostProgram, policy: &Policy, supplied: &[String]) -> Outco
             .writes
             .then(|| scope(&root, &policy.write_scope))
             .transpose()?;
-        Ok::<_, Code>((read, write))
+        let list = program
+            .lists
+            .then(|| scope(&root, &policy.list_scope))
+            .transpose()?;
+        Ok::<_, Code>((read, write, list))
     })();
-    let Ok((reader, writer)) = scopes else {
+    let Ok((reader, writer, lister)) = scopes else {
         return Outcome::rejected();
     };
     let executed = (|| {
@@ -487,7 +766,7 @@ pub fn run(program: &HostProgram, policy: &Policy, supplied: &[String]) -> Outco
             Value::Text(value) => Ok(value),
             _ => Err(Code::EngineFault),
         };
-        let mut pending = None;
+        let mut pending: Option<Pending> = None;
         for step in &program.steps {
             match step {
                 Step::Let(key, expr) => {
@@ -497,6 +776,73 @@ pub fn run(program: &HostProgram, policy: &Policy, supplied: &[String]) -> Outco
                     let path = text(path, &values)?;
                     values.insert(key.clone(), read(reader.as_ref().unwrap(), &path)?);
                 }
+                Step::ReadJson(key, path) => {
+                    let path = text(path, &values)?;
+                    documents.insert(key.clone(), read_json(reader.as_ref().unwrap(), &path)?);
+                }
+                Step::ListDir(key, path) => {
+                    let path = text(path, &values)?;
+                    documents.insert(key.clone(), list_dir(lister.as_ref().unwrap(), &path)?);
+                }
+                Step::JsonGet(target, source, key, target_kind) => {
+                    let document = documents.get(source).ok_or(Code::EngineFault)?;
+                    let key = match evaluate(key, &values)? {
+                        Value::Text(t) => Key::Text(t),
+                        Value::Int(i) => Key::Index(i),
+                        _ => return Err(Code::EngineFault),
+                    };
+                    let child = host_json::get(document, key).map_err(|_| Code::InvalidJson)?;
+                    match target_kind {
+                        JsonTarget::Json => {
+                            documents.insert(target.clone(), child);
+                        }
+                        JsonTarget::Text => match child.0 {
+                            JsonValue::String(s) => {
+                                values.insert(target.clone(), Value::Text(s));
+                            }
+                            _ => return Err(Code::InvalidJson),
+                        },
+                        JsonTarget::Int => match child.0 {
+                            JsonValue::Number(n) => {
+                                let v = n
+                                    .as_i64()
+                                    .and_then(|x| i32::try_from(x).ok())
+                                    .ok_or(Code::InvalidJson)?;
+                                values.insert(target.clone(), Value::Int(v));
+                            }
+                            _ => return Err(Code::InvalidJson),
+                        },
+                        JsonTarget::Bool => match child.0 {
+                            JsonValue::Bool(v) => {
+                                values.insert(target.clone(), Value::Bool(v));
+                            }
+                            _ => return Err(Code::InvalidJson),
+                        },
+                    }
+                }
+                Step::JsonCount(target, source) => {
+                    let document = documents.get(source).ok_or(Code::EngineFault)?;
+                    let count = host_json::count(document).map_err(|_| Code::InvalidJson)?;
+                    values.insert(target.clone(), Value::Int(count));
+                }
+                Step::JsonObject(target) => {
+                    documents.insert(
+                        target.clone(),
+                        Document(JsonValue::Object(Default::default())),
+                    );
+                }
+                Step::JsonSet(target, field, value) => {
+                    let original = documents.get(target).ok_or(Code::EngineFault)?;
+                    let value = match value {
+                        JsonInput::Document(name) => {
+                            documents.get(name).ok_or(Code::EngineFault)?.0.clone()
+                        }
+                        JsonInput::Scalar(expr) => evaluate(expr, &values)?.plain(),
+                    };
+                    let next =
+                        host_json::set(original, field, value).map_err(|_| Code::InvalidJson)?;
+                    documents.insert(target.clone(), next);
+                }
                 Step::Write(path, value) => {
                     let path = text(path, &values)?;
                     path_parts(&path)?;
@@ -504,9 +850,31 @@ pub fn run(program: &HostProgram, policy: &Policy, supplied: &[String]) -> Outco
                     if value.len() > MAX_FILE_BYTES {
                         return Err(Code::ResourceTooLarge);
                     }
-                    pending = Some((path, value));
+                    pending = Some(Pending::Write(path, value));
                 }
-                Step::Emit(expr) => return Ok((evaluate(expr, &values)?, pending)),
+                Step::WriteJson(path, source) => {
+                    let path = text(path, &values)?;
+                    path_parts(&path)?;
+                    let doc = documents.get(source).ok_or(Code::EngineFault)?;
+                    let raw = host_json::compact(doc).map_err(|_| Code::InvalidJson)?;
+                    pending = Some(Pending::Write(path, raw));
+                }
+                Step::Mkdir(path) => {
+                    let path = text(path, &values)?;
+                    path_parts(&path)?;
+                    pending = Some(Pending::Mkdir(path));
+                }
+                Step::Rmdir(path) => {
+                    let path = text(path, &values)?;
+                    path_parts(&path)?;
+                    pending = Some(Pending::Rmdir(path));
+                }
+                Step::Emit(expr) => return Ok((evaluate(expr, &values)?.plain(), pending)),
+                Step::EmitJson(source) => {
+                    let doc = documents.get(source).ok_or(Code::EngineFault)?;
+                    host_json::compact(doc).map_err(|_| Code::InvalidJson)?;
+                    return Ok((doc.0.clone(), pending));
+                }
             }
         }
         Err(Code::EngineFault)
@@ -514,9 +882,17 @@ pub fn run(program: &HostProgram, policy: &Policy, supplied: &[String]) -> Outco
     match executed {
         Err(code) => Outcome::failure(Phase::Execute, code),
         Ok((result, None)) => Outcome::success(result, None),
-        Ok((result, Some((path, value)))) => match write(writer.as_ref().unwrap(), &path, &value) {
-            Ok(()) => Outcome::success(result, Some(path)),
-            Err(code) => Outcome::failure(Phase::Commit, code),
-        },
+        Ok((result, Some(pending))) => {
+            let path = pending.path().to_owned();
+            let committed = match pending {
+                Pending::Write(path, value) => write(writer.as_ref().unwrap(), &path, &value),
+                Pending::Mkdir(path) => mkdir(writer.as_ref().unwrap(), &path),
+                Pending::Rmdir(path) => rmdir(writer.as_ref().unwrap(), &path),
+            };
+            match committed {
+                Ok(()) => Outcome::success(result, Some(path)),
+                Err(code) => Outcome::failure(Phase::Commit, code),
+            }
+        }
     }
 }
