@@ -1,0 +1,10 @@
+host "Native Host A2 inventory"
+arg input: text
+read_json config from input
+json_get_text title from config at "title"
+list_dir contents from "."
+json_object report
+json_set report.title = title
+json_set report.files = contents
+write_json "report.json" = report
+emit_json report

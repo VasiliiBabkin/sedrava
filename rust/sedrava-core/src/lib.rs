@@ -9,10 +9,13 @@ pub mod collections;
 pub mod expr;
 #[cfg(unix)]
 pub mod host;
+#[cfg(unix)]
+pub(crate) mod host_json;
 pub mod ir;
 pub mod model;
 pub mod modules;
 pub mod navigation;
+pub mod packages;
 pub mod parser;
 pub mod runtime;
 pub mod site;

@@ -130,7 +130,7 @@ def main():
         assert sorted(p.name for p in outbox.iterdir()) == ["report", "symlink"]
 
         for unsupported in (
-            'read x from "../input"\nemit x', 'read_json x from "data"\nemit 0',
+            'read x from "../input"\nemit x', 'read_json x from "../data"\nemit 0',
             'fetch x from "https://example.com"\nemit 0', ''.join(f'let x{i} = 1\n' for i in range(64)) + 'emit x0',
             ''.join(f'read read{i} from "ok"\n' for i in range(9)) + 'emit 0',
         ):

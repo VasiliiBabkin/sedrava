@@ -1,0 +1,23 @@
+{
+  "packages": [
+    {
+      "dependencies": [],
+      "files": {
+        "math.sdr": "f6825f9e6791276dcba1a60d3074db4fd19700d8b47a1a9acb712ba94c54ec40",
+        "sedrava.toml": "07769197c04210738ca947c32ab028ca4abec61926a85c4568d13e686847b304"
+      },
+      "name": "example.math",
+      "path": "vendor/example.math",
+      "version": "1.0.0"
+    }
+  ],
+  "root": {
+    "dependencies": [
+      "example.math"
+    ],
+    "manifest_sha256": "bbd7fbf13d577b614e3d6a8c473fca9b45b37216a503779714acc2fbd3744267",
+    "name": "example.locked.app",
+    "version": "0.1.0"
+  },
+  "schema": 1
+}

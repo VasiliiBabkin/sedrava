@@ -4,7 +4,8 @@
 //! filesystem discovery. This is import expansion only; component/style macro
 //! expansion and full Site/WebApp parsing remain separate migration work.
 use crate::model::{fail, Error, Result, MAX_SOURCE_CHARS};
-use std::collections::BTreeSet;
+use sha2::{Digest, Sha256};
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 
@@ -21,6 +22,7 @@ pub struct ExpandedSource {
 struct Expander {
     root: PathBuf,
     files: BTreeSet<PathBuf>,
+    verified: Option<BTreeMap<PathBuf, String>>,
 }
 
 fn path_from_import(line: &str) -> Option<&str> {
@@ -126,7 +128,29 @@ impl Expander {
             if metadata.len() > MAX_MODULE_BYTES {
                 return fail("Imported module too large");
             }
-            let imported = fs::read_to_string(&resolved).map_err(|e| {
+            let bytes = fs::read(&resolved)
+                .map_err(|e| Error(format!("Cannot read module {}: {e}", resolved.display())))?;
+            if bytes.len() as u64 > MAX_MODULE_BYTES {
+                return fail("Imported module bytes exceed source limit");
+            }
+            if candidate_rel
+                .components()
+                .next()
+                .is_some_and(|x| x.as_os_str() == "vendor")
+            {
+                let expected = self
+                    .verified
+                    .as_ref()
+                    .and_then(|pins| pins.get(&resolved))
+                    .ok_or_else(|| {
+                        Error("Unreviewed vendored module import: sedrava.lock required".into())
+                    })?;
+                let actual = format!("{:x}", Sha256::digest(&bytes));
+                if &actual != expected {
+                    return fail("Vendored import changed after lock verification");
+                }
+            }
+            let imported = String::from_utf8(bytes).map_err(|e| {
                 Error(format!(
                     "Cannot read UTF-8 module {}: {e}",
                     resolved.display()
@@ -182,9 +206,11 @@ pub fn expand_local_imports(entrypoint: &Path) -> Result<ExpandedSource> {
     }
     let source =
         fs::read_to_string(&canonical).map_err(|e| Error(format!("Cannot read source: {e}")))?;
+    let verified = crate::packages::verify_if_project(&canonical)?;
     let mut expander = Expander {
         root,
         files: BTreeSet::new(),
+        verified,
     };
     let output = expander.expand(&source, &canonical, &[canonical.clone()], 0)?;
     Ok(ExpandedSource {

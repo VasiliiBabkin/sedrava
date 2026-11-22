@@ -15,7 +15,7 @@ fn usage() {
     println!(
         "Sedrava native Rust core (EXPERIMENTAL)\n\
          Usage:\n\
-           sedrava-native host check FILE
+           sedrava-native lock DIR\n           sedrava-native verify DIR\n           sedrava-native host check FILE
            sedrava-native host run FILE --root DIR --trusted [--allow-read] [--allow-write]
            sedrava-native check FILE\n\
            sedrava-native test FILE\n\
@@ -31,7 +31,7 @@ fn usage() {
          snapshot persistence and experimental typed IR export.\n\
          Full Site/WebApp and Android generators remain incomplete.
          Native Android preview requires explicit application ID.
-         WebApp HTTP uses same-origin capabilities. Native Host supports trusted local text files.\n\
+         WebApp HTTP uses same-origin capabilities. Native Host supports trusted local text/JSON files and scoped directories.\n\
          See docs/RUST_FULL_MIGRATION.ru.md. Do not use for production."
     );
 }
@@ -183,8 +183,12 @@ fn host_command(args: &[String]) -> Result<()> {
                 "--trusted" => policy.trusted = true,
                 "--allow-read" => policy.allow_read = true,
                 "--allow-write" => policy.allow_write = true,
+                "--allow-list" => policy.allow_list = true,
+                "--allow-mkdir" => policy.allow_mkdir = true,
+                "--allow-rmdir" => policy.allow_rmdir = true,
                 "--read-scope" => policy.read_scope = options.next()?.clone(),
                 "--write-scope" => policy.write_scope = options.next()?.clone(),
+                "--list-scope" => policy.list_scope = options.next()?.clone(),
                 "--arg" if supplied.len() < 16 => supplied.push(options.next()?.clone()),
                 "--result-protocol" if options.next()?.as_str() == "v1" => {}
                 _ => return None,
@@ -234,6 +238,20 @@ fn run() -> Result<()> {
     if command == "host" {
         return host_command(&args[2..]);
     }
+    if command == "lock" || command == "verify" {
+        if args.len() != 3 {
+            return Err(Error("Expected lock DIR or verify DIR".into()));
+        }
+        let root = Path::new(&args[2]);
+        if command == "lock" {
+            let file = sedrava_core::packages::write_lock(root)?;
+            println!("Created verified lock: {}", file.display());
+        } else {
+            let paths = sedrava_core::packages::verify(root)?;
+            println!("Verified lock: {} pinned files", paths.len());
+        }
+        return Ok(());
+    }
     let is_build = command == "build";
     if is_build
         && !matches!(
@@ -249,6 +267,9 @@ fn run() -> Result<()> {
     let source = args
         .get(source_index)
         .ok_or_else(|| Error("Expected a command, target and .sdr file".into()))?;
+    // An explicit project manifest always requires an intact reviewed lock,
+    // including for Site/WebApp that currently use a separate module parser.
+    sedrava_core::packages::verify_if_project(Path::new(source))?;
     if is_build && matches!(args[2].as_str(), "site" | "webapp") {
         if args.len() != 6 || args[4] != "--output" {
             return Err(Error(format!(

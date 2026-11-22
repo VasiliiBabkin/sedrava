@@ -1,0 +1,11 @@
+app "Locked native example"
+import "vendor/example.math/math.sdr"
+state number = 2
+derive result = twice(number)
+action increment:
+    number = number + 1
+test first: -> result == 4
+screen main:
+    text "Offline verified code"
+    value result
+    button "Increment" -> increment
