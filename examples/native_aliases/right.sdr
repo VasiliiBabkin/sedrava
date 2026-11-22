@@ -1,0 +1,5 @@
+record Item:
+    label: text
+    done: bool
+fn increment(n: int) -> int = n + 10
+fn twice(n: int) -> int = increment(increment(n))

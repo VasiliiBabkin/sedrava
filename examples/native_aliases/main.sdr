@@ -1,0 +1,26 @@
+app "Native namespaced imports"
+import "faults.sdr" as faults
+import "left.sdr" as left
+import "right.sdr" as right
+state total = 0
+state summary = ""
+state left_items: list<left.Item>(max=5) = []
+state right_items: list<right.Item>(max=5) = []
+action calculate:
+    total = left.twice(1) + right.twice(2)
+    summary = "left.increment is a string, not a call"
+    match faults.parse_positive(-3):
+        Ok(value):
+            total = value
+        Err(Invalid { supplied }):
+            summary = error_id(faults.ParseFault.Invalid(supplied=supplied))
+action populate:
+    left_items = append(left_items, left.Item(label="left", done=true))
+    right_items = append(right_items, right.Item(label="right", done=false))
+screen main:
+    value total
+    value summary
+    button "Calculate" -> calculate
+    button "Populate" -> populate
+test calculated: calculate -> total == 25 and summary == "example.alias.ParseFault.Invalid"
+test populated: populate -> count(left_items) == 1 and count(right_items) == 1
