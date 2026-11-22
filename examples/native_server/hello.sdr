@@ -1,0 +1,16 @@
+# Sedrava Server A1: static and typed JSON, zero disk/network effects.
+server "Hello API"
+route GET "/health":
+    respond 200 { status: "ok", version: 1 }
+route GET "/hello":
+    respond 200 { message: "Привет от Sedrava!" }
+route POST "/items":
+    request name: text
+    request quantity: int
+    request available: bool
+    respond 201 { status: "created", name: request.name, quantity: request.quantity, available: request.available }
+route PUT "/items":
+    request name: text
+    respond 202 { status: "accepted", name: request.name }
+route DELETE "/items":
+    respond 200 { deleted: true }
