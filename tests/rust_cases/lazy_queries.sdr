@@ -1,0 +1,16 @@
+app "Short-circuit collection queries"
+record Task:
+    title: text
+    flag: bool
+fn good(row: Task) -> bool = row.flag or date_days(row.title) > 0
+fn bad(row: Task) -> bool = not row.flag and date_days(row.title) > 0
+state tasks: list<Task>(max=10) = []
+action prepare:
+    tasks = append(tasks, Task(title="invalid-date", flag=true))
+    tasks = append(tasks, Task(title="invalid-date", flag=false))
+test lazy_any: prepare -> any(tasks, good)
+test lazy_find: prepare -> find(tasks, good) == 1
+test lazy_all: prepare -> not all(tasks, bad)
+screen main:
+    text "Lazy"
+    button "Prepare" -> prepare

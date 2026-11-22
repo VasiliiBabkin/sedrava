@@ -1,0 +1,28 @@
+app "Records and stable ids"
+record Task:
+    title: text
+    done: bool
+    score: int
+state tasks: list<Task>(max=10) = []
+state selected = 0
+state title = "Начать 😀"
+derive items_total = count(tasks)
+derive done_total = count(filter(tasks, "done", true))
+derive score_total = sum(tasks, "score")
+derive first_done = find(tasks, "done", true)
+action add:
+    require title != ""
+    tasks = append(tasks, Task(title=title, done=false, score=2))
+action finish:
+    require has(tasks, 1)
+    tasks = update(tasks, 1, Task(title=get(tasks, 1).title, done=true, score=3))
+action delete:
+    tasks = remove(tasks, 1)
+test initial: -> items_total == 0 and done_total == 0 and score_total == 0
+test append_one: add -> items_total == 1 and get(tasks, 1).title == "Начать 😀"
+test update_one: add, finish -> done_total == 1 and first_done == 1 and score_total == 3
+test remove_one: add, finish, delete -> items_total == 0 and next_id(tasks) == 2
+screen main:
+    text "Task list"
+    value items_total
+    list tasks select selected

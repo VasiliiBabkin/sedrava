@@ -24,6 +24,9 @@ SCENARIOS = [
     ("run-reference", "run", "examples/reference_09.sdr", ["add", "add"]),
     ("run-unicode", "run", "examples/text_profile.sdr", ["rename"]),
     ("test-reference", "test", "examples/reference_09.sdr", []),
+    ("run-records", "run", "tests/rust_cases/records_lists.sdr", ["add", "finish"]),
+    ("run-functions", "run", "tests/rust_cases/functions_queries.sdr", ["add"]),
+    ("run-navigation", "run", "tests/rust_cases/navigation.sdr", ["open", "$back"]),
 ]
 
 

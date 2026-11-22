@@ -2,8 +2,8 @@
 //! No Rust/Python/JS eval, foreign calls, I/O, implicit casts or dynamic code.
 
 use crate::model::{
-    check_i32, ensure_text, fail, Binary, Error, Expr, Kind, Result, State, Unary, Value,
-    MAX_AST_NODES,
+    check_i32, ensure_text, fail, Binary, Error, Expr, Kind, PureFunction, Result, State, Unary,
+    Value, MAX_AST_NODES,
 };
 use std::collections::BTreeMap;
 
@@ -14,6 +14,9 @@ enum Tok {
     Id(String),
     LParen,
     RParen,
+    Comma,
+    Dot,
+    Assign,
     Plus,
     Minus,
     Mul,
@@ -26,6 +29,8 @@ enum Tok {
     And,
     Or,
     Not,
+    If,
+    Else,
     End,
 }
 
@@ -59,6 +64,8 @@ fn lex(source: &str) -> Result<Vec<Tok>> {
                 "and" => Tok::And,
                 "or" => Tok::Or,
                 "not" => Tok::Not,
+                "if" => Tok::If,
+                "else" => Tok::Else,
                 _ => Tok::Id(word),
             }
         } else if c == '"' {
@@ -103,6 +110,8 @@ fn lex(source: &str) -> Result<Vec<Tok>> {
             match c {
                 '(' => Tok::LParen,
                 ')' => Tok::RParen,
+                ',' => Tok::Comma,
+                '.' => Tok::Dot,
                 '+' => Tok::Plus,
                 '-' => Tok::Minus,
                 '*' => {
@@ -115,6 +124,7 @@ fn lex(source: &str) -> Result<Vec<Tok>> {
                     pos += 1;
                     Tok::Eq
                 }
+                '=' => Tok::Assign,
                 '!' if chars.get(pos) == Some(&'=') => {
                     pos += 1;
                     Tok::Ne
@@ -178,6 +188,24 @@ impl Parser {
             return fail("Expression exceeds complexity limit");
         }
         Ok(expr)
+    }
+
+    fn parse_conditional(&mut self) -> Result<Expr> {
+        let then_value = self.parse_or()?;
+        if *self.peek() != Tok::If {
+            return Ok(then_value);
+        }
+        self.next();
+        let condition = self.nested(|p| p.parse_conditional())?;
+        if self.next() != Tok::Else {
+            return fail("Conditional expression requires else");
+        }
+        let fallback = self.nested(|p| p.parse_conditional())?;
+        self.build(Expr::Conditional(
+            Box::new(condition),
+            Box::new(then_value),
+            Box::new(fallback),
+        ))
     }
 
     fn parse_or(&mut self) -> Result<Expr> {
@@ -273,15 +301,71 @@ impl Parser {
             Tok::Id(s) if s == "false" || s == "False" => Expr::Bool(false),
             Tok::Id(s) => Expr::Ident(s),
             Tok::LParen => {
-                let inner = self.nested(|parser| parser.parse_or())?;
+                let inner = self.nested(|parser| parser.parse_conditional())?;
                 if self.next() != Tok::RParen {
                     return fail("Unclosed expression parenthesis");
                 }
-                return Ok(inner);
+                inner
             }
             other => return fail(format!("Expected scalar expression, found {other:?}")),
         };
-        self.build(expr)
+        let mut expr = self.build(expr)?;
+        loop {
+            match self.peek() {
+                Tok::Dot => {
+                    self.next();
+                    let Tok::Id(field) = self.next() else {
+                        return fail("Record field identifier expected");
+                    };
+                    expr = self.build(Expr::Attr(Box::new(expr), field))?;
+                }
+                Tok::LParen => {
+                    let Expr::Ident(name) = expr else {
+                        return fail("Only declared named operations are callable");
+                    };
+                    self.next();
+                    let mut args = Vec::new();
+                    let mut kwargs = Vec::new();
+                    if *self.peek() != Tok::RParen {
+                        loop {
+                            let keyword = if let Tok::Id(s) = self.peek() {
+                                if self.tokens.get(self.pos + 1) == Some(&Tok::Assign) {
+                                    Some(s.clone())
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            };
+                            if let Some(key) = keyword {
+                                self.next();
+                                self.next();
+                                let value = self.nested(|p| p.parse_conditional())?;
+                                kwargs.push((key, value));
+                            } else {
+                                if !kwargs.is_empty() {
+                                    return fail("Positional argument after named argument");
+                                }
+                                args.push(self.nested(|p| p.parse_conditional())?);
+                            }
+                            if *self.peek() != Tok::Comma {
+                                break;
+                            }
+                            self.next();
+                            if *self.peek() == Tok::RParen {
+                                break;
+                            }
+                        }
+                    }
+                    if self.next() != Tok::RParen {
+                        return fail("Unclosed function call");
+                    }
+                    expr = self.build(Expr::Call { name, args, kwargs })?;
+                }
+                _ => break,
+            }
+        }
+        Ok(expr)
     }
 }
 
@@ -293,7 +377,7 @@ pub fn parse(source: &str) -> Result<Expr> {
         nodes: 0,
         nesting: 0,
     };
-    let expr = parser.parse_or()?;
+    let expr = parser.parse_conditional()?;
     if *parser.peek() != Tok::End {
         return fail("Unexpected trailing tokens in expression");
     }
@@ -308,10 +392,43 @@ pub fn infer(expr: &Expr, types: &BTreeMap<String, Kind>) -> Result<Kind> {
         }
         Expr::Bool(_) => Ok(Kind::Bool),
         Expr::Text(_) => Ok(Kind::Text),
-        Expr::Ident(name) => types
-            .get(name)
-            .copied()
-            .ok_or_else(|| Error(format!("Unknown identifier: {name}"))),
+        Expr::Ident(name) => {
+            let kind = types
+                .get(name)
+                .cloned()
+                .ok_or_else(|| Error(format!("Unknown identifier: {name}")))?;
+            if matches!(&kind, Kind::Record{name:record_name,..} if name==record_name)
+                || matches!(kind, Kind::Function { .. })
+            {
+                return fail("Constructor or pure function requires a call");
+            }
+            Ok(kind)
+        }
+        Expr::Conditional(test, yes, no) => {
+            if infer(test, types)? != Kind::Bool {
+                return fail("Conditional requires bool test");
+            }
+            let left = infer(yes, types)?;
+            if left != infer(no, types)? {
+                return fail("Conditional branches must match types");
+            }
+            Ok(left)
+        }
+        Expr::Attr(base, field) => {
+            let kind = infer(base, types)?;
+            if let Kind::Record { fields, .. } = kind {
+                fields
+                    .iter()
+                    .find(|(name, _)| name == field)
+                    .map(|(_, t)| t.clone())
+                    .ok_or_else(|| Error(format!("Unknown record field: {field}")))
+            } else {
+                fail("Record field access requires record value")
+            }
+        }
+        Expr::Call { name, args, kwargs } => {
+            crate::collections::infer_call(name, args, kwargs, types, &|e| infer(e, types))
+        }
         Expr::Unary(op, inner) => {
             if *op == Unary::Neg && matches!(inner.as_ref(), Expr::Int(2_147_483_648)) {
                 return Ok(Kind::Int);
@@ -358,6 +475,19 @@ fn as_bool(value: Value) -> Result<bool> {
 }
 
 pub fn evaluate(expr: &Expr, values: &State) -> Result<Value> {
+    evaluate_with(expr, values, &BTreeMap::new())
+}
+
+pub fn evaluate_with(expr: &Expr, values: &State, types: &BTreeMap<String, Kind>) -> Result<Value> {
+    evaluate_full(expr, values, types, &BTreeMap::new())
+}
+
+pub fn evaluate_full(
+    expr: &Expr,
+    values: &State,
+    types: &BTreeMap<String, Kind>,
+    functions: &BTreeMap<String, PureFunction>,
+) -> Result<Value> {
     match expr {
         Expr::Int(v) => Ok(Value::Int(check_i32(*v)?)),
         Expr::Bool(v) => Ok(Value::Bool(*v)),
@@ -366,28 +496,72 @@ pub fn evaluate(expr: &Expr, values: &State) -> Result<Value> {
             .get(name)
             .cloned()
             .ok_or_else(|| Error(format!("Unknown identifier: {name}"))),
+        Expr::Conditional(test, yes, no) => {
+            if evaluate_full(test, values, types, functions)? == Value::Bool(true) {
+                evaluate_full(yes, values, types, functions)
+            } else {
+                evaluate_full(no, values, types, functions)
+            }
+        }
+        Expr::Attr(base, field) => {
+            let record = evaluate_full(base, values, types, functions)?;
+            if let Value::Record { fields, .. } = record {
+                fields
+                    .get(field)
+                    .cloned()
+                    .ok_or_else(|| Error(format!("Unknown record field: {field}")))
+            } else {
+                fail("Expected record")
+            }
+        }
+        Expr::Call { name, args, kwargs } => {
+            if let Some(function) = functions.get(name) {
+                if !kwargs.is_empty() || args.len() != function.parameters.len() {
+                    return fail("Pure function argument count mismatch");
+                }
+                let mut params = State::new();
+                for ((key, expected), argument) in function.parameters.iter().zip(args.iter()) {
+                    let value = evaluate_full(argument, values, types, functions)?;
+                    crate::model::validate(&value, expected)?;
+                    params.insert(key.clone(), value);
+                }
+                let result = evaluate_full(&function.body, &params, types, functions)?;
+                crate::model::validate(&result, &function.result)?;
+                Ok(result)
+            } else {
+                crate::collections::evaluate_call(name, args, kwargs, types, functions, &|e| {
+                    evaluate_full(e, values, types, functions)
+                })
+            }
+        }
         Expr::Unary(Unary::Neg, inner) => {
             // Python AST folds this one valid i32 minimum literal.
             if matches!(inner.as_ref(), Expr::Int(2_147_483_648)) {
                 return Ok(Value::Int(i32::MIN));
             }
-            let v = as_int(evaluate(inner, values)?)?;
+            let v = as_int(evaluate_full(inner, values, types, functions)?)?;
             Ok(Value::Int(v.checked_neg().ok_or_else(|| {
                 Error("Integer overflow: outside signed 32-bit range".into())
             })?))
         }
-        Expr::Unary(Unary::Not, inner) => Ok(Value::Bool(!as_bool(evaluate(inner, values)?)?)),
+        Expr::Unary(Unary::Not, inner) => Ok(Value::Bool(!as_bool(evaluate_full(
+            inner, values, types, functions,
+        )?)?)),
         Expr::Binary(Binary::And, left, right) => {
-            let a = as_bool(evaluate(left, values)?)?;
-            Ok(Value::Bool(a && as_bool(evaluate(right, values)?)?))
+            let a = as_bool(evaluate_full(left, values, types, functions)?)?;
+            Ok(Value::Bool(
+                a && as_bool(evaluate_full(right, values, types, functions)?)?,
+            ))
         }
         Expr::Binary(Binary::Or, left, right) => {
-            let a = as_bool(evaluate(left, values)?)?;
-            Ok(Value::Bool(a || as_bool(evaluate(right, values)?)?))
+            let a = as_bool(evaluate_full(left, values, types, functions)?)?;
+            Ok(Value::Bool(
+                a || as_bool(evaluate_full(right, values, types, functions)?)?,
+            ))
         }
         Expr::Binary(op, left, right) => {
-            let a = evaluate(left, values)?;
-            let b = evaluate(right, values)?;
+            let a = evaluate_full(left, values, types, functions)?;
+            let b = evaluate_full(right, values, types, functions)?;
             let result = match op {
                 Binary::Eq => return Ok(Value::Bool(a == b)),
                 Binary::Ne => return Ok(Value::Bool(a != b)),
@@ -449,7 +623,7 @@ mod tests {
 
     #[test]
     fn rejects_unsafe_syntax() {
-        for expr in ["eval('x')", "a.b", "a[0]", "1 / 0", "1 == 1 == 1", "x = 2"] {
+        for expr in ["eval('x')", "a[0]", "1 / 0", "1 == 1 == 1", "x = 2"] {
             assert!(parse(expr).is_err(), "accepted {expr}");
         }
     }

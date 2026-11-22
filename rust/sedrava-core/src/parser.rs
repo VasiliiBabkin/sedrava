@@ -5,8 +5,9 @@
 
 use crate::expr;
 use crate::model::{
-    fail, EmbeddedTest, Error, Expr, Kind, Program, Result, State, Stmt, Value, MAX_ACTION_STEPS,
-    MAX_BLOCK_DEPTH, MAX_SOURCE_CHARS,
+    fail, EmbeddedTest, Error, Expr, Kind, Navigation, Program, PureFunction, Result, Screen,
+    State, Stmt, Value, MAX_ACTION_STEPS, MAX_BLOCK_DEPTH, MAX_COLLECTIONS, MAX_RECORDS,
+    MAX_SOURCE_CHARS,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -207,7 +208,7 @@ fn parse_block(
             };
             body.push(Stmt::Assign(
                 name.to_string(),
-                require_type(value, &scope, *kind, number)?,
+                require_type(value, &scope, kind.clone(), number)?,
             ));
         } else {
             return line_error(number, "Unsupported statement in native core");
@@ -215,6 +216,37 @@ fn parse_block(
         *pos += 1;
     }
     Ok(body)
+}
+
+fn portable_type(raw: &str, types: &BTreeMap<String, Kind>) -> Result<Kind> {
+    match raw {
+        "int" => return Ok(Kind::Int),
+        "bool" => return Ok(Kind::Bool),
+        "text" => return Ok(Kind::Text),
+        _ => {}
+    }
+    if let Some(kind @ Kind::Record { .. }) = types.get(raw) {
+        return Ok(kind.clone());
+    }
+    if let Some(spec) = raw.strip_prefix("list<") {
+        let Some((name, capacity)) = spec.split_once(">(max=") else {
+            return fail("Invalid bounded list function type");
+        };
+        let cap = capacity
+            .strip_suffix(')')
+            .and_then(|n| n.parse::<usize>().ok())
+            .ok_or_else(|| Error("Invalid list capacity".into()))?;
+        if !(1..=100).contains(&cap) {
+            return fail("Function list capacity must be 1..100");
+        }
+        if let Some(record @ Kind::Record { .. }) = types.get(name) {
+            return Ok(Kind::List {
+                record: Box::new(record.clone()),
+                capacity: cap,
+            });
+        }
+    }
+    fail(format!("Unknown function type: {raw}"))
 }
 
 fn parse_widget(
@@ -227,12 +259,70 @@ fn parse_widget(
     if let Some(label) = text.strip_prefix("text ") {
         parse_label(label, number)?;
     } else if let Some(name) = text.strip_prefix("value ") {
-        if !types.contains_key(name) {
-            return line_error(number, "Unknown value state or derive");
+        if !matches!(
+            types.get(name),
+            Some(Kind::Int) | Some(Kind::Text) | Some(Kind::Bool)
+        ) {
+            return line_error(number, "Value requires scalar state or derive");
         }
-    } else if let Some(name) = text.strip_prefix("input ") {
+    } else if let Some(rest) = text.strip_prefix("list ") {
+        let tokens: Vec<&str> = rest.split_whitespace().collect();
+        if tokens.len() < 3 || tokens[1] != "select" {
+            return line_error(number, "Expected list collection select state");
+        }
+        let Some(Kind::List { record, .. }) = types.get(tokens[0]) else {
+            return line_error(number, "List widget requires declared collection");
+        };
+        if !matches!(states.get(tokens[2]), Some(Value::Int(_))) {
+            return line_error(number, "List selection must be int state");
+        }
+        let mut pos = 3;
+        let mut action = None;
+        while pos < tokens.len() {
+            if pos + 1 >= tokens.len() {
+                return line_error(number, "Invalid list widget option");
+            }
+            match tokens[pos] {
+                "open" => {
+                    action = Some(tokens[pos + 1].to_owned());
+                }
+                "title" | "status" => {
+                    let required = if tokens[pos] == "title" {
+                        Kind::Text
+                    } else {
+                        Kind::Bool
+                    };
+                    let Kind::Record { fields, .. } = record.as_ref() else {
+                        return line_error(number, "List rows must be records");
+                    };
+                    if !fields
+                        .iter()
+                        .any(|(f, k)| f == tokens[pos + 1] && *k == required)
+                    {
+                        return line_error(number, "List title/status record field mismatch");
+                    }
+                }
+                _ => return line_error(number, "Unsupported list widget option"),
+            }
+            pos += 2;
+        }
+        return Ok(action);
+    } else if let Some(rest) = text.strip_prefix("display ") {
+        let (_, kind) = checked_expression(rest, types, number)?;
+        if !matches!(kind, Kind::Int | Kind::Bool | Kind::Text) {
+            return line_error(number, "Display requires scalar expression");
+        }
+    } else if let Some(rest) = text.strip_prefix("input ") {
+        let (name, label) = if let Some((name, label)) = rest.split_once(" label ") {
+            (name, Some(label))
+        } else {
+            (rest, None)
+        };
         if !matches!(states.get(name), Some(Value::Int(_)) | Some(Value::Text(_))) {
             return line_error(number, "Input requires int or text state");
+        }
+        if let Some(label) = label {
+            parse_label(label, number)?;
         }
     } else if let Some(rest) = text.strip_prefix("show ") {
         let Some((key, label)) = rest.split_once(" : text ") else {
@@ -257,21 +347,24 @@ fn parse_widget(
     Ok(None)
 }
 
-/// Parse scalar app semantics, including states, derives, rules, actions, tests
-/// and simple screens. Records, collections, nav and site/webapp are NOT supported.
+/// Parse supported app semantics including typed records/lists, functions,
+/// rules, actions, tests and navigation. Site/WebApp DSL is NOT supported.
 pub fn parse(source: &str) -> Result<Program> {
     let mut lines = source_lines(source)?;
     let mut name: Option<String> = None;
     let mut states = State::new();
     let mut types = BTreeMap::new();
     let mut derives = Vec::new();
+    let mut functions = BTreeMap::new();
     let mut actions = BTreeMap::new();
     let mut rules = Vec::new();
     let mut tests = Vec::new();
     let mut persisted = BTreeSet::new();
-    let mut widgets_actions = Vec::new();
+    let mut screens = BTreeMap::new();
+    let mut navigation = BTreeMap::new();
+    let mut initial_screen: Option<String> = None;
+    let mut navigation_seen = false;
     let mut seen_action_or_after = false;
-    let mut seen_screen = false;
     let mut i = 0;
 
     while i < lines.len() {
@@ -289,7 +382,194 @@ pub fn parse(source: &str) -> Result<Program> {
                 return line_error(current.number, "Empty app name");
             }
             name = Some(title);
+        } else if let Some(rest) = text.strip_prefix("record ") {
+            if seen_action_or_after
+                || !states.is_empty()
+                || types
+                    .values()
+                    .filter(|x| matches!(x, Kind::Record { .. }))
+                    .count()
+                    >= MAX_RECORDS
+            {
+                return line_error(
+                    current.number,
+                    "Record declarations must precede states/actions",
+                );
+            }
+            let Some(record_name) = rest.strip_suffix(':') else {
+                return line_error(current.number, "Expected record name:");
+            };
+            if !is_identifier(record_name) || types.contains_key(record_name) {
+                return line_error(current.number, "Invalid record name");
+            }
+            i += 1;
+            let mut fields = Vec::new();
+            while i < lines.len() && lines[i].indent > 0 {
+                let field = &lines[i];
+                if field.indent != 4 {
+                    return line_error(field.number, "Record field indentation must be 4");
+                }
+                let Some((name, raw_type)) = field.content.split_once(": ") else {
+                    return line_error(field.number, "Expected record field: type");
+                };
+                if !is_identifier(name) || name == "id" || fields.iter().any(|(n, _)| n == name) {
+                    return line_error(field.number, "Invalid or duplicate record field");
+                }
+                let kind = match raw_type {
+                    "int" => Kind::Int,
+                    "bool" => Kind::Bool,
+                    "text" => Kind::Text,
+                    _ => return line_error(field.number, "Record fields must be int/bool/text"),
+                };
+                fields.push((name.to_owned(), kind));
+                i += 1;
+            }
+            if fields.is_empty() || fields.len() > 16 {
+                return line_error(current.number, "Record must have 1..16 fields");
+            }
+            types.insert(
+                record_name.to_string(),
+                Kind::Record {
+                    name: record_name.to_string(),
+                    fields,
+                },
+            );
+            continue;
+        } else if let Some(rest) = text.strip_prefix("fn ") {
+            if seen_action_or_after || !states.is_empty() || functions.len() >= 32 {
+                return line_error(current.number, "Pure functions must precede states/actions");
+            }
+            let Some((signature, expression)) = rest.split_once(" = ") else {
+                return line_error(current.number, "Expected function body after =");
+            };
+            let Some((declaration, returns)) = signature.split_once(" -> ") else {
+                return line_error(current.number, "Function requires explicit return type");
+            };
+            let Some((name, args)) = declaration.split_once('(') else {
+                return line_error(current.number, "Function requires parameter list");
+            };
+            let Some(args) = args.strip_suffix(')') else {
+                return line_error(current.number, "Unclosed function parameters");
+            };
+            if !is_identifier(name)
+                || types.contains_key(name)
+                || crate::stdlib::signature(name).is_some()
+                || matches!(
+                    name,
+                    "append"
+                        | "update"
+                        | "remove"
+                        | "get"
+                        | "has"
+                        | "count"
+                        | "next_id"
+                        | "filter"
+                        | "map"
+                        | "find"
+                        | "any"
+                        | "all"
+                        | "sort"
+                        | "sum"
+                )
+            {
+                return line_error(current.number, "Duplicate or reserved pure function");
+            }
+            let mut parameters = Vec::new();
+            let mut scope = types.clone();
+            if !args.trim().is_empty() {
+                for raw in args.split(',') {
+                    let Some((param_name, raw_type)) = raw.trim().split_once(": ") else {
+                        return line_error(current.number, "Invalid function parameter");
+                    };
+                    if !is_identifier(param_name)
+                        || scope.contains_key(param_name)
+                        || parameters.iter().any(|(key, _)| key == param_name)
+                    {
+                        return line_error(current.number, "Duplicate or reserved parameter");
+                    }
+                    let kind = portable_type(raw_type.trim(), &types)
+                        .map_err(|e| Error(format!("Line {}: {e}", current.number)))?;
+                    scope.insert(param_name.into(), kind.clone());
+                    parameters.push((param_name.into(), kind));
+                }
+            }
+            if parameters.len() > 8 {
+                return line_error(current.number, "Function parameter limit exceeded");
+            }
+            let result_kind = portable_type(returns.trim(), &types)
+                .map_err(|e| Error(format!("Line {}: {e}", current.number)))?;
+            let body = require_type(
+                expression.trim(),
+                &scope,
+                result_kind.clone(),
+                current.number,
+            )?;
+            let kind = Kind::Function {
+                parameters: parameters.iter().map(|(_, v)| v.clone()).collect(),
+                result: Box::new(result_kind.clone()),
+            };
+            functions.insert(
+                name.into(),
+                PureFunction {
+                    name: name.into(),
+                    parameters,
+                    result: result_kind,
+                    body,
+                },
+            );
+            types.insert(name.into(), kind);
         } else if let Some(rest) = text.strip_prefix("state ") {
+            if rest.contains(": list<") {
+                if seen_action_or_after {
+                    return line_error(current.number, "States must precede actions and rules");
+                }
+                let Some((key, spec)) = rest.split_once(": list<") else {
+                    return line_error(current.number, "Invalid bounded list state");
+                };
+                let Some((record_name, after)) = spec.split_once(">(max=") else {
+                    return line_error(current.number, "Bounded list requires max=...");
+                };
+                let Some(cap) = after
+                    .strip_suffix(") = []")
+                    .and_then(|raw| raw.parse::<usize>().ok())
+                else {
+                    return line_error(current.number, "Bounded list requires empty initial list");
+                };
+                if !is_identifier(key)
+                    || types.contains_key(key)
+                    || cap == 0
+                    || cap > 100
+                    || states
+                        .values()
+                        .filter(|x| matches!(x, Value::List { .. }))
+                        .count()
+                        >= MAX_COLLECTIONS
+                {
+                    return line_error(
+                        current.number,
+                        "Invalid or duplicate collection declaration",
+                    );
+                }
+                let Some(record @ Kind::Record { .. }) = types.get(record_name) else {
+                    return line_error(current.number, "Unknown declared record type");
+                };
+                let kind = Kind::List {
+                    record: Box::new(record.clone()),
+                    capacity: cap,
+                };
+                states.insert(
+                    key.to_string(),
+                    Value::List {
+                        kind: kind.clone(),
+                        items: vec![],
+                        next_id: 1,
+                    },
+                );
+                types.insert(key.to_string(), kind);
+                i += 1;
+                continue;
+            }
+
             if seen_action_or_after {
                 return line_error(current.number, "States must precede actions and rules");
             }
@@ -385,30 +665,117 @@ pub fn parse(source: &str) -> Result<Program> {
                     .collect(),
                 expected: require_type(condition.trim(), &types, Kind::Bool, current.number)?,
             });
-        } else if text == "screen main:" {
+        } else if let Some(rest) = text.strip_prefix("screen ") {
             seen_action_or_after = true;
-            if seen_screen {
-                return line_error(current.number, "Duplicate screen main");
+            let Some(decl) = rest.strip_suffix(':') else {
+                return line_error(current.number, "Screen requires a trailing colon");
+            };
+            let (screen_name, guard) = if let Some((name, guard)) = decl.split_once(" when ") {
+                (
+                    name,
+                    Some(require_type(guard, &types, Kind::Bool, current.number)?),
+                )
+            } else {
+                (decl, None)
+            };
+            if !is_identifier(screen_name)
+                || screens.contains_key(screen_name)
+                || screens.len() >= 32
+            {
+                return line_error(current.number, "Duplicate or invalid screen");
             }
-            seen_screen = true;
             i += 1;
             if i >= lines.len() || lines[i].indent == 0 {
                 return line_error(current.number, "Empty screen");
             }
             let widget_indent = lines[i].indent;
+            let mut commands = Vec::new();
+            let mut requires_navigation = false;
             let mut count = 0;
             while i < lines.len() && lines[i].indent != 0 {
                 if lines[i].indent != widget_indent {
                     return line_error(lines[i].number, "Invalid widget indentation");
                 }
+                let widget = &lines[i].content;
+                if widget.starts_with("display ")
+                    || (widget.starts_with("input ") && widget.contains(" label "))
+                    || (widget.starts_with("list ") && widget.contains(" open "))
+                {
+                    requires_navigation = true;
+                }
                 if let Some(action) = parse_widget(&lines[i], &types, &states)? {
-                    widgets_actions.push(action);
+                    commands.push(action);
                 }
                 count += 1;
                 i += 1;
             }
             if count == 0 {
                 return line_error(current.number, "Empty screen");
+            }
+            screens.insert(
+                screen_name.to_owned(),
+                Screen {
+                    name: screen_name.to_owned(),
+                    guard,
+                    commands,
+                    requires_navigation,
+                },
+            );
+            continue;
+        } else if text == "navigation:" {
+            seen_action_or_after = true;
+            if navigation_seen {
+                return line_error(current.number, "Duplicate navigation block");
+            }
+            navigation_seen = true;
+            i += 1;
+            while i < lines.len() && lines[i].indent > 0 {
+                let next = &lines[i];
+                if next.indent != 4 {
+                    return line_error(next.number, "Navigation indentation must be four spaces");
+                }
+                if let Some(name) = next.content.strip_prefix("initial ") {
+                    if initial_screen.is_some() || !is_identifier(name) {
+                        return line_error(
+                            next.number,
+                            "Duplicate or invalid navigation initial screen",
+                        );
+                    }
+                    initial_screen = Some(name.into());
+                } else if let Some(rest) = next.content.strip_prefix("action ") {
+                    let Some((command, destination)) = rest.split_once(" -> ") else {
+                        return line_error(next.number, "Navigation command requires target");
+                    };
+                    let (target, action) =
+                        if let Some((target, action)) = destination.split_once(" using ") {
+                            (target, Some(action.to_string()))
+                        } else {
+                            (destination, None)
+                        };
+                    if !is_identifier(command)
+                        || !is_identifier(target)
+                        || navigation.len() >= 64
+                        || navigation.contains_key(command)
+                    {
+                        return line_error(next.number, "Invalid/duplicate navigation command");
+                    }
+                    if let Some(ref action) = action {
+                        if !is_identifier(action) {
+                            return line_error(next.number, "Invalid action");
+                        }
+                    }
+                    navigation.insert(
+                        command.into(),
+                        Navigation {
+                            name: command.into(),
+                            target: target.into(),
+                            action,
+                        },
+                    );
+                } else {
+                    return line_error(next.number, "Unknown navigation declaration");
+                }
+                i += 1;
             }
             continue;
         } else {
@@ -423,16 +790,93 @@ pub fn parse(source: &str) -> Result<Program> {
     let Some(name) = name else {
         return fail("Missing app");
     };
-    for test in &tests {
-        for action in &test.actions {
+    let has_navigation = navigation_seen || screens.len() > 1;
+    let initial = if has_navigation {
+        if !navigation_seen {
+            return fail("Multiple screens require navigation block");
+        }
+        let name =
+            initial_screen.ok_or_else(|| Error("Navigation requires initial screen".into()))?;
+        let Some(screen) = screens.get(&name) else {
+            return fail("Unknown initial screen");
+        };
+        if screen.guard.is_some() {
+            return fail("Initial screen must be unguarded");
+        }
+        name
+    } else {
+        if screens.keys().any(|key| key != "main") {
+            return fail("Non-main screen requires navigation");
+        }
+        if screens
+            .values()
+            .any(|screen| screen.guard.is_some() || screen.requires_navigation)
+        {
+            return fail("Extended widgets or guarded screen require navigation");
+        }
+        "main".into()
+    };
+    for (name, binding) in &navigation {
+        if types.contains_key(name) || actions.contains_key(name) || screens.contains_key(name) {
+            return fail(format!("Navigation name conflict: {name}"));
+        }
+        if binding.target != "pop" && !screens.contains_key(&binding.target) {
+            return fail(format!("Unknown navigation target: {}", binding.target));
+        }
+        if let Some(action) = &binding.action {
             if !actions.contains_key(action) {
-                return fail(format!("Unknown test action: {action}"));
+                return fail(format!("Unknown domain action: {action}"));
             }
         }
     }
-    for action in widgets_actions {
-        if !actions.contains_key(&action) {
-            return fail(format!("Unknown button action: {action}"));
+    let mut referenced = BTreeSet::new();
+    let mut reachable = BTreeSet::from([initial.clone()]);
+    let mut edges: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    for (name, screen) in &screens {
+        for command in &screen.commands {
+            if !actions.contains_key(command) && !navigation.contains_key(command) {
+                return fail(format!("Unknown screen command: {command}"));
+            }
+            if let Some(binding) = navigation.get(command) {
+                referenced.insert(command.clone());
+                if binding.target != "pop" {
+                    edges
+                        .entry(name.clone())
+                        .or_default()
+                        .insert(binding.target.clone());
+                }
+            }
+        }
+    }
+    for name in navigation.keys() {
+        if !referenced.contains(name) {
+            return fail(format!("Unreachable navigation binding: {name}"));
+        }
+    }
+    if has_navigation {
+        loop {
+            let old = reachable.len();
+            let known: Vec<String> = reachable.iter().cloned().collect();
+            for name in known {
+                if let Some(targets) = edges.get(&name) {
+                    reachable.extend(targets.iter().cloned());
+                }
+            }
+            if old == reachable.len() {
+                break;
+            }
+        }
+        for name in screens.keys() {
+            if !reachable.contains(name) {
+                return fail(format!("Unreachable screen: {name}"));
+            }
+        }
+    }
+    for test in &tests {
+        for action in &test.actions {
+            if !actions.contains_key(action) && !navigation.contains_key(action) {
+                return fail(format!("Unknown test action: {action}"));
+            }
         }
     }
     let program = Program {
@@ -440,9 +884,14 @@ pub fn parse(source: &str) -> Result<Program> {
         states,
         types,
         derives,
+        functions,
         actions,
         rules,
         tests,
+        screens,
+        navigation,
+        initial_screen: initial,
+        has_navigation,
     };
     let initial = crate::runtime::resolve(&program, &program.states)?;
     if !crate::runtime::rules_hold(&program, &initial)? {
@@ -468,7 +917,7 @@ mod tests {
 
     #[test]
     fn unsupported_features_and_bad_types_fail_loudly() {
-        assert!(parse("app \"X\"\nrecord Task:\n    title: text").is_err());
+        assert!(parse("app \"X\"\nrecord Task:\n    id: text").is_err());
         assert!(parse("app \"X\"\nstate a = 1\nrule a").is_err());
         assert!(parse("app \"X\"\nstate a = 1\naction up: a = \"wrong\"").is_err());
     }

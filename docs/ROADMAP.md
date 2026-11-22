@@ -2,6 +2,9 @@
 
 ## Native Rust Core / Экспериментальный перенос ядра
 
+**Current detailed coverage:** [full migration status and release gates](RUST_FULL_MIGRATION.ru.md). The experimental native core now also implements records, bounded lists, pure functions, queries, scalar stdlib and navigation; Web/Android generators, modules, Host effects and persistence still use Python.
+
+
 - Отдельная ветка: experiment/rust-core-migration.
 - Реализовано самостоятельное Rust-ядро для ограниченного набора скалярных
   .sdr-программ (парсер, проверка типов, интерпретатор, CLI).

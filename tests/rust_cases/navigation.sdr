@@ -1,0 +1,22 @@
+app "Navigation state machine"
+state count = 0
+state flag = true
+derive may_open = flag and count < 3
+action step: count = count + 1
+action disable: flag = false
+rule count >= 0 and count <= 3
+test visit: open, back -> count == 1
+test back_root: back -> count == 0
+screen main:
+    text "Main"
+    button "Open" -> open
+    button "Disable" -> disable
+screen details when may_open:
+    text "Details"
+    display count
+    button "Back" -> back
+    button "Step" -> step
+navigation:
+    initial main
+    action open -> details using step
+    action back -> pop
