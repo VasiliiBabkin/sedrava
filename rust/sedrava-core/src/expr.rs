@@ -145,6 +145,7 @@ struct Parser {
     tokens: Vec<Tok>,
     pos: usize,
     nodes: usize,
+    nesting: usize,
 }
 
 impl Parser {
@@ -158,6 +159,17 @@ impl Parser {
 
     fn peek(&self) -> &Tok {
         &self.tokens[self.pos]
+    }
+
+    fn nested(&mut self, parse: impl FnOnce(&mut Self) -> Result<Expr>) -> Result<Expr> {
+        const MAX_NESTING: usize = 64;
+        if self.nesting >= MAX_NESTING {
+            return fail("Expression nesting limit exceeded");
+        }
+        self.nesting += 1;
+        let result = parse(self);
+        self.nesting -= 1;
+        result
     }
 
     fn build(&mut self, expr: Expr) -> Result<Expr> {
@@ -191,7 +203,7 @@ impl Parser {
     fn parse_not(&mut self) -> Result<Expr> {
         if *self.peek() == Tok::Not {
             self.next();
-            let inner = self.parse_not()?;
+            let inner = self.nested(|parser| parser.parse_not())?;
             self.build(Expr::Unary(Unary::Not, Box::new(inner)))
         } else {
             self.parse_compare()
@@ -246,7 +258,7 @@ impl Parser {
     fn parse_neg(&mut self) -> Result<Expr> {
         if *self.peek() == Tok::Minus {
             self.next();
-            let inner = self.parse_neg()?;
+            let inner = self.nested(|parser| parser.parse_neg())?;
             self.build(Expr::Unary(Unary::Neg, Box::new(inner)))
         } else {
             self.parse_atom()
@@ -261,7 +273,7 @@ impl Parser {
             Tok::Id(s) if s == "false" || s == "False" => Expr::Bool(false),
             Tok::Id(s) => Expr::Ident(s),
             Tok::LParen => {
-                let inner = self.parse_or()?;
+                let inner = self.nested(|parser| parser.parse_or())?;
                 if self.next() != Tok::RParen {
                     return fail("Unclosed expression parenthesis");
                 }
@@ -279,6 +291,7 @@ pub fn parse(source: &str) -> Result<Expr> {
         tokens: lex(source)?,
         pos: 0,
         nodes: 0,
+        nesting: 0,
     };
     let expr = parser.parse_or()?;
     if *parser.peek() != Tok::End {
@@ -424,6 +437,14 @@ mod tests {
         assert!(parse(&format!("{max:?}")).is_ok());
         let too_long = "😀".repeat(1025);
         assert!(parse(&format!("{too_long:?}")).is_err());
+    }
+
+    #[test]
+    fn rejects_excessive_recursive_nesting() {
+        let nested = format!("{}1{}", "(".repeat(1000), ")".repeat(1000));
+        assert!(parse(&nested).is_err());
+        assert!(parse(&format!("{}true", "not ".repeat(1000))).is_err());
+        assert!(parse(&format!("{}1", "-".repeat(1000))).is_err());
     }
 
     #[test]
