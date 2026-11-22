@@ -566,6 +566,20 @@ pub fn parse(source: &str) -> Result<Program> {
             if parameters.len() > 8 {
                 return line_error(current.number, "Function parameter limit exceeded");
             }
+            let (returns, declared_effects) =
+                if let Some(kind) = returns.strip_suffix(" effects pure") {
+                    if kind.is_empty() || kind.contains(" effects ") {
+                        return line_error(current.number, "Malformed effects pure annotation");
+                    }
+                    (kind, Some(BTreeSet::new()))
+                } else if returns.contains(" effects") {
+                    return line_error(
+                        current.number,
+                        "Only effects pure is supported for functions",
+                    );
+                } else {
+                    (returns, None)
+                };
             let result_kind = portable_type(returns.trim(), &types)
                 .map_err(|e| Error(format!("Line {}: {e}", current.number)))?;
             let body = require_type(
@@ -592,6 +606,7 @@ pub fn parse(source: &str) -> Result<Program> {
                     parameters,
                     result: result_kind,
                     body,
+                    declared_effects,
                 },
             );
             types.insert(name.into(), kind);
@@ -1027,6 +1042,9 @@ pub fn parse(source: &str) -> Result<Program> {
         initial_screen: initial,
         has_navigation,
     };
+    // A1: audit the typed function domain before any backend can consume it.
+    // The result is NOT a grant of filesystem/network privileges.
+    crate::effects::infer_program(&program)?;
     let initial = crate::runtime::resolve(&program, &program.states)?;
     if !crate::runtime::rules_hold(&program, &initial)? {
         return fail("Invalid initial state");

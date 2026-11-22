@@ -1,0 +1,8 @@
+app "Native A1 checked effects"
+fn increment(x: int) -> int effects pure = x + 1
+fn double_step(y: int) -> int = increment(increment(y))
+state count = 0
+action advance: count = double_step(count)
+screen main:
+    value count
+test advanced: advance -> count == 2

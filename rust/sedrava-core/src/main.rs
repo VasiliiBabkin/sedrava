@@ -18,6 +18,7 @@ fn usage() {
            sedrava-native lock DIR\n           sedrava-native verify DIR\n           sedrava-native host check FILE
            sedrava-native host run FILE --root DIR --trusted [--allow-read] [--allow-write]
            sedrava-native check FILE\n\
+           sedrava-native effects FILE [--target app|web|android]\n\
            sedrava-native test FILE\n\
            sedrava-native run FILE [ACTION ...] [--state-file PATH]\n\
            sedrava-native inspect FILE
@@ -250,6 +251,33 @@ fn run() -> Result<()> {
             let paths = sedrava_core::packages::verify(root)?;
             println!("Verified lock: {} pinned files", paths.len());
         }
+        return Ok(());
+    }
+    if command == "effects" {
+        let target = match args.as_slice() {
+            [_, _, _, flag, target] if flag == "--target" => target.as_str(),
+            [_, _, _] => "app",
+            _ => {
+                return Err(Error(
+                    "Expected effects FILE [--target app|web|android]".into(),
+                ))
+            }
+        };
+        if !matches!(target, "app" | "web" | "android") {
+            return Err(Error(
+                "Unsupported effects CLI target (app|web|android)".into(),
+            ));
+        }
+        let source = Path::new(&args[2]);
+        // Import expansion and locked-vendor SHA verification precede hashing.
+        let expanded = sedrava_core::modules::expand_local_imports(source)?;
+        // Python 0.12 canonical app-domain expansion terminates with one LF.
+        // Keep this behavior for byte-identical source_sha256 manifests without
+        // altering legacy Rust module expansion used by other commands.
+        let canonical = format!("{}\n", expanded.source.trim_end_matches('\n'));
+        let checked = parse(&canonical)?;
+        let manifest = sedrava_core::effects::manifest(&checked, &canonical, target)?;
+        println!("{}", sedrava_core::effects::canonical_json(&manifest)?);
         return Ok(());
     }
     let is_build = command == "build";
