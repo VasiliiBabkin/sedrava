@@ -191,18 +191,44 @@ action fallback:''','''action fallback:''',1),
         assert hostile not in html, "Raw untrusted markup inserted into HTML"
         src.write_text(source,encoding="utf-8")
 
-        # Android must fail rather than generate a semantically invalid APK.
+        # Flat imports can carry nominal user errors, but require an explicit
+        # stable ID instead of implicitly assigning the entry app identity.
+        imported=ROOT/"examples/native_typed_errors_modules/main.sdr"
+        for compiler in ([NATIVE],):
+            run(compiler,"check",imported,ok=True)
+            run(compiler,"test",imported,ok=True)
+        imported_out=folder/"imported-android"
+        run([NATIVE],"build","android",imported,"--output",imported_out,
+            "--application-id","org.sedrava.importedresult",ok=True)
+        imported_program=(imported_out/
+            "app/src/main/java/org/sedrava/importedresult/Program.kt")
+        assert "example.parse.ParseFault" in imported_program.read_text(encoding="utf8")
+        (folder/"errors.sdr").write_text(
+            'error closed ErrorWithoutStableId:\n    Invalid:\n',encoding="utf8")
+        (folder/"bad-import.sdr").write_text(
+            'app "Negative"\nimport "errors.sdr"\nstate count = 0\n',encoding="utf8")
+        run([NATIVE],"check",folder/"bad-import.sdr",ok=False)
+
+        # Native Kotlin codegen now supports typed Result and action match.
+        # Full Android compilation and execution are covered separately.
         output=folder/"android"
         run([NATIVE],"build","android",src,"--output",output,
-            "--application-id","org.sedrava.typederrors",ok=False)
-        assert not output.exists()
+            "--application-id","org.sedrava.typederrors",ok=True)
+        kotlin=output/"app/src/main/java/org/sedrava/typederrors/Program.kt"
+        assert kotlin.is_file()
+        raw=kotlin.read_text(encoding="utf-8")
+        for token in ("SdrResult.Success","SdrResult.Failure",
+                      "nominalError(","match_","SdrType.Result("):
+            assert token in raw,token
 
     print("PASS: native Core typed-error Result/match + Web Node execution")
     print("PASS: 6 accepted action sequences and 22 negative source cases")
     print("PASS: overload/field/variant/exhaustiveness and overflow rejection")
     if py:
         print("PASS: same acceptance/full state vs Python 0.12 PR #56")
-    print("LIMIT: Android typed Result backend, legacy try_* and imported errors still pending")
+    print("PASS: Android typed Result/match Kotlin generation (compiled JVM separately)")
+    print("PASS: flat nominal-error imports require explicit IDs and compile to Android")
+    print("LIMIT: legacy try_* and namespace aliases remain separate work")
 
 
 if __name__=="__main__":

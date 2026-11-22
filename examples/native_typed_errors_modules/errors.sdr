@@ -1,0 +1,4 @@
+error closed ParseFault id "example.parse.ParseFault":
+    InvalidValue:
+        supplied: int
+fn parse_number(x: int) -> Result<int, ParseFault> effects pure = Ok(x) if x >= 0 else Err(ParseFault.InvalidValue(supplied=x))

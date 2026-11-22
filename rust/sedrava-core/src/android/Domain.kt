@@ -9,6 +9,35 @@ internal sealed interface SdrType {
     data object Text : SdrType
     data class Record(val name: String) : SdrType
     data class Collection(val record: String, val capacity: Int) : SdrType
+    data class Error(val name: String) : SdrType
+    data class Result(val success: SdrType, val error: SdrType) : SdrType
+}
+
+internal data class SdrError(
+    val family: String,
+    val id: String,
+    val variant: String,
+    val fields: Map<String, Any>,
+)
+
+internal sealed interface SdrResult {
+    data class Success(val value: Any) : SdrResult
+    data class Failure(val error: SdrError) : SdrResult
+}
+
+internal data class ErrorFamily(
+    val id: String,
+    val variants: Map<String, Map<String, SdrType>>,
+)
+
+// The generator supplies nominal families from the checked Rust program IR.
+// No dynamic decoding from untrusted strings and no throwable EngineError adapter.
+internal fun nominalError(family: String, variant: String, fields: Map<String, Any>): SdrError {
+    val schema = errorTypes[family]
+        ?: throw IllegalArgumentException("Unknown nominal error family")
+    val value = SdrError(family, schema.id + "." + variant, variant, fields.toMap())
+    checkValue(value, SdrType.Error(family))
+    return value
 }
 
 internal data class SdrRecord(val type: String, val fields: Map<String, Any>)
@@ -53,6 +82,23 @@ internal fun checkValue(value: Any, type: SdrType): Any {
             for (row in value.rows) {
                 require(row.id in 1 until value.nextId && ids.add(row.id))
                 checkValue(row.record, SdrType.Record(type.record))
+            }
+        }
+        is SdrType.Error -> {
+            require(value is SdrError && value.family == type.name)
+            val family = errorTypes[type.name]
+                ?: throw IllegalArgumentException("Unknown nominal error family")
+            require(value.id == family.id + "." + value.variant)
+            val fields = family.variants[value.variant]
+                ?: throw IllegalArgumentException("Unknown nominal error variant")
+            require(value.fields.keys == fields.keys)
+            for ((name, fieldType) in fields) checkValue(value.fields.getValue(name), fieldType)
+        }
+        is SdrType.Result -> {
+            require(value is SdrResult)
+            when(value) {
+                is SdrResult.Success -> checkValue(value.value, type.success)
+                is SdrResult.Failure -> checkValue(value.error, type.error)
             }
         }
     }

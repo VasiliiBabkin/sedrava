@@ -13,9 +13,8 @@ fn kotlin_type(kind: &Kind) -> Result<&'static str> {
         Kind::Record { .. } => Ok("SdrRecord"),
         Kind::List { .. } => Ok("SdrList"),
         Kind::Function { .. } => fail("Android cannot use a function as a value"),
-        Kind::Error { .. } | Kind::Result { .. } => {
-            fail("Android typed Result/match backend requires native completion")
-        }
+        Kind::Error { .. } => Ok("SdrError"),
+        Kind::Result { .. } => Ok("SdrResult"),
     }
 }
 
@@ -32,8 +31,9 @@ fn spec(kind: &Kind) -> Result<String> {
             format!("SdrType.Collection({}, {capacity})", quote(name))
         }
         Kind::Function { .. } => return fail("No runtime value type for function"),
-        Kind::Error { .. } | Kind::Result { .. } => {
-            return fail("Android typed Result backend not implemented")
+        Kind::Error { name, .. } => format!("SdrType.Error({})", quote(name)),
+        Kind::Result { success, error } => {
+            format!("SdrType.Result({}, {})", spec(success)?, spec(error)?)
         }
     })
 }
@@ -145,6 +145,32 @@ fn emit(expr: &Expr, types: &Types, locals: &Names, receiver: &str) -> Result<St
                     .collect::<Result<Vec<_>>>()?
                     .join(", ");
                 format!("record({}, mapOf({fields}))", quote(name))
+            } else if let Some((family, variant)) = name.split_once('.') {
+                let Some(Kind::Error { variants, .. }) = types.get(family) else {
+                    return fail("Android: unresolved nominal error family");
+                };
+                let Some((_, schema)) = variants.iter().find(|(key, _)| key == variant) else {
+                    return fail("Android: unresolved nominal error variant");
+                };
+                if !args.is_empty() || kwargs.len() != schema.len() {
+                    return fail("Android: invalid error constructor");
+                }
+                let payload = schema
+                    .iter()
+                    .map(|(field, _)| {
+                        let (_, expression) = kwargs
+                            .iter()
+                            .find(|(name, _)| name == field)
+                            .ok_or_else(|| Error("Missing nominal error payload field".into()))?;
+                        Ok(format!("{} to {}", quote(field), sub(expression)?))
+                    })
+                    .collect::<Result<Vec<_>>>()?
+                    .join(", ");
+                format!(
+                    "nominalError({}, {}, linkedMapOf({payload}))",
+                    quote(family),
+                    quote(variant)
+                )
             } else if matches!(
                 name.as_str(),
                 "filter" | "map" | "find" | "any" | "all" | "sort" | "sum"
@@ -193,6 +219,23 @@ fn emit(expr: &Expr, types: &Types, locals: &Names, receiver: &str) -> Result<St
                 let arguments = args.iter().map(sub).collect::<Result<Vec<_>>>()?.join(", ");
                 if matches!(types.get(name), Some(Kind::Function { .. })) {
                     format!("function_{name}({arguments})")
+                } else if !types.contains_key(name) && name == "Ok" && args.len() == 1 {
+                    format!("SdrResult.Success({arguments})")
+                } else if !types.contains_key(name) && name == "Err" && args.len() == 1 {
+                    format!("SdrResult.Failure({arguments} as SdrError)")
+                } else if !types.contains_key(name) && name == "error_id" && args.len() == 1 {
+                    format!("({arguments} as SdrError).id")
+                } else if !types.contains_key(name) && name == "result_ok" && args.len() == 1 {
+                    format!("({arguments} is SdrResult.Success)")
+                } else if !types.contains_key(name) && name == "result_or" && args.len() == 2 {
+                    let kind = crate::expr::infer(&args[0], types)?;
+                    let Kind::Result { success, .. } = kind else {
+                        return fail("Android result_or expected typed Result");
+                    };
+                    // Both arguments evaluated once and in source order,
+                    // even when the primary Result is successful.
+                    format!("run {{ val _result = {}; val _fallback = {};                         if (_result is SdrResult.Success) _result.value as {} else _fallback }}",
+                        sub(&args[0])?,sub(&args[1])?,kotlin_type(&success)?)
                 } else if matches!(
                     name.as_str(),
                     "append" | "remove" | "get" | "has" | "update" | "count" | "next_id"
@@ -235,7 +278,106 @@ fn statements(
                 locals.insert(name.clone(), local);
             }
             Stmt::Require(expr) => writeln!(out, "{pad}require({})", compile(expr)?).unwrap(),
-            Stmt::Match(_, _) => return fail("Android match backend not implemented yet"),
+            Stmt::Match(subject, arms) => {
+                use crate::model::MatchPattern;
+                let result_type = crate::expr::infer(subject, &types)?;
+                let Kind::Result { success, error } = &result_type else {
+                    return fail("Android match subject is not Result");
+                };
+                let Kind::Error { variants, .. } = error.as_ref() else {
+                    return fail("Android legacy Error match not implemented");
+                };
+                let matched = format!("match_{}", index);
+                *index += 1;
+                writeln!(
+                    out,
+                    "{pad}val {matched} = {} as SdrResult",
+                    compile(subject)?
+                )
+                .unwrap();
+                for (arm_index, arm) in arms.iter().enumerate() {
+                    let mut scoped_types = types.clone();
+                    let mut scoped_locals = locals.clone();
+                    match &arm.pattern {
+                        MatchPattern::Ok(name) => {
+                            let value = format!("local_{}", index);
+                            *index += 1;
+                            scoped_types.insert(name.clone(), success.as_ref().clone());
+                            scoped_locals.insert(name.clone(), value.clone());
+                            let code = format!(
+                                "({matched} as SdrResult.Success).value as {}",
+                                kotlin_type(success)?
+                            );
+                            writeln!(
+                                out,
+                                "{pad}{} ({matched} is SdrResult.Success) {{",
+                                if arm_index == 0 { "if" } else { "else if" }
+                            )
+                            .unwrap();
+                            writeln!(out, "{pad}    val {value} = {code}").unwrap();
+                        }
+                        MatchPattern::Variant { name, bindings } => {
+                            let (_, fields) = variants
+                                .iter()
+                                .find(|(variant, _)| variant == name)
+                                .ok_or_else(|| {
+                                    Error("Android unknown typed error variant".into())
+                                })?;
+                            let cond = format!(
+                                "{matched} is SdrResult.Failure && {matched}.error.variant == {}",
+                                quote(name)
+                            );
+                            writeln!(
+                                out,
+                                "{pad}{} ({cond}) {{",
+                                if arm_index == 0 { "if" } else { "else if" }
+                            )
+                            .unwrap();
+                            for (field, binder) in bindings {
+                                let kind = fields
+                                    .iter()
+                                    .find(|(key, _)| key == field)
+                                    .map(|(_, kind)| kind)
+                                    .ok_or_else(|| Error("Unbound typed error field".into()))?;
+                                let local = format!("local_{}", index);
+                                *index += 1;
+                                scoped_types.insert(binder.clone(), kind.clone());
+                                scoped_locals.insert(binder.clone(), local.clone());
+                                writeln!(out,"{pad}    val {local} = ({matched} as SdrResult.Failure).error.fields.getValue({}) as {}",
+                                    quote(field),kotlin_type(kind)?).unwrap();
+                            }
+                        }
+                        MatchPattern::Fallback(name) => {
+                            let local = format!("local_{}", index);
+                            *index += 1;
+                            scoped_types.insert(name.clone(), error.as_ref().clone());
+                            scoped_locals.insert(name.clone(), local.clone());
+                            writeln!(
+                                out,
+                                "{pad}{} ({matched} is SdrResult.Failure) {{",
+                                if arm_index == 0 { "if" } else { "else if" }
+                            )
+                            .unwrap();
+                            writeln!(out, "{pad}    val {local} = {matched}.error").unwrap();
+                        }
+                    };
+                    statements(
+                        out,
+                        &arm.body,
+                        &scoped_types,
+                        &scoped_locals,
+                        depth + 4,
+                        index,
+                    )?;
+                    writeln!(out, "{pad}}}").unwrap();
+                }
+                writeln!(
+                    out,
+                    "{pad}else {{ throw IllegalArgumentException({}) }}",
+                    quote("E_MATCH: unmatched typed Result")
+                )
+                .unwrap();
+            }
             Stmt::Branch(cond, yes, no) => {
                 writeln!(out, "{pad}if ({}) {{", compile(cond)?).unwrap();
                 statements(out, yes, &types, &locals, depth + 4, index)?;
@@ -328,6 +470,29 @@ fn emit_widgets(out: &mut String, program: &Program) -> Result<()> {
 
 pub(super) fn generate(program: &Program) -> Result<String> {
     let mut out = String::new();
+    writeln!(out, "internal val errorTypes = mapOf<String, ErrorFamily>(").unwrap();
+    for (name, kind) in &program.types {
+        if let Kind::Error { id, variants, .. } = kind {
+            let mut members = Vec::new();
+            for (variant, fields) in variants {
+                let values = fields
+                    .iter()
+                    .map(|(field, kind)| Ok(format!("{} to {}", quote(field), spec(kind)?)))
+                    .collect::<Result<Vec<_>>>()?
+                    .join(", ");
+                members.push(format!("{} to linkedMapOf({values})", quote(variant)));
+            }
+            writeln!(
+                out,
+                "    {} to ErrorFamily({}, mapOf({})),",
+                quote(name),
+                quote(id),
+                members.join(", ")
+            )
+            .unwrap();
+        }
+    }
+    writeln!(out, ")").unwrap();
     writeln!(
         out,
         "internal val recordTypes = mapOf<String, Map<String, SdrType>>("

@@ -84,15 +84,6 @@ pub fn validate_application_id(value: &str) -> Result<()> {
     Ok(())
 }
 pub fn generate(program: &Program, application_id: &str) -> Result<AndroidProject> {
-    if program.types.values().any(|k| {
-        matches!(
-            k,
-            crate::model::Kind::Error { .. } | crate::model::Kind::Result { .. }
-        )
-    }) {
-        return fail("Android typed Result/match backend not implemented yet");
-    }
-
     validate_application_id(application_id)?;
     if program.screens.is_empty() {
         return fail("Android requires at least one app screen");
@@ -178,6 +169,37 @@ mod tests {
             assert_eq!(metadata["namespace"], "org.sedrava.demo");
             assert_eq!(metadata["title"], p.name);
         }
+    }
+
+    #[test]
+    fn native_typed_error_android_generates_checked_kotlin() {
+        let source = include_str!("../../../examples/native_typed_errors_a1/main.sdr");
+        let program = parse(source).expect("typed error fixture must compile natively");
+        let artifact = generate(&program, "org.sedrava.typed").unwrap();
+        let file = "app/src/main/java/org/sedrava/typed/Program.kt";
+        let kotlin = std::str::from_utf8(&artifact.files[file]).unwrap();
+        for syntax in [
+            "internal val errorTypes",
+            "SdrType.Result(",
+            "SdrResult.Success",
+            "SdrResult.Failure",
+            "nominalError(",
+            "match_",
+            "E_MATCH: unmatched typed Result",
+        ] {
+            assert!(kotlin.contains(syntax), "Missing checked Kotlin {syntax}");
+        }
+        let domain =
+            std::str::from_utf8(&artifact.files["app/src/main/java/org/sedrava/typed/Domain.kt"])
+                .unwrap();
+        assert!(domain.contains("internal sealed interface SdrResult"));
+        assert!(domain.contains("checkValue(value.error, type.error)"));
+        let snapshots = std::str::from_utf8(
+            &artifact.files["app/src/main/java/org/sedrava/typed/Snapshots.kt"],
+        )
+        .unwrap();
+        assert!(snapshots.contains("is SdrResult.Failure -> encodeJson("));
+        assert!(!artifact.files.keys().any(|path| path.contains("../")));
     }
 
     #[test]
