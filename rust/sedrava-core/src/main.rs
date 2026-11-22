@@ -17,6 +17,8 @@ fn usage() {
          Usage:\n\
            sedrava-native lock DIR\n           sedrava-native verify DIR\n           sedrava-native host check FILE
            sedrava-native host run FILE --root DIR --trusted [--allow-read] [--allow-write]
+           sedrava-native server check FILE
+           sedrava-native server run FILE [--port PORT] [--max-requests N] [--idle-ms N]
            sedrava-native check FILE\n\
            sedrava-native effects FILE [--target app|web|android]\n\
            sedrava-native test FILE\n\
@@ -221,6 +223,45 @@ fn host_command(_args: &[String]) -> Result<()> {
     ))
 }
 
+fn server_command(args: &[String]) -> Result<()> {
+    use sedrava_core::server::{self, RuntimeOptions};
+    match args {
+        [command, source] if command == "check" => {
+            let program = server::parse(&read_source(source)?)?;
+            println!("OK: server {} (native, loopback-only)", program.name);
+            Ok(())
+        }
+        [command, source, options @ ..] if command == "run" => {
+            let program = server::parse(&read_source(source)?)?;
+            let mut settings=RuntimeOptions {
+                port: 0,
+                max_requests: 32,
+                idle_ms: 30_000,
+            };
+            let mut seen=std::collections::BTreeSet::new();
+            let mut next=options.iter();
+            while let Some(flag)=next.next() {
+                if !seen.insert(flag.as_str()) {
+                    return Err(Error("E_SERVER_CLI: duplicated option".into()));
+                }
+                let value=next.next().ok_or_else(|| Error(
+                    "E_SERVER_CLI: expected option argument".into()))?;
+                match flag.as_str() {
+                    "--port" => settings.port=value.parse::<u16>()
+                        .map_err(|_|Error("E_SERVER_CLI: invalid port".into()))?,
+                    "--max-requests" => settings.max_requests=value.parse::<u32>()
+                        .map_err(|_|Error("E_SERVER_CLI: invalid max-requests".into()))?,
+                    "--idle-ms" => settings.idle_ms=value.parse::<u32>()
+                        .map_err(|_|Error("E_SERVER_CLI: invalid idle-ms".into()))?,
+                    _ => return Err(Error(format!("E_SERVER_CLI: unsupported option {flag}"))),
+                }
+            }
+            server::serve(&program,settings)
+        }
+        _ => Err(Error("Expected server check FILE or server run FILE [--port PORT] [--max-requests N] [--idle-ms N]".into())),
+    }
+}
+
 fn run() -> Result<()> {
     let args: Vec<String> = env::args().collect();
     if args.len() == 1 || args.get(1).is_some_and(|s| s == "--help" || s == "-h") {
@@ -238,6 +279,9 @@ fn run() -> Result<()> {
     let command = &args[1];
     if command == "host" {
         return host_command(&args[2..]);
+    }
+    if command == "server" {
+        return server_command(&args[2..]);
     }
     if command == "lock" || command == "verify" {
         if args.len() != 3 {
