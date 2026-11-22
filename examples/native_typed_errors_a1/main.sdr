@@ -1,0 +1,78 @@
+app "Native typed Result A1"
+error closed ArithmeticError id "example.ArithmeticError":
+    IntOverflow:
+        left: int
+        right: int
+    InvalidScalar:
+        scalar: int
+error open ReadError id "example.ReadError":
+    NotFound:
+        path: text
+    Denied:
+        path: text
+fn checked(x: int) -> Result<int, ArithmeticError> effects pure = Ok(x) if x < 100 else Err(ArithmeticError.IntOverflow(left=x, right=1))
+fn missing(x: text) -> Result<text, ReadError> = Err(ReadError.NotFound(path=x))
+fn other(x: text) -> Result<text, ReadError> = Err(ReadError.Denied(path=x))
+fn ready(x: bool) -> Result<bool, ArithmeticError> = Ok(x)
+state total = 0
+state message = ""
+state flag = false
+derive recent = checked(100)
+derive succeeded = result_ok(checked(4))
+derive defaulted = result_or(checked(100), -1)
+action success:
+    match checked(4):
+        Ok(value):
+            total = value
+        Err(IntOverflow { left, right }):
+            total = left + right
+        Err(InvalidScalar { scalar }):
+            total = scalar
+    match ready(true):
+        Ok(value):
+            flag = value
+        Err(error):
+            flag = false
+action fail:
+    match checked(100):
+        Ok(value):
+            total = value
+        Err(IntOverflow { left, right: addend }):
+            total = left + addend
+        Err(InvalidScalar { scalar }):
+            total = scalar
+    match missing("/foo"):
+        Ok(value):
+            message = value
+        Err(NotFound { path }):
+            message = path
+        Err(error):
+            message = error_id(error)
+action fallback:
+    match other("/restricted"):
+        Ok(value):
+            message = value
+        Err(NotFound { path }):
+            message = path
+        Err(error):
+            message = error_id(error)
+action rollback:
+    total = 7
+    match checked(100):
+        Ok(value):
+            total = value
+        Err(IntOverflow { left, right }):
+            total = 2147483647 + 1
+        Err(InvalidScalar { scalar }):
+            total = scalar
+screen main:
+    value total
+    value message
+    value flag
+    button "Success" -> success
+    button "Failure" -> fail
+    button "Fallback" -> fallback
+    button "Rollback" -> rollback
+test positive: success -> total == 4 and flag == true
+test expected: fail -> total == 101 and message == "/foo"
+test unknown: fallback -> message == "example.ReadError.Denied"

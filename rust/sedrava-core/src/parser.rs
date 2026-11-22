@@ -5,9 +5,9 @@
 
 use crate::expr;
 use crate::model::{
-    fail, EmbeddedTest, Error, Expr, Kind, Navigation, Program, PureFunction, Result, Screen,
-    SourceSpan, State, Stmt, Value, Widget, MAX_ACTION_STEPS, MAX_BLOCK_DEPTH, MAX_COLLECTIONS,
-    MAX_RECORDS, MAX_SOURCE_CHARS,
+    fail, EmbeddedTest, Error, Expr, Kind, MatchArm, MatchPattern, Navigation, Program,
+    PureFunction, Result, Screen, SourceSpan, State, Stmt, Value, Widget, MAX_ACTION_STEPS,
+    MAX_BLOCK_DEPTH, MAX_COLLECTIONS, MAX_RECORDS, MAX_SOURCE_CHARS,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -47,6 +47,12 @@ fn source_lines(source: &str) -> Result<Vec<Line>> {
         });
     }
     Ok(result)
+}
+
+fn user_error_identifier(name: &str) -> bool {
+    let mut chars = name.chars();
+    matches!(chars.next(),Some(c) if c.is_ascii_alphabetic())
+        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
 fn is_identifier(name: &str) -> bool {
@@ -132,6 +138,139 @@ fn split_decl<'a>(rest: &'a str, number: usize) -> Result<(&'a str, &'a str)> {
     Ok((name, value))
 }
 
+fn parse_match(
+    lines: &[Line],
+    pos: &mut usize,
+    indent: usize,
+    depth: usize,
+    known: &BTreeMap<String, Kind>,
+    states: &BTreeMap<String, Kind>,
+    count: &mut usize,
+) -> Result<Stmt> {
+    let line = &lines[*pos];
+    let source = line
+        .content
+        .strip_prefix("match ")
+        .and_then(|v| v.strip_suffix(':'))
+        .ok_or_else(|| Error("E_MATCH: invalid match declaration".into()))?;
+    let (expression, kind) = checked_expression(source, known, line.number)?;
+    let Kind::Result { success, error } = &kind else {
+        return line_error(line.number, "E_MATCH: expected typed Result expression");
+    };
+    let Kind::Error { variants, .. } = error.as_ref() else {
+        return line_error(line.number, "E_MATCH: legacy Result not yet supported");
+    };
+    *pos += 1;
+    if *pos >= lines.len() || lines[*pos].indent <= indent {
+        return line_error(line.number, "E_MATCH: expected nonempty arms");
+    }
+    let arm_indent = lines[*pos].indent;
+    let mut arms = Vec::new();
+    let mut had_fallback = false;
+    while *pos < lines.len() && lines[*pos].indent >= arm_indent {
+        let arm = &lines[*pos];
+        if arm.indent != arm_indent || !arm.content.ends_with(':') || had_fallback {
+            return line_error(
+                arm.number,
+                "E_MATCH: invalid arm indentation or arm after fallback",
+            );
+        }
+        *count += 1;
+        if *count > MAX_ACTION_STEPS {
+            return line_error(arm.number, "E_MATCH: action statement budget");
+        }
+        let name = arm.content.trim_end_matches(':');
+        let mut scope = known.clone();
+        let (pattern, binds): (MatchPattern, Vec<(String, Kind)>) = if let Some(value) =
+            name.strip_prefix("Ok(").and_then(|v| v.strip_suffix(')'))
+        {
+            if !is_identifier(value) || value.len() > 64 || scope.contains_key(value) {
+                return line_error(arm.number, "E_MATCH: bad Ok binder");
+            }
+            (
+                MatchPattern::Ok(value.into()),
+                vec![(value.into(), success.as_ref().clone())],
+            )
+        } else if let Some(value) = name.strip_prefix("Err(").and_then(|v| v.strip_suffix(')')) {
+            if let Some((variant, fields)) = value.split_once(" {") {
+                let Some(fields) = fields.strip_suffix('}') else {
+                    return line_error(arm.number, "E_MATCH: expected closing brace");
+                };
+                let variant = variant.trim();
+                let Some((_, schema)) = variants.iter().find(|(n, _)| n == variant) else {
+                    return line_error(arm.number, "E_MATCH: unknown variant");
+                };
+                let mut aliases = Vec::new();
+                let mut used = BTreeSet::new();
+                let mut binds = Vec::new();
+                if !fields.trim().is_empty() {
+                    for field in fields.split(',') {
+                        let field = field.trim();
+                        let (key, alias) = if let Some((key, alias)) = field.split_once(':') {
+                            (key.trim(), alias.trim())
+                        } else {
+                            (field, field)
+                        };
+                        let Some((_, kind)) = schema.iter().find(|(n, _)| n == key) else {
+                            return line_error(arm.number, "E_MATCH: unknown error payload field");
+                        };
+                        if !is_identifier(alias)
+                            || alias.len() > 64
+                            || scope.contains_key(alias)
+                            || !used.insert(key)
+                            || binds.iter().any(|(n, _)| n == alias)
+                        {
+                            return line_error(arm.number, "E_MATCH: invalid/duplicate arm binder");
+                        }
+                        aliases.push((key.into(), alias.into()));
+                        binds.push((alias.into(), kind.clone()));
+                    }
+                }
+                (
+                    MatchPattern::Variant {
+                        name: variant.into(),
+                        bindings: aliases,
+                    },
+                    binds,
+                )
+            } else {
+                let binder = value.trim();
+                if variants.iter().any(|(name, _)| name == binder) {
+                    return line_error(arm.number, "E_MATCH: variant pattern requires braces");
+                }
+                if !is_identifier(binder) || binder.len() > 64 || scope.contains_key(binder) {
+                    return line_error(arm.number, "E_MATCH: bad fallback binder");
+                }
+                had_fallback = true;
+                (
+                    MatchPattern::Fallback(binder.into()),
+                    vec![(binder.into(), error.as_ref().clone())],
+                )
+            }
+        } else {
+            return line_error(arm.number, "E_MATCH: expected Ok(...) or Err(...)");
+        };
+        for (key, kind) in binds {
+            scope.insert(key, kind);
+        }
+        *pos += 1;
+        if *pos >= lines.len() || lines[*pos].indent <= arm_indent {
+            return line_error(arm.number, "E_MATCH: empty arm");
+        }
+        let body_indent = lines[*pos].indent;
+        let body = parse_block(lines, pos, body_indent, depth + 1, &scope, states, count)?;
+        if body.is_empty() {
+            return line_error(arm.number, "E_MATCH: empty arm");
+        }
+        arms.push(MatchArm { pattern, body });
+        if arms.len() > 18 {
+            return line_error(arm.number, "E_MATCH: arm count exceeds budget");
+        }
+    }
+    crate::typed_errors::exhaustive(&kind, &arms)?;
+    Ok(Stmt::Match(expression, arms))
+}
+
 fn parse_block(
     lines: &[Line],
     pos: &mut usize,
@@ -160,6 +299,12 @@ fn parse_block(
         }
         let number = current.number;
         let text = current.content.as_str();
+        if text.starts_with("match ") && text.ends_with(':') {
+            body.push(parse_match(
+                lines, pos, indent, depth, &scope, states, count,
+            )?);
+            continue;
+        }
         if text.starts_with("if ") && text.ends_with(':') {
             let condition = require_type(&text[3..text.len() - 1], &scope, Kind::Bool, number)?;
             *pos += 1;
@@ -219,6 +364,9 @@ fn parse_block(
 }
 
 fn portable_type(raw: &str, types: &BTreeMap<String, Kind>) -> Result<Kind> {
+    if let Some(kind) = crate::typed_errors::result_type(raw, types)? {
+        return Ok(kind);
+    }
     match raw {
         "int" => return Ok(Kind::Int),
         "bool" => return Ok(Kind::Bool),
@@ -445,6 +593,156 @@ pub fn parse(source: &str) -> Result<Program> {
                 return line_error(current.number, "Empty app name");
             }
             name = Some(title);
+        } else if let Some(header) = text.strip_prefix("error ") {
+            if seen_action_or_after
+                || !states.is_empty()
+                || !functions.is_empty()
+                || types
+                    .values()
+                    .filter(|kind| matches!(kind, Kind::Error { .. }))
+                    .count()
+                    >= 16
+            {
+                return line_error(
+                    current.number,
+                    "E_ERROR_TYPE: error families must precede functions/states and be <=16",
+                );
+            }
+            let Some(header) = header.strip_suffix(':') else {
+                return line_error(current.number, "E_ERROR_TYPE: expected ending ':'");
+            };
+            let (spec, explicit_id) = if let Some((spec, id)) = header.split_once(" id ") {
+                (spec, Some(parse_label(id, current.number)?))
+            } else {
+                (header, None)
+            };
+            let Some((openness, family)) = spec.split_once(' ') else {
+                return line_error(
+                    current.number,
+                    "E_ERROR_TYPE: expected error closed|open Name",
+                );
+            };
+            if !matches!(openness, "open" | "closed")
+                || !is_identifier(family)
+                || family.len() > 64
+                || types.contains_key(family)
+                || matches!(
+                    family,
+                    "int"
+                        | "text"
+                        | "bool"
+                        | "list"
+                        | "Result"
+                        | "Error"
+                        | "Ok"
+                        | "Err"
+                        | "error_id"
+                        | "BudgetExceeded"
+                        | "PolicyViolation"
+                        | "CapabilityDenied"
+                        | "CompilerError"
+                        | "InternalError"
+                )
+            {
+                return line_error(
+                    current.number,
+                    "E_ERROR_TYPE: invalid or reserved error name",
+                );
+            }
+            let id = explicit_id.unwrap_or_else(|| format!("entry.{family}"));
+            if id.is_empty()
+                || id.len() > 128
+                || id.starts_with('.')
+                || id.ends_with('.')
+                || id.split('.').any(|part| {
+                    part.is_empty()
+                        || !part
+                            .chars()
+                            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+                })
+                || types
+                    .values()
+                    .any(|kind| matches!(kind, Kind::Error{id:other,..} if other==&id))
+            {
+                return line_error(
+                    current.number,
+                    "E_ERROR_TYPE: invalid/duplicate stable error identifier",
+                );
+            }
+            let mut variants: Vec<(String, Vec<(String, Kind)>)> = Vec::new();
+            i += 1;
+            while i < lines.len() && lines[i].indent > 0 {
+                let variant = &lines[i];
+                if variant.indent != 4 || !variant.content.ends_with(':') {
+                    return line_error(variant.number, "E_ERROR_TYPE: variant indent must be four");
+                }
+                let name = variant.content.trim_end_matches(':');
+                if !is_identifier(name)
+                    || name.len() > 64
+                    || variants.iter().any(|(x, _)| x == name)
+                    || variants.len() >= 16
+                {
+                    return line_error(
+                        variant.number,
+                        "E_ERROR_TYPE: invalid/duplicate error variant",
+                    );
+                }
+                i += 1;
+                let mut fields: Vec<(String, Kind)> = Vec::new();
+                while i < lines.len() && lines[i].indent > 4 {
+                    let field = &lines[i];
+                    if field.indent != 8 {
+                        return line_error(
+                            field.number,
+                            "E_ERROR_TYPE: field indent must be eight",
+                        );
+                    }
+                    let Some((name, kind)) = field.content.split_once(": ") else {
+                        return line_error(field.number, "E_ERROR_TYPE: expected field: scalar");
+                    };
+                    if !user_error_identifier(name)
+                        || name.len() > 64
+                        || fields.len() >= 16
+                        || fields.iter().any(|(x, _)| x == name)
+                    {
+                        return line_error(field.number, "E_ERROR_TYPE: invalid or repeated field");
+                    }
+                    let kind = match kind {
+                        "int" => Kind::Int,
+                        "text" => Kind::Text,
+                        "bool" => Kind::Bool,
+                        _ => {
+                            return line_error(field.number, "E_ERROR_TYPE: payload must be scalar")
+                        }
+                    };
+                    fields.push((name.into(), kind));
+                    i += 1;
+                }
+                variants.push((name.into(), fields));
+            }
+            if variants.is_empty() {
+                return line_error(
+                    current.number,
+                    "E_ERROR_TYPE: error family requires variants",
+                );
+            }
+            declaration_spans.insert(
+                format!("error:{family}"),
+                SourceSpan {
+                    line: current.number,
+                    column: 1,
+                },
+            );
+            types.insert(
+                family.into(),
+                Kind::Error {
+                    name: family.into(),
+                    id,
+                    open: openness == "open",
+                    variants,
+                },
+            );
+            continue;
         } else if let Some(rest) = text.strip_prefix("record ") {
             if seen_action_or_after
                 || !states.is_empty()
@@ -582,12 +880,20 @@ pub fn parse(source: &str) -> Result<Program> {
                 };
             let result_kind = portable_type(returns.trim(), &types)
                 .map_err(|e| Error(format!("Line {}: {e}", current.number)))?;
-            let body = require_type(
-                expression.trim(),
-                &scope,
-                result_kind.clone(),
-                current.number,
-            )?;
+            let body = if matches!(result_kind, Kind::Result { .. }) {
+                let parsed = expr::parse(expression.trim())
+                    .map_err(|e| Error(format!("Line {}: {e}", current.number)))?;
+                crate::typed_errors::validate_body(&parsed, &result_kind, &scope)
+                    .map_err(|e| Error(format!("Line {}: {e}", current.number)))?;
+                parsed
+            } else {
+                require_type(
+                    expression.trim(),
+                    &scope,
+                    result_kind.clone(),
+                    current.number,
+                )?
+            };
             let kind = Kind::Function {
                 parameters: parameters.iter().map(|(_, v)| v.clone()).collect(),
                 result: Box::new(result_kind.clone()),

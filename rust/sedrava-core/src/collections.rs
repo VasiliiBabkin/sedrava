@@ -36,6 +36,29 @@ pub fn infer_call(
     types: &BTreeMap<String, Kind>,
     infer: &dyn Fn(&Expr) -> Result<Kind>,
 ) -> Result<Kind> {
+    if matches!(name, "result_ok" | "result_or") && !types.contains_key(name) {
+        if !kwargs.is_empty() || args.len() != if name == "result_ok" { 1 } else { 2 } {
+            return fail("E_RESULT: result intrinsic arity");
+        }
+        let Kind::Result { success, .. } = infer(&args[0])? else {
+            return fail("E_RESULT: expected typed Result");
+        };
+        if name == "result_or" && infer(&args[1])? != *success {
+            return fail("E_RESULT: fallback must have Result success type");
+        }
+        return Ok(if name == "result_ok" {
+            Kind::Bool
+        } else {
+            *success
+        });
+    }
+    if name == "error_id" && !types.contains_key("error_id") {
+        if !kwargs.is_empty() || args.len() != 1 || !matches!(infer(&args[0])?, Kind::Error { .. })
+        {
+            return fail("E_RESULT: error_id requires a typed error value");
+        }
+        return Ok(Kind::Text);
+    }
     if let Some(kind @ Kind::Record { fields, .. }) = types.get(name) {
         if !args.is_empty() || kwargs.len() != fields.len() {
             return fail("Record requires exact named fields");
@@ -227,6 +250,33 @@ pub fn evaluate_call(
     functions: &BTreeMap<String, PureFunction>,
     eval: &dyn Fn(&Expr) -> Result<Value>,
 ) -> Result<Value> {
+    if matches!(name, "result_ok" | "result_or") && !types.contains_key(name) {
+        if !kwargs.is_empty() || args.len() != if name == "result_ok" { 1 } else { 2 } {
+            return fail("E_RESULT: invalid result intrinsic call");
+        }
+        let Value::Result { ok, value, .. } = eval(&args[0])? else {
+            return fail("E_RESULT: result intrinsic requires typed Result");
+        };
+        if name == "result_ok" {
+            return Ok(Value::Bool(ok));
+        }
+        let fallback = eval(&args[1])?;
+        return Ok(if ok { *value } else { fallback });
+    }
+    if name == "error_id" && !types.contains_key("error_id") {
+        if !kwargs.is_empty() || args.len() != 1 {
+            return fail("E_RESULT: invalid error_id arguments");
+        }
+        let Value::Error {
+            kind: Kind::Error { id, .. },
+            variant,
+            ..
+        } = eval(&args[0])?
+        else {
+            return fail("E_RESULT: error_id needs user error");
+        };
+        return Ok(Value::Text(format!("{id}.{variant}")));
+    }
     if let Some(kind @ Kind::Record { fields, .. }) = types.get(name) {
         if kwargs.len() != fields.len() || !args.is_empty() {
             return fail("Invalid record constructor");

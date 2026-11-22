@@ -106,6 +106,58 @@ fn execute_block(
                     return fail("Action requirement rejected");
                 }
             }
+            Stmt::Match(expression, arms) => {
+                use crate::model::MatchPattern;
+                // Evaluate the subject exactly once. A candidate state is
+                // published only by transition() after all branches succeed.
+                let value = expr::evaluate_full(
+                    expression,
+                    &environment,
+                    &program.types,
+                    &program.functions,
+                )?;
+                let Value::Result { ok, value, .. } = value else {
+                    return fail("E_MATCH: action subject must be Result");
+                };
+                let mut chosen = None;
+                for arm in arms {
+                    let mut bound = locals.clone();
+                    let matches = match (&arm.pattern, ok, value.as_ref()) {
+                        (MatchPattern::Ok(key), true, any) => {
+                            bound.insert(key.clone(), any.clone());
+                            true
+                        }
+                        (
+                            MatchPattern::Variant { name, bindings },
+                            false,
+                            Value::Error {
+                                variant, fields, ..
+                            },
+                        ) if name == variant => {
+                            for (field, alias) in bindings {
+                                let item = fields.get(field).ok_or_else(|| {
+                                    Error("E_MATCH: missing checked error field".into())
+                                })?;
+                                bound.insert(alias.clone(), item.clone());
+                            }
+                            true
+                        }
+                        (MatchPattern::Fallback(key), false, err @ Value::Error { .. }) => {
+                            bound.insert(key.clone(), err.clone());
+                            true
+                        }
+                        _ => false,
+                    };
+                    if matches {
+                        chosen = Some((&arm.body, bound));
+                        break;
+                    }
+                }
+                let Some((branch, mut bound)) = chosen else {
+                    return fail("E_MATCH: exhaustive branch not found");
+                };
+                execute_block(program, candidate, branch, &mut bound, steps)?;
+            }
             Stmt::Branch(condition, yes, no) => {
                 let branch = if expr::evaluate_full(
                     condition,
