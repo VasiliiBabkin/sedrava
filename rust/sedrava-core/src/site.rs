@@ -35,7 +35,10 @@ fn lines(source: &str) -> Result<Vec<Line>> {
         if raw.starts_with('\u{feff}') {
             return error(number, "UTF-8 BOM is unsupported");
         }
-        let indent = raw.chars().take_while(|ch| *ch == ' ' || *ch == '\t').count();
+        let indent = raw
+            .chars()
+            .take_while(|ch| *ch == ' ' || *ch == '\t')
+            .count();
         if raw.chars().take(indent).any(|ch| ch == '\t') {
             return error(number, "Tabs in indentation are unsupported");
         }
@@ -79,7 +82,10 @@ fn quoted(input: &str, line: usize) -> Result<(String, &str)> {
 fn only_quoted(input: &str, line: usize) -> Result<String> {
     let (value, remaining) = quoted(input, line)?;
     if !remaining.is_empty() {
-        return error(line, "Unexpected modifiers (not supported in native Site preview)");
+        return error(
+            line,
+            "Unexpected modifiers (not supported in native Site preview)",
+        );
     }
     Ok(value)
 }
@@ -101,8 +107,12 @@ fn valid_href(value: &str) -> bool {
     }
     if let Some(host_path) = value.strip_prefix("https://") {
         let host = host_path.split(&['/', '?', '#'][..]).next().unwrap_or("");
-        return !host.is_empty() && !host.starts_with('.') && !host.contains('@')
-            && host.chars().all(|c| c.is_ascii_alphanumeric() || ".-:".contains(c));
+        return !host.is_empty()
+            && !host.starts_with('.')
+            && !host.contains('@')
+            && host
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || ".-:".contains(c));
     }
     if value.starts_with("//") || value.contains("..") {
         return false;
@@ -123,7 +133,9 @@ fn output_path(route: &str, line: usize) -> Result<String> {
             segment.is_empty()
                 || segment == &"."
                 || segment == &".."
-                || !segment.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+                || !segment
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
         })
     {
         return error(line, "Unsafe page route");
@@ -161,9 +173,15 @@ fn parse_nodes(lines: &[Line], index: &mut usize, indent: usize, depth: usize) -
             out.push_str(&parse_nodes(lines, index, indent + 4, depth + 1)?);
             out.push_str(&format!("</{tag}>\n"));
         } else if let Some(rest) = current.text.strip_prefix("heading ") {
-            out.push_str(&format!("<h1>{}</h1>\n", html(&only_quoted(rest, current.number)?)));
+            out.push_str(&format!(
+                "<h1>{}</h1>\n",
+                html(&only_quoted(rest, current.number)?)
+            ));
         } else if let Some(rest) = current.text.strip_prefix("paragraph ") {
-            out.push_str(&format!("<p>{}</p>\n", html(&only_quoted(rest, current.number)?)));
+            out.push_str(&format!(
+                "<p>{}</p>\n",
+                html(&only_quoted(rest, current.number)?)
+            ));
         } else if let Some(rest) = current.text.strip_prefix("code ") {
             out.push_str(&format!(
                 "<pre><code>{}</code></pre>\n",
@@ -177,9 +195,12 @@ fn parse_nodes(lines: &[Line], index: &mut usize, indent: usize, depth: usize) -
             .or_else(|| current.text.strip_prefix("button "))
         {
             let (label, remainder) = quoted(rest, current.number)?;
-            let href_src = remainder
-                .strip_prefix("to ")
-                .ok_or_else(|| Error(format!("Line {}: Expected 'to' after link label", current.number)))?;
+            let href_src = remainder.strip_prefix("to ").ok_or_else(|| {
+                Error(format!(
+                    "Line {}: Expected 'to' after link label",
+                    current.number
+                ))
+            })?;
             let destination = only_quoted(href_src, current.number)?;
             if !valid_href(&destination) {
                 return error(current.number, "Unsafe or unsupported link destination");
@@ -223,16 +244,26 @@ pub fn generate(source: &str) -> Result<StaticSite> {
             .text
             .strip_prefix("page ")
             .and_then(|s| s.strip_suffix(':'))
-            .ok_or_else(|| Error(format!(
-                "Line {}: Native Site preview only supports page declarations",
+            .ok_or_else(|| {
+                Error(format!(
+                    "Line {}: Native Site preview only supports page declarations",
+                    header.number
+                ))
+            })?;
+        let (slug, route_text) = page_header.split_once(" at ").ok_or_else(|| {
+            Error(format!(
+                "Line {}: Expected 'page name at \"/\":'",
                 header.number
-            )))?;
-        let (slug, route_text) = page_header
-            .split_once(" at ")
-            .ok_or_else(|| Error(format!("Line {}: Expected 'page name at \"/\":'", header.number)))?;
+            ))
+        })?;
         if slug.is_empty()
-            || !slug.chars().next().is_some_and(|ch| ch.is_ascii_alphabetic())
-            || !slug.chars().all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
+            || !slug
+                .chars()
+                .next()
+                .is_some_and(|ch| ch.is_ascii_alphabetic())
+            || !slug
+                .chars()
+                .all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
         {
             return error(header.number, "Invalid page identifier");
         }
@@ -264,10 +295,8 @@ pub fn generate(source: &str) -> Result<StaticSite> {
             }
             index += 1;
         }
-        let title = title.ok_or_else(|| Error(format!(
-            "Line {}: Page must include title",
-            header.number
-        )))?;
+        let title = title
+            .ok_or_else(|| Error(format!("Line {}: Page must include title", header.number)))?;
         if title.is_empty() {
             return error(header.number, "Page title cannot be empty");
         }
@@ -344,7 +373,12 @@ page guide at "/guide/":
 
     #[test]
     fn invalid_json_literal_and_bad_indentation_fail() {
-        assert!(generate("site \"x\"\npage h at \"/\":\n    title \"T\"\n  heading \"H\"\n").is_err());
-        assert!(generate("site \"x\"\npage h at \"/\":\n    title \"T\"\n    heading \"\\uZZZZ\"\n").is_err());
+        assert!(
+            generate("site \"x\"\npage h at \"/\":\n    title \"T\"\n  heading \"H\"\n").is_err()
+        );
+        assert!(generate(
+            "site \"x\"\npage h at \"/\":\n    title \"T\"\n    heading \"\\uZZZZ\"\n"
+        )
+        .is_err());
     }
 }

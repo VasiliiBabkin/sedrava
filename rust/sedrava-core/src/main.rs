@@ -120,7 +120,12 @@ fn run() -> Result<()> {
     }
     let command = &args[1];
     let is_build = command == "build";
-    if is_build && !matches!(args.get(2).map(String::as_str), Some("web" | "android" | "site")) {
+    if is_build
+        && !matches!(
+            args.get(2).map(String::as_str),
+            Some("web" | "android" | "site")
+        )
+    {
         return Err(Error(
             "Native build supports only experimental web, site and android targets".into(),
         ));
@@ -131,22 +136,26 @@ fn run() -> Result<()> {
         .ok_or_else(|| Error("Expected a command, target and .sdr file".into()))?;
     if is_build && args[2] == "site" {
         if args.len() != 6 || args[4] != "--output" {
-            return Err(Error(
-                "Expected build site FILE --output DIR".into(),
-            ));
+            return Err(Error("Expected build site FILE --output DIR".into()));
         }
         let output = PathBuf::from(&args[5]);
         if fs::symlink_metadata(&output).is_ok() {
             return Err(Error("Site output directory must not already exist".into()));
         }
-        let metadata = fs::metadata(source).map_err(|e| Error(format!("Cannot stat {source}: {e}")))?;
+        let metadata =
+            fs::metadata(source).map_err(|e| Error(format!("Cannot stat {source}: {e}")))?;
         if metadata.len() > (sedrava_core::model::MAX_SOURCE_CHARS as u64) * 4 {
             return Err(Error("Site source exceeds size limit".into()));
         }
-        let raw = fs::read_to_string(source).map_err(|e| Error(format!("Cannot read Site source: {e}")))?;
+        let raw = fs::read_to_string(source)
+            .map_err(|e| Error(format!("Cannot read Site source: {e}")))?;
         let site = sedrava_core::site::generate(&raw)?;
-        let parent = output.parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or(Path::new("."));
-        fs::create_dir_all(parent).map_err(|e| Error(format!("Cannot create output parent: {e}")))?;
+        let parent = output
+            .parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .unwrap_or(Path::new("."));
+        fs::create_dir_all(parent)
+            .map_err(|e| Error(format!("Cannot create output parent: {e}")))?;
         let staging = tempfile::tempdir_in(parent)
             .map_err(|e| Error(format!("Cannot stage Site directory: {e}")))?;
         #[cfg(unix)]
@@ -158,7 +167,9 @@ fn run() -> Result<()> {
         for (name, content) in &site.files {
             let relative = Path::new(name);
             if relative.is_absolute()
-                || relative.components().any(|part| !matches!(part, std::path::Component::Normal(_)))
+                || relative
+                    .components()
+                    .any(|part| !matches!(part, std::path::Component::Normal(_)))
             {
                 return Err(Error("Unsafe generated Site path".into()));
             }
@@ -173,7 +184,9 @@ fn run() -> Result<()> {
                     {
                         use std::os::unix::fs::PermissionsExt;
                         fs::set_permissions(&directory, fs::Permissions::from_mode(0o755))
-                            .map_err(|e| Error(format!("Cannot set Site subdirectory permissions: {e}")))?;
+                            .map_err(|e| {
+                                Error(format!("Cannot set Site subdirectory permissions: {e}"))
+                            })?;
                     }
                 }
             }
@@ -294,12 +307,17 @@ fn run() -> Result<()> {
     }
     // Site sources are a separate DSL from app-mode. Never silently parse them as apps.
     if command == "check" && args.len() == 3 {
-        let metadata = fs::metadata(source).map_err(|e| Error(format!("Cannot stat {source}: {e}")))?;
+        let metadata =
+            fs::metadata(source).map_err(|e| Error(format!("Cannot stat {source}: {e}")))?;
         if metadata.len() > (sedrava_core::model::MAX_SOURCE_CHARS as u64) * 4 {
             return Err(Error("Source file exceeds size limit".into()));
         }
-        let raw = fs::read_to_string(source).map_err(|e| Error(format!("Cannot read source: {e}")))?;
-        if raw.lines().map(str::trim).find(|s| !s.is_empty() && !s.starts_with('#'))
+        let raw =
+            fs::read_to_string(source).map_err(|e| Error(format!("Cannot read source: {e}")))?;
+        if raw
+            .lines()
+            .map(str::trim)
+            .find(|s| !s.is_empty() && !s.starts_with('#'))
             .is_some_and(|first| first.starts_with("site "))
         {
             let _ = sedrava_core::site::generate(&raw)?;
