@@ -1,3 +1,4 @@
+use super::services::{self, Services};
 use super::{
     canonical_root, external, parse, parse_nodes, render, safe_url, syntax, validate_tree, Line,
     Node, Props, StaticSite, Token,
@@ -31,6 +32,8 @@ pub(super) fn widget(kind: &str) -> Option<Widget> {
         "title", "status", "search", "sort", "where", "equals", "active", "empty", "fields",
     ];
     let (block, positional, required, optional): (_, _, &[_], &[_]) = match kind {
+        "request" | "cancel" => (false, "text", &["text", "service"], &[]),
+        "remote" => (false, "service", &["service"], &["search", "title"]),
         "value" => (false, "state", &["state"], &[]),
         "input" => (false, "state", &["state", "label"], &["kind"]),
         "checkbox" => (false, "state", &["state", "label"], &[]),
@@ -55,7 +58,7 @@ pub(super) fn widget(kind: &str) -> Option<Widget> {
     Some(Widget {
         block,
         positional: (!positional.is_empty()).then_some(positional),
-        state_argument: matches!(positional, "state" | "collection" | "field"),
+        state_argument: matches!(positional, "state" | "collection" | "field" | "service"),
         required,
         optional,
     })
@@ -314,6 +317,8 @@ fn validate_controls(
     form: bool,
     row_fields: Option<&BTreeMap<&str, Kind>>,
     program: &Program,
+    services: &Services,
+    remote_row: bool,
 ) -> Result<()> {
     for node in nodes {
         let kind = node.kind.as_str();
@@ -331,7 +336,8 @@ fn validate_controls(
             return Err(node.line.error("Invalid form or select nesting"));
         }
         if let Some(fields) = row_fields {
-            if node.props.contains_key("id")
+            if (remote_row && matches!(kind, "button" | "pick"))
+                || node.props.contains_key("id")
                 || matches!(
                     kind,
                     "each"
@@ -347,6 +353,9 @@ fn validate_controls(
                         | "close"
                         | "navigate"
                         | "back"
+                        | "remote"
+                        | "request"
+                        | "cancel"
                 )
             {
                 return Err(node
@@ -364,7 +373,49 @@ fn validate_controls(
         } else if matches!(kind, "field" | "row-when" | "pick") {
             return Err(node.line.error("Row control requires an each template"));
         }
-        let local_fields = if kind == "each" {
+        let service = node
+            .props
+            .get("service")
+            .map(|key| {
+                services
+                    .get(key)
+                    .ok_or_else(|| node.line.error(format!("Unknown HTTP service {key}")))
+            })
+            .transpose()?;
+        if kind == "remote" {
+            if node
+                .props
+                .get("search")
+                .is_some_and(|key| program.types.get(key) != Some(&Kind::Text))
+                || node
+                    .props
+                    .get("title")
+                    .is_some_and(|key| service.unwrap().fields.get(key) != Some(&"text"))
+            {
+                return Err(node
+                    .line
+                    .error("Remote search requires text state and title requires a text field"));
+            }
+        }
+        let local_fields = if kind == "remote" {
+            Some(
+                service
+                    .unwrap()
+                    .fields
+                    .iter()
+                    .map(|(key, kind)| {
+                        (
+                            key.as_str(),
+                            match *kind {
+                                "bool" => Kind::Bool,
+                                "int32" => Kind::Int,
+                                _ => Kind::Text,
+                            },
+                        )
+                    })
+                    .collect(),
+            )
+        } else if kind == "each" {
             let Kind::List { record, .. } = &program.types[&node.props["collection"]] else {
                 unreachable!()
             };
@@ -420,9 +471,36 @@ fn validate_controls(
             form || kind == "form",
             local_fields.as_ref().or(row_fields),
             program,
+            services,
+            remote_row || kind == "remote",
         )?;
     }
     Ok(())
+}
+
+fn remote_render_cost(nodes: &[Node], services: &Services) -> usize {
+    fn template_cost(nodes: &[Node]) -> usize {
+        nodes
+            .iter()
+            .map(|node| 3 + template_cost(&node.children))
+            .sum()
+    }
+    nodes
+        .iter()
+        .map(|node| {
+            if node.kind == "remote" {
+                let service = &services[&node.props["service"]];
+                let content = if node.children.is_empty() {
+                    service.fields.len()
+                } else {
+                    template_cost(&node.children)
+                };
+                service.max_rows() * (1 + content)
+            } else {
+                remote_render_cost(&node.children, services)
+            }
+        })
+        .sum()
 }
 
 fn collect_dialogs(
@@ -461,6 +539,7 @@ pub fn generate(source: &str, root: Option<&Path>) -> Result<StaticSite> {
     let mut palettes = BTreeMap::new();
     let mut theme_state = None;
     let mut views = Vec::new();
+    let mut service_blocks = Vec::new();
     let mut i = 1;
     while i < lines.len() {
         let line = &lines[i];
@@ -504,7 +583,8 @@ pub fn generate(source: &str, root: Option<&Path>) -> Result<StaticSite> {
             "theme" | "style" | "stylesheet" | "license" | "favicon" => {
                 presentation.extend_from_slice(group)
             }
-            "service" | "navigation" | "screen" | "origin" | "robots" | "social-image" => {
+            "service" => service_blocks.push(group),
+            "navigation" | "screen" | "origin" | "robots" | "social-image" => {
                 return Err(line.error(format!("Unsupported native WebApp declaration {keyword}")));
             }
             _ if views.is_empty() => {
@@ -540,6 +620,7 @@ pub fn generate(source: &str, root: Option<&Path>) -> Result<StaticSite> {
     if !runtime::valid_state(&program, &program.states) {
         return fail("Invalid initial WebApp state");
     }
+    let services = services::parse(&service_blocks, &program)?;
     let mut parsed: Vec<View> = Vec::new();
     let mut ids = BTreeSet::from(["content".into(), "sedrava-error".into()]);
     let mut count = 0;
@@ -579,11 +660,21 @@ pub fn generate(source: &str, root: Option<&Path>) -> Result<StaticSite> {
             false,
             None,
             &program,
+            &services,
+            false,
         )?;
+    }
+    if parsed
+        .iter()
+        .map(|view| remote_render_cost(&view.nodes, &services))
+        .sum::<usize>()
+        > 20_000
+    {
+        return fail("WebApp HTTP remote rendering exceeds the document budget");
     }
     let mut script = String::from("'use strict';\n");
     let namespace = format!("webapp:{}", program.name);
-    web::append_domain(&program, &mut script, Some(&namespace))?;
+    let names = web::append_domain(&program, &mut script, Some(&namespace))?;
     let config: BTreeMap<_, _> = parsed.iter().map(|v| (&v.name, &v.route)).collect();
     script.push_str(&format!(
         "const viewConfig = JSON.parse({});\n",
@@ -593,6 +684,9 @@ pub fn generate(source: &str, root: Option<&Path>) -> Result<StaticSite> {
         "const themeState = {};\n",
         web::json(&theme_state)
     ));
+    if !services.is_empty() {
+        services::emit(&services, &names, &mut script)?;
+    }
     script.push_str(include_str!("webapp.js"));
     render::webapp(
         &program.name,
@@ -600,6 +694,7 @@ pub fn generate(source: &str, root: Option<&Path>) -> Result<StaticSite> {
         &palettes,
         &parsed,
         script,
+        !services.is_empty(),
         root.as_deref(),
     )
 }
