@@ -25,6 +25,7 @@ does **not** replace the stable Python 0.11.0 toolchain.
 - [Russian build/use guide and unsupported features](docs/RUST_CORE_MIGRATION.ru.md)
 - [Differential Python/Rust checker](scripts/verify_rust_core.py)
 - [Scoped CLI benchmark](scripts/benchmark_rust_core.py)
+- [Dated validation evidence and bounded performance results](evidence/rust-core/README.md)
 
 For example, from the repository root, after installing Rust:
 
