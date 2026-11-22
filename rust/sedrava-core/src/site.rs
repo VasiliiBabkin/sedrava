@@ -306,18 +306,19 @@ mod tests {
 
     #[test]
     fn generates_two_pages_with_escaped_text() {
-        let input = "site \"Example\"\n\
-page home at \"/\":\n\
-    title \"Hello & World\"\n\
-    description \"<safe>\"\n\
-    container:\n\
-        column:\n\
-            heading \"Hello <Rust>\"\n\
-            paragraph \"Native Site\"\n\
-            link \"Guide\" to \"/guide/\"\n\
-page guide at \"/guide/\":\n\
-    title \"Guide\"\n\
-    paragraph \"Second page\"\n";
+        let input = r#"site "Example"
+page home at "/":
+    title "Hello & World"
+    description "<safe>"
+    container:
+        column:
+            heading "Hello <Rust>"
+            paragraph "Native Site"
+            link "Guide" to "/guide/"
+page guide at "/guide/":
+    title "Guide"
+    paragraph "Second page"
+"#;
         let site = generate(input).unwrap();
         assert_eq!(site.files.len(), 2);
         let html = &site.files["index.html"];
