@@ -1,0 +1,38 @@
+app "Sedrava · Unicode"
+state source = "мама мыла раму"
+state cursor = 0
+state chars = 0
+state spaces = 0
+state letters_a = 0
+state runs = 0
+
+action analyze:
+    require text_length(source) <= 256
+    cursor = 0
+    chars = text_length(source)
+    spaces = 0
+    letters_a = 0
+    while cursor < chars limit 256:
+        let ch = text_at(source, cursor)
+        if ch == " ":
+            spaces = spaces + 1
+        if ch == "а":
+            letters_a = letters_a + 1
+        cursor = cursor + 1
+    runs = runs + 1
+
+test initial: -> source == "мама мыла раму"
+screen main:
+    text "Sedrava Native 0.12 · Unicode"
+    text "Это новая проверка языка: Unicode, вложенные условия и цикл на Sedrava."
+    text "Начальный пример: мама мыла раму. Ожидается 14 символов, 2 пробела и 4 буквы а."
+    text "Вводи строки короче 257 символов. Пример с эмодзи: кот 🐱"
+    input source label "Текст для анализа"
+    button "Посчитать символы" -> analyze
+    text "Результаты после нажатия:"
+    display chars
+    display spaces
+    display letters_a
+    display runs
+navigation:
+    initial main
