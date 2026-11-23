@@ -287,7 +287,10 @@ fn run() -> Result<()> {
         return Ok(());
     }
     if args[1] == "--version" {
-        println!("sedrava-native 0.1.0-alpha.1 (experimental partial Sedrava core)");
+        println!(
+            "sedrava-native {} (experimental native preview; not stable)",
+            env!("CARGO_PKG_VERSION")
+        );
         return Ok(());
     }
     if args.len() < 3 {

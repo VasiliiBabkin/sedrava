@@ -15,7 +15,7 @@ import tarfile
 import tempfile
 
 ROOT=Path(__file__).resolve().parents[1]
-EXEC=ROOT/"rust/target/release/sedrava-native"
+EXEC=Path(os.environ.get("CARGO_TARGET_DIR",str(ROOT/"rust/target")))/"release/sedrava-native"
 INSTALL=ROOT/"scripts/install_native_preview.sh"
 
 def sha(path):
@@ -44,7 +44,21 @@ def main():
         assert first["dirty_source"] in (True,False)
         second=json.loads(execute(command).stdout)
         assert checksum==sha(archive)==second["archive_sha256"]
+        # Negative control: an old executable must never be mislabeled with
+        # the current Cargo package version, regardless of file name.
+        fake=tmp/"fake-binary"/"sedrava-native"
+        fake.parent.mkdir()
+        fake.write_text('#!/bin/sh\necho "sedrava-native 0.1.0-alpha.1 (old)"\n')
+        fake.chmod(0o700)
+        reject=tmp/"reject-stale"
+        execute(["python3",ROOT/"scripts/package_native_preview.py",
+                 "--binary",fake,"--output",reject],expect=False)
+        assert not reject.exists() or not list(reject.iterdir())
         assert first["binary_sha256"]==sha(EXEC)
+        assert first["version"]=="0.12.0-alpha.1"
+        assert first["channel"]=="alpha"
+        assert "0.12.0-alpha.1" in archive.name
+        assert "0.12.0-alpha.1" in execute([EXEC,"--version"]).stdout
 
         # Strict PATH: no Python, pip, rustc or cargo installed in tool bin.
         tools=tmp/"tools"
@@ -93,7 +107,7 @@ def main():
 
         print("PASS: two reproducible SHA256-identical native tar.gz preview archives")
         print("PASS: no-Python/no-Rust-on-PATH installer + native app check/test")
-        print("PASS: existing binary, corrupt hash, extra entries and symlink bin rejected")
+        print("PASS: stale binary version, existing target, invalid hash, extra entries and symlink bin rejected")
         print(f"ARCHIVE_SHA256={checksum}")
         print(f"BINARY_SHA256={sha(EXEC)}")
         print(f"ARCHIVE_BYTES={archive.stat().st_size}")

@@ -50,3 +50,15 @@ A limited ASCII-token scanner is implemented in real Sedrava source and executed
 ### Native bounded loop and self-hosting lexer A1
 
 An experimental bounded while condition limit N statement (1..256) is supported in the Rust interpreter and native Web/Android code generators. A one-action Sedrava-authored lexer uses this internal loop; it no longer relies on one external CLI action per character. Stable Python 0.11 has no such syntax. 81 native tests and an independent lexical golden corpus pass. Web JS syntax checked with Node; Kotlin compilation not available on the VDS. This is **not** a self-hosted compiler. See [A1 protocol](SELF_HOSTING_LEXER_A1.ru.md).
+
+### Native 0.12.0-alpha.1 candidate (2026-11-23)
+
+The native Rust CLI has a separate 0.12.0-alpha.1 candidate version.
+It is not a published release. Ubuntu Linux validation included
+81 Rust tests, 390 Python/Rust differential examples, 7 CLI smoke
+gates, Host and A6 regression, versioned binary packaging and offline
+installation. The Python 0.11 stable package remains unchanged.
+Android APK, Windows/macOS, full 0.11 parity, cross-browser validation
+and release security review are still BLOCKERS for stable 0.12.
+[Release notes](RELEASE_NOTES_NATIVE_0_12_0_ALPHA1.ru.md) ·
+[gate matrix](NATIVE_012_ALPHA_ACCEPTANCE.md).
