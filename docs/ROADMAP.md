@@ -109,3 +109,16 @@ A real generated Android/Kotlin debug APK was also compiled by
 Gradle/Android SDK on VDS and signature-verified (no device test).
 This does NOT implement a full parser or stage 1/2/3 self-hosting.
 [Protocol (RU)](SELF_HOSTING_LEXER_A3.ru.md).
+
+### Experimental self-hosting parser A4 (2026-11-23)
+
+A4 adds a separate Sedrava-authored scan_layout action producing
+NEWLINE/INDENT/DEDENT for strict four-space indentation (<=8 levels)
+and a limited parse_binary action with two literal operands or
+the fixed precedence form INTEGER +/- INTEGER * / INTEGER.
+Independent corpus: layout 106 accepted / 10 rejected, expression
+AST 12 accepted / 15 rejected, plus A1-A3 regressions and 81 Rust
+tests PASS. Not a general grammar, shared token stream or self-hosting.
+A real Android/Kotlin debug APK also compiled via Gradle on the VDS
+and its signature was verified; physical Android execution is NOT TESTED.
+[Detailed limitations (RU)](SELF_HOSTING_PARSER_A4.ru.md).

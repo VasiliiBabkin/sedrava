@@ -194,3 +194,5 @@ Tested on Rust and generated Android Kotlin; not a self-hosted compiler.
 
 A3 research: [Sedrava-written source spans and a first assignment AST](docs/SELF_HOSTING_LEXER_A3.ru.md).
 This is a one-shot subset parser, not an autonomous compiler or full Sedrava grammar.
+
+Experimental [Sedrava-authored A4 layout tokens and limited arithmetic AST](docs/SELF_HOSTING_PARSER_A4.ru.md): NEWLINE/INDENT/DEDENT on a strict 4-space subset, plus a small fixed precedence-aware binary assignment. This is not a complete parser or self-hosted compiler.
