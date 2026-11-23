@@ -75,3 +75,14 @@ Gradle Kotlin/JVM. Real Chromium browser acceptance was attempted but
 the download was blocked, Android SDK/APK is unavailable. No new
 stable/beta release authorization is implied.
 [Detailed evidence (RU)](NATIVE_012_STABLE011_PARITY.ru.md).
+
+### 0.12.0-alpha.1 real Android debug APK smoke (2026-11-23)
+
+Android SDK Platform 35 + Build Tools 35 were installed on VDS (retained
+for future development). A real debug Android APK was generated from
+`examples/android_native_test.sdr` via native Rust CLI and compiled by
+Gradle 8.11.1 / Android Gradle Plugin 8.9.2 / Kotlin 2.0.21. Android
+Build Tools verified the APK, v2 debug signature, package, minSdk 26,
+targetSdk 35 and no dangerous system permissions. **Device install,
+on-phone behavior and OTA/upgrade are NOT TESTED** until user completes
+physical smoke. See [Android APK protocol](NATIVE_012_ANDROID_APK_SMOKE.ru.md).

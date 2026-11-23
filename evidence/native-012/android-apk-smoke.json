@@ -1,0 +1,32 @@
+{
+  "schema": "sedrava.native.android.apk-smoke.v1",
+  "tested_date": "2026-11-23",
+  "native_version": "0.12.0-alpha.1",
+  "compiler_source_sha": "ab357bcd849de97c00b200d16701cfa1945a3b35",
+  "source_file": "examples/android_native_test.sdr",
+  "source_sha256": "b9fb430af8201d794374b47da6a137fed4745f8bb1871c91d9ab3f3e4cb25ece",
+  "device_install": "NOT_TESTED",
+  "apk_compilation": "PASS",
+  "apk_static_verification": "PASS",
+  "android_debug_signature": "PASS",
+  "debug_signed_by": "CN=Android Debug",
+  "application_id": "ru.ladokod.sedrava.native012test",
+  "app_name": "Проверка Sedrava",
+  "min_sdk": 26,
+  "target_sdk": 35,
+  "compile_sdk": 35,
+  "gradle_version": "8.11.1",
+  "android_gradle_plugin": "8.9.2",
+  "kotlin_android_plugin": "2.0.21",
+  "jdk": 17,
+  "artifact": "Sedrava-Native-Test-0.12.0-alpha.1-debug.apk",
+  "apk_bytes": 8772887,
+  "apk_sha256": "e21d2a04f9f790c61cd08910ea452431776f059d29638684cad63bda82af1d09",
+  "permissions_note": "No dangerous system permissions; AndroidX private dynamic receiver permission present",
+  "limitations": [
+    "No on-device install or behavior",
+    "No upgrade/rollback",
+    "No production signing",
+    "No cross-Android-device compatibility evidence"
+  ]
+}

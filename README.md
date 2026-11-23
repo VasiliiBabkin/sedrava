@@ -30,6 +30,7 @@ The Rust CLI is not yet proven compatible with the complete Python 0.11
 language, and an Android source tree is not evidence of a working APK.
 
 - [Native alpha notes / RU](docs/RELEASE_NOTES_NATIVE_0_12_0_ALPHA1.ru.md)
+- [Real Android debug APK build and device smoke protocol (RU)](docs/NATIVE_012_ANDROID_APK_SMOKE.ru.md)
 - [Scope-specific acceptance gates](docs/NATIVE_012_ALPHA_ACCEPTANCE.md)
 - [Published 0.11.0 differential and Web/Kotlin follow-up (RU)](docs/NATIVE_012_STABLE011_PARITY.ru.md)
 - [Rust migration and limitations](docs/RUST_FULL_MIGRATION.ru.md)

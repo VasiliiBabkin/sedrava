@@ -45,3 +45,11 @@ exact release tag c9cde75..., 297 Git objects verified; 898 comparisons,
 published-stable site/WebApp build comparisons; generated Kotlin/JVM
 execution PASS with Gradle/Kotlin. Web Node and jsdom tests PASS but
 real browser execution and Android APK remain blocked.
+
+
+### Android APK build addendum (23 Nov 2026)
+
+Android SDK 35 Build Tools/Platform retained on VDS. A real generated
+`app-debug.apk` was built and independently inspected with aapt,
+apksigner and ZIP CRC verification. The first physical phone smoke is
+pending. See [reproduction](NATIVE_012_ANDROID_APK_SMOKE.ru.md).
