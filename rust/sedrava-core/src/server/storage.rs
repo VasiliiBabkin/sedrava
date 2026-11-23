@@ -141,7 +141,7 @@ fn decoded(raw: &[u8], expected: &str, defs: &BTreeMap<String, StateDef>) -> Res
     Ok(values)
 }
 
-fn decoded_transaction(
+pub(super) fn decoded_transaction(
     raw: &[u8],
     expected: &str,
     defs: &BTreeMap<String, StateDef>,

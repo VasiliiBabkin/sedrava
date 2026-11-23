@@ -16,12 +16,14 @@ use std::time::{Duration, Instant};
 mod backend;
 mod http;
 mod journal;
+mod sqlite;
 mod state;
 mod storage;
 mod transaction;
 
 use backend::TransactionBackend;
 use journal::JournalStore;
+use sqlite::SqliteStore;
 use state::{StateDef, Step, Values};
 use std::path::Path;
 use storage::{SaveFailure, Store};
@@ -345,6 +347,7 @@ pub(crate) struct Session {
     values: Values,
     store: Option<Store>,
     journal: Option<JournalStore>,
+    sqlite: Option<SqliteStore>,
     ledger: Option<Ledger>,
     poisoned: bool,
 }
@@ -354,24 +357,35 @@ impl Session {
         state_dir: Option<&Path>,
         transactional: bool,
         journaled: bool,
+        sqlite_state: Option<&Path>,
     ) -> Result<Self> {
-        if transactional && state_dir.is_none() {
-            return fail("E_SERVER_TRANSACTION: --transactional requires --state-dir");
+        if transactional && state_dir.is_none() && sqlite_state.is_none() {
+            return fail(
+                "E_SERVER_TRANSACTION: --transactional requires --state-dir or --sqlite-state",
+            );
+        }
+        if sqlite_state.is_some() && (!transactional || state_dir.is_some() || journaled) {
+            return fail("E_SERVER_SQLITE: --sqlite-state requires --transactional and forbids --state-dir/--journaled");
         }
         if journaled && !transactional {
             return fail("E_SERVER_JOURNAL: --journaled requires --transactional");
         }
-        let (store, journal, values, ledger) = if journaled {
+        let (store, journal, sqlite, values, ledger) = if let Some(path) = sqlite_state {
+            let (sqlite, values, ledger) =
+                SqliteStore::open(path, &program.name, &program.states, &program.source_sha)?;
+            (None, None, Some(sqlite), values, ledger)
+        } else if journaled {
             let dir = state_dir.expect("checked --state-dir");
             let (journal, values, ledger) =
                 JournalStore::open(dir, &program.name, &program.states, &program.source_sha)?;
-            (None, Some(journal), values, ledger)
+            (None, Some(journal), None, values, ledger)
         } else if let Some(dir) = state_dir {
             let (store, values, ledger) =
                 Store::open(dir, &program.name, &program.states, transactional)?;
-            (Some(store), None, values, ledger)
+            (Some(store), None, None, values, ledger)
         } else {
             (
+                None,
                 None,
                 None,
                 program
@@ -386,12 +400,16 @@ impl Session {
             values,
             store,
             journal,
+            sqlite,
             ledger: transactional.then_some(ledger),
             poisoned: false,
         })
     }
 
     fn backend(&mut self) -> Option<&mut dyn TransactionBackend> {
+        if let Some(sqlite) = self.sqlite.as_mut() {
+            return Some(sqlite);
+        }
         if let Some(journal) = self.journal.as_mut() {
             return Some(journal);
         }
@@ -409,7 +427,7 @@ pub(crate) fn reply(
     body: &[u8],
     content_type: Option<&str>,
 ) -> http::Response {
-    let mut session = Session::open(program, None, false, false).expect("in-memory state");
+    let mut session = Session::open(program, None, false, false, None).expect("in-memory state");
     reply_stateful(
         program,
         &mut session,
@@ -617,6 +635,7 @@ pub fn serve(
     state_dir: Option<&Path>,
     transactional: bool,
     journaled: bool,
+    sqlite_state: Option<&Path>,
 ) -> Result<()> {
     if options.max_requests == 0
         || options.max_requests > 10_000
@@ -625,7 +644,7 @@ pub fn serve(
     {
         return fail("E_SERVER_RUN: max_requests 1..10000 and idle_ms 500..120000 required");
     }
-    let mut session = Session::open(program, state_dir, transactional, journaled)?;
+    let mut session = Session::open(program, state_dir, transactional, journaled, sqlite_state)?;
     let listener = TcpListener::bind(("127.0.0.1", options.port))
         .map_err(|e| Error(format!("E_SERVER_BIND: unable to bind loopback: {e}")))?;
     listener

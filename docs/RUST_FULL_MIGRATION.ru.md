@@ -237,3 +237,13 @@ Issue #65 остаётся открытым.
 Это **не** production WAL: нет checkpoint/компактизации,
 power-loss доказательства и сетевой многопользовательской БД.
 Issue #84 остаётся открытым.
+
+### Server A5 — SedravaSQL SQLite storage
+
+[Server A5](RUST_NATIVE_SERVER_A5_SQLITE.ru.md) добавляет opt-in
+`--sqlite-state` через **реальную внешнюю Rust-библиотеку SedravaSQL**
+(pinned commit b5831d7...). Подтверждённые операции записываются
+в SQLite WAL с атомарным аудитом и квитанциями. Старые режимы
+не меняются, серверный лимит 32 квитанций пока остаётся.
+Это первая работающая интеграция языка и независимой СУБД,
+не полный SQL/ORM API и не production.

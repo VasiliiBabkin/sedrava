@@ -1,0 +1,19 @@
+# A5 native server persisted through pinned SedravaSQL SQLite backend.
+server "SQLite A5 Example"
+state count: int = 0
+state total: int = 0
+state label: text = "open"
+route GET "/summary":
+    respond 200 { count: state.count, total: state.total, label: state.label }
+route POST "/record":
+    request amount: int
+    require request.amount > 0
+    set count = state.count + 1
+    set total = state.total + request.amount
+    require state.total <= 100
+    respond 201 { count: state.count, total: state.total, accepted: true }
+route PUT "/label":
+    request name: text
+    require request.name != ""
+    set label = request.name
+    respond 200 { label: state.label }

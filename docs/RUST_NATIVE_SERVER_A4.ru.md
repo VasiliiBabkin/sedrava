@@ -183,3 +183,8 @@ A4-тесты проверяют настоящие HTTP-запросы чере
 Следующая задача: [Issue #84](https://github.com/VasiliiBabkin/sedrava/issues/84)
 — протокол транзакций begin/read/update/abort, checkpoint, rollback,
 обоснованная модель восстановления и адаптер для SedravaSQL.
+
+Существует также [Server A5 на SedravaSQL/SQLite](RUST_NATIVE_SERVER_A5_SQLITE.ru.md):
+он использует SQLite WAL и параметризованные транзакции, не требует
+миграции существующих A4-каталогов и не закрывает требования к
+production-надёжности.
