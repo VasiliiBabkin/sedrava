@@ -106,6 +106,31 @@ fn execute_block(
                     return fail("Action requirement rejected");
                 }
             }
+            Stmt::While(condition, cap, repeated) => {
+                // Everything is evaluated on transition()'s private candidate,
+                // never published until the whole action succeeds.
+                for _ in 0..*cap {
+                    let mut environment = resolve(program, candidate)?;
+                    environment.extend(locals.clone());
+                    if expr::evaluate_full(
+                        condition,
+                        &environment,
+                        &program.types,
+                        &program.functions,
+                    )? != Value::Bool(true)
+                    {
+                        break;
+                    }
+                    execute_block(program, candidate, repeated, &mut locals.clone(), steps)?;
+                }
+                let mut environment = resolve(program, candidate)?;
+                environment.extend(locals.clone());
+                if expr::evaluate_full(condition, &environment, &program.types, &program.functions)?
+                    == Value::Bool(true)
+                {
+                    return fail("While iteration limit exceeded");
+                }
+            }
             Stmt::Match(expression, arms) => {
                 use crate::model::MatchPattern;
                 // Evaluate the subject exactly once. A candidate state is
@@ -286,6 +311,47 @@ mod tests {
         assert_eq!(run_tests(&p).unwrap(), 1);
         let state = run_actions(&p, &["add".into()]).unwrap();
         assert_eq!(state.get("positive"), Some(&Value::Bool(true)));
+    }
+
+    #[test]
+    fn bounded_while_executes_exactly_and_publishes_only_when_finished() {
+        let p = parse(
+            "app \"Loop\"\nstate n = 0\naction go:\n    while n < 5 limit 5:\n        n = n + 1",
+        )
+        .unwrap();
+        let state = run_actions(&p, &["go".into()]).unwrap();
+        assert_eq!(state.get("n"), Some(&Value::Int(5)));
+        let p=parse("app \"Loop\"\nstate n = 0\naction go:\n    while n < 5 limit 6:\n        n = n + 1\n    n = n + 2").unwrap();
+        let state = run_actions(&p, &["go".into()]).unwrap();
+        assert_eq!(state.get("n"), Some(&Value::Int(7)));
+    }
+
+    #[test]
+    fn bounded_while_nonterminating_or_bad_input_keeps_original_state() {
+        let p = parse(
+            "app \"Loop\"\nstate n = 0\naction bad:\n    while true limit 2:\n        n = n + 1",
+        )
+        .unwrap();
+        let before = p.states.clone();
+        assert!(transition(&p, &before, "bad")
+            .unwrap_err()
+            .to_string()
+            .contains("limit exceeded"));
+        assert_eq!(before.get("n"), Some(&Value::Int(0)));
+        let p=parse("app \"Loop\"\nstate n = 0\naction bad:\n    while n < 4 limit 5:\n        n = n + 1\n        require n < 3").unwrap();
+        assert!(transition(&p, &p.states, "bad").is_err());
+        assert_eq!(p.states.get("n"), Some(&Value::Int(0)));
+        for wrong in [
+            "while n < 3:\n        n = n + 1",
+            "while n < 3 limit 0:\n        n = n + 1",
+            "while n < 3 limit 257:\n        n = n + 1",
+            "while n < 3 limit -1:\n        n = n + 1",
+            "while 7 limit 5:\n        n = n + 1",
+            "while n < 3 limit 5:",
+        ] {
+            let source = format!("app \"Loop\"\nstate n = 0\naction go:\n    {wrong}");
+            assert!(parse(&source).is_err(), "{wrong}");
+        }
     }
 
     #[test]

@@ -294,6 +294,32 @@ fn statements_js(
                     expr_js(e, &env)?
                 ));
             }
+            Stmt::While(condition, cap, repeated) => {
+                *counter += 1;
+                let ident = format!("_loop_{counter}");
+                out.push_str(&format!(
+                    "{pad}let {ident}=0;
+"
+                ));
+                out.push_str(&format!(
+                    "{pad}while ({}) {{
+",
+                    expr_js(condition, &env)?
+                ));
+                out.push_str(&format!(
+                    "{pad}  if ({ident}>={cap}) throw Error('While iteration limit exceeded');
+"
+                ));
+                out.push_str(&format!(
+                    "{pad}  {ident}++;
+"
+                ));
+                statements_js(repeated, &env, out, counter, depth + 2)?;
+                out.push_str(&format!(
+                    "{pad}}}
+"
+                ));
+            }
             Stmt::Match(subject, arms) => {
                 use crate::model::MatchPattern;
                 *counter += 1;

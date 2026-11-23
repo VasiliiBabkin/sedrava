@@ -278,6 +278,21 @@ fn statements(
                 locals.insert(name.clone(), local);
             }
             Stmt::Require(expr) => writeln!(out, "{pad}require({})", compile(expr)?).unwrap(),
+            Stmt::While(condition, cap, repeated) => {
+                let ident = format!("loop_{index}");
+                *index += 1;
+                writeln!(out, "{pad}var {ident}=0").unwrap();
+                writeln!(out, "{pad}while ({}) {{", compile(condition)?).unwrap();
+                writeln!(
+                    out,
+                    "{pad}    require({ident}<{cap}) {{ {} }}",
+                    quote("While iteration limit exceeded")
+                )
+                .unwrap();
+                writeln!(out, "{pad}    {ident}++").unwrap();
+                statements(out, repeated, &types, &locals, depth + 4, index)?;
+                writeln!(out, "{pad}}}").unwrap();
+            }
             Stmt::Match(subject, arms) => {
                 use crate::model::MatchPattern;
                 let result_type = crate::expr::infer(subject, &types)?;

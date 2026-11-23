@@ -299,6 +299,36 @@ fn parse_block(
         }
         let number = current.number;
         let text = current.content.as_str();
+        if text.starts_with("while ") && text.ends_with(':') {
+            let rest = &text[6..text.len() - 1];
+            let (condition, raw_cap) = rest.rsplit_once(" limit ").ok_or_else(|| {
+                Error(format!(
+                    "Line {number}: while requires explicit limit 1..256"
+                ))
+            })?;
+            if raw_cap.is_empty() || !raw_cap.bytes().all(|c| c.is_ascii_digit()) {
+                return line_error(number, "while requires decimal limit 1..256");
+            }
+            let cap = raw_cap
+                .parse::<u16>()
+                .map_err(|_| Error(format!("Line {number}: while limit out of range")))?;
+            if !(1..=256).contains(&cap) {
+                return line_error(number, "while limit must be 1..256");
+            }
+            let condition = require_type(condition, &scope, Kind::Bool, number)?;
+            *pos += 1;
+            if *pos >= lines.len() || lines[*pos].indent <= indent {
+                return line_error(number, "Empty while body");
+            }
+            let nested_indent = lines[*pos].indent;
+            let repeated =
+                parse_block(lines, pos, nested_indent, depth + 1, &scope, states, count)?;
+            if repeated.is_empty() {
+                return line_error(number, "Empty while body");
+            }
+            body.push(Stmt::While(condition, cap, repeated));
+            continue;
+        }
         if text.starts_with("match ") && text.ends_with(':') {
             body.push(parse_match(
                 lines, pos, indent, depth, &scope, states, count,

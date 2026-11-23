@@ -46,3 +46,7 @@ the language compiler.
 ### Self-hosting lexer A0 preview
 
 A limited ASCII-token scanner is implemented in real Sedrava source and executed via native Rust CLI. It requires one external CLI action per input scalar, so it is **not** autonomous or self-hosting. A new portable text_at(text,index) Unicode-scalar primitive has Rust/Python/JS parity tests; Kotlin runtime source was updated but a Kotlin compiler is unavailable in the tested VDS environment. See [detailed Russian evidence](SELF_HOSTING_LEXER_A0.ru.md).
+
+### Native bounded loop and self-hosting lexer A1
+
+An experimental bounded while condition limit N statement (1..256) is supported in the Rust interpreter and native Web/Android code generators. A one-action Sedrava-authored lexer uses this internal loop; it no longer relies on one external CLI action per character. Stable Python 0.11 has no such syntax. 81 native tests and an independent lexical golden corpus pass. Web JS syntax checked with Node; Kotlin compilation not available on the VDS. This is **not** a self-hosted compiler. See [A1 protocol](SELF_HOSTING_LEXER_A1.ru.md).
