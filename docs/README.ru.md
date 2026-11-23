@@ -80,3 +80,7 @@ The integration preview adds shared composition, pure functions, bounded collect
 [Парсер A4 на Sedrava: отступы и небольшой арифметический AST](SELF_HOSTING_PARSER_A4.ru.md).
 
 [Этап A5.1: единый поток лексических токенов и отступов](SELF_HOSTING_UNIFIED_A51.ru.md).
+
+A7: документированное чтение значения и ревизии ключа
+SedravaSQL на стороне сервера.
+См. RUST_NATIVE_SERVER_A7_DB_METADATA.ru.md.

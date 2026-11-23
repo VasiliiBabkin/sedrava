@@ -106,7 +106,11 @@ impl SqliteV2Store {
     }
 
     /// Narrow read-only bridge to a managed SedravaSQL UTF-8 KV value.
-    pub fn read_text(&self, namespace: &str, key: &str) -> Result<Option<String>> {
+    pub fn read_text_and_revision(
+        &self,
+        namespace: &str,
+        key: &str,
+    ) -> Result<Option<(String, u64)>> {
         if namespace.starts_with("sedrava_native") {
             return fail("E_SERVER_DB: reserved namespace");
         }
@@ -123,7 +127,7 @@ impl SqliteV2Store {
                 if text.chars().count() > 1_024 || text.chars().any(char::is_control) {
                     return fail("E_SERVER_DB: stored value outside text scalar limits");
                 }
-                Ok(Some(text))
+                Ok(Some((text, row.revision)))
             }
         }
     }

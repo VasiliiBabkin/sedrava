@@ -1,0 +1,15 @@
+{
+  "schema": "sedrava.native-server.a7.db-revision.v1",
+  "date": "2026-11-24",
+  "test_script": "scripts/verify_native_server_db_revision_a7.py",
+  "example": "examples/native_server/sqlite_a7_metadata.sdr",
+  "backend": "SedravaSQL managed SQLite (existing pinned dependency)",
+  "cross_process_write_update_delete": true,
+  "invalid_dsl_rejected": 7,
+  "int32_revision_overflow_rejected": true,
+  "rust_unit_tests_pass": 82,
+  "a6_regressions_pass": true,
+  "clippy_strict_pass": false,
+  "production_ready": false,
+  "limitations": "GET-only, one key coherent read; no multi-key snapshot, write DSL or public API"
+}

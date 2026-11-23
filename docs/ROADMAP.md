@@ -133,3 +133,13 @@ Android/Kotlin assembleDebug PASS (no device execution). The merger is
 limited to 100 output tokens, 256 input scalars, fresh-run IDs and a
 narrow subset with no strings in layout code. No full grammar/AST.
 [RU details](SELF_HOSTING_UNIFIED_A51.ru.md).
+
+### Native server A7 (2026-11-24): read-only SedravaSQL revision
+
+A7 adds typed db_revision("namespace/key") to the local native server
+DSL, next to db_get. For the same key both fields reuse one managed
+SedravaSQL row read, with checked int32 revision conversion.
+Live independent CLI writes and Sedrava GET updates PASS; seven
+invalid DSL cases PASS, overflow fails closed, 82 Rust tests PASS,
+A6 integration regressions PASS. No arbitrary SQL/write/multi-key
+snapshot. See RUST_NATIVE_SERVER_A7_DB_METADATA.ru.md.

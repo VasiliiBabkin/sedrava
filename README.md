@@ -200,3 +200,8 @@ Experimental [Sedrava-authored A4 layout tokens and limited arithmetic AST](docs
 A5.1 self-hosting research: [merge lexical and indentation tokens in
 Sedrava](docs/SELF_HOSTING_UNIFIED_A51.ru.md). Three bounded actions
 combine A3 and A4 streams in source order. This is not a full parser.
+
+Experimental Server A7: direct read-only SedravaSQL revision
+accessor db_revision("namespace/key") alongside db_get; one shared
+managed-row read per key and GET response.
+See docs/RUST_NATIVE_SERVER_A7_DB_METADATA.ru.md.

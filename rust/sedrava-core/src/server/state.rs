@@ -24,6 +24,12 @@ pub enum Expr {
         key: String,
         slot: String,
     },
+    /// The current int32 revision of a managed SedravaSQL row (A7).
+    DbRevision {
+        namespace: String,
+        key: String,
+        slot: String,
+    },
     Add(Box<Expr>, Box<Expr>),
 }
 
@@ -142,33 +148,51 @@ pub fn atom(
     states: &BTreeMap<String, StateDef>,
 ) -> Result<(Expr, ScalarType)> {
     let raw = raw.trim();
-    if let Some(argument) = raw
-        .strip_prefix("db_get(")
-        .and_then(|r| r.strip_suffix(')'))
-    {
-        let path: String = serde_json::from_str(argument)
-            .map_err(|_| Error("E_SERVER_DB: expected quoted namespace/key".into()))?;
-        let (namespace, key) = path
-            .split_once('/')
-            .ok_or_else(|| Error("E_SERVER_DB: expected namespace/key".into()))?;
-        let id_ok = |v: &str| {
-            !v.is_empty()
-                && v.len() <= 128
-                && v.bytes()
-                    .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'_'))
-        };
-        if !id_ok(namespace) || !id_ok(key) || namespace.starts_with("sedrava_native") {
-            return fail("E_SERVER_DB: invalid or reserved namespace/key");
+    // Static and checked DB path only: no request-provided SQL identifiers.
+    for (prefix, revision) in [("db_get(", false), ("db_revision(", true)] {
+        if let Some(argument) = raw.strip_prefix(prefix).and_then(|r| r.strip_suffix(')')) {
+            let path: String = serde_json::from_str(argument)
+                .map_err(|_| Error("E_SERVER_DB: expected quoted namespace/key".into()))?;
+            let (namespace, key) = path
+                .split_once('/')
+                .ok_or_else(|| Error("E_SERVER_DB: expected namespace/key".into()))?;
+            let id_ok = |v: &str| {
+                !v.is_empty()
+                    && v.len() <= 128
+                    && v.bytes()
+                        .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'_'))
+            };
+            if !id_ok(namespace) || !id_ok(key) || namespace.starts_with("sedrava_native") {
+                return fail("E_SERVER_DB: invalid or reserved namespace/key");
+            }
+            // Two different slots share a single request-local row read.
+            let slot = format!(
+                "_sql_{}_{:x}",
+                if revision { "rev" } else { "text" },
+                Sha256::digest(path.as_bytes())
+            );
+            let expression = if revision {
+                Expr::DbRevision {
+                    namespace: namespace.into(),
+                    key: key.into(),
+                    slot,
+                }
+            } else {
+                Expr::DbGet {
+                    namespace: namespace.into(),
+                    key: key.into(),
+                    slot,
+                }
+            };
+            return Ok((
+                expression,
+                if revision {
+                    ScalarType::Int
+                } else {
+                    ScalarType::Text
+                },
+            ));
         }
-        let slot = format!("_sql_{:x}", Sha256::digest(path.as_bytes()));
-        return Ok((
-            Expr::DbGet {
-                namespace: namespace.to_owned(),
-                key: key.to_owned(),
-                slot,
-            },
-            ScalarType::Text,
-        ));
     }
     if let Some(name) = raw.strip_prefix("request.") {
         let Some(&kind) = request.get(name) else {
@@ -216,8 +240,8 @@ pub fn parse_step(
     states: &BTreeMap<String, StateDef>,
     is_get: bool,
 ) -> Result<Step> {
-    if text.contains("db_get(") {
-        return fail("E_SERVER_DB: db_get is read-only and supported only in GET responses");
+    if text.contains("db_get(") || text.contains("db_revision(") {
+        return fail("E_SERVER_DB: database expressions are GET-response-only");
     }
     if let Some(raw) = text.strip_prefix("set ") {
         if is_get {
@@ -276,7 +300,9 @@ pub fn eval(
         Expr::Literal(value) => Ok(value.clone()),
         Expr::Request(key) => request.get(key).cloned().ok_or(EvalError::Invalid),
         Expr::State(key) => state.get(key).cloned().ok_or(EvalError::Invalid),
-        Expr::DbGet { slot, .. } => state.get(slot).cloned().ok_or(EvalError::Invalid),
+        Expr::DbGet { slot, .. } | Expr::DbRevision { slot, .. } => {
+            state.get(slot).cloned().ok_or(EvalError::Invalid)
+        }
         Expr::Add(a, b) => {
             let a = eval(a, request, state)?;
             let b = eval(b, request, state)?;
@@ -332,6 +358,40 @@ pub fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn a7_db_revision_is_typed_and_literal_only() {
+        let request = BTreeMap::new();
+        let state = BTreeMap::new();
+        let (value, kind) =
+            expression(r#"db_revision("public_notes/welcome")"#, &request, &state).unwrap();
+        assert_eq!(kind, ScalarType::Int);
+        assert!(matches!(
+            value,
+            Expr::DbRevision { namespace, key, .. }
+              if namespace == "public_notes" && key == "welcome"
+        ));
+        assert_eq!(
+            expression(r#"db_get("public_notes/welcome")"#, &request, &state)
+                .unwrap()
+                .1,
+            ScalarType::Text
+        );
+        for invalid in [
+            r#"db_revision("sedrava_native_a6/internal")"#,
+            r#"db_revision("public_notes/../../wrong")"#,
+            r#"db_revision(request.path)"#,
+            r#"db_revision("public_notes/")"#,
+        ] {
+            assert!(expression(invalid, &request, &state).is_err(), "{invalid}");
+        }
+        assert!(parse_step(
+            r#"require db_revision("public_notes/welcome") == 1"#,
+            &request,
+            &state,
+            false
+        )
+        .is_err());
+    }
     #[test]
     fn bounded_int_and_quoted_plus() {
         let mut state = BTreeMap::new();
