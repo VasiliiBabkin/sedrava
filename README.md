@@ -191,3 +191,6 @@ The [stable 0.11.0](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.
 Native A2 research: [self-hosting lexer written in Sedrava](docs/SELF_HOSTING_LEXER_A2.ru.md)
 now handles basic quoted Unicode text, comments and compound punctuation.
 Tested on Rust and generated Android Kotlin; not a self-hosted compiler.
+
+A3 research: [Sedrava-written source spans and a first assignment AST](docs/SELF_HOSTING_LEXER_A3.ru.md).
+This is a one-shot subset parser, not an autonomous compiler or full Sedrava grammar.

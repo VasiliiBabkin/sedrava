@@ -1,0 +1,144 @@
+# A3: Sedrava-written lexer with source spans and tiny assignment AST prototype.
+# One action scans up to 256 Unicode scalars. Strings preserve raw spelling.
+# Supports ASCII identifiers/integers, quoted strings and basic escapes,
+# whitespace, # comments, punctuation and two-character operators.
+app "Self-host Lexer A3"
+record Token:
+    kind: text
+    lexeme: text
+    offset: int
+    end: int
+    line: int
+    column: int
+record Assignment:
+    name: text
+    literal: text
+    start: int
+    end: int
+fn ascii_letter(ch: text) -> bool = contains("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_", ch)
+fn ascii_digit(ch: text) -> bool = contains("0123456789", ch)
+
+state source = "sum==42 # comment"
+state cursor = 0
+state start = 0
+state line = 1
+state column = 1
+state start_line = 1
+state start_column = 1
+state fragment = ""
+state fragment_kind = ""
+state operator = ""
+state in_string = false
+state escaped = false
+state in_comment = false
+state tokens: list<Token>(max=100) = []
+state assignments: list<Assignment>(max=1) = []
+
+action scan:
+    require text_length(source) <= 256
+    while cursor < text_length(source) limit 256:
+        let ch = text_at(source, cursor)
+        if in_comment:
+            if ch == "\n":
+                in_comment = false
+        else:
+            if in_string:
+                fragment = concat(fragment, ch)
+                if escaped:
+                    require contains("ntr\"\\", ch)
+                    escaped = false
+                else:
+                    if ch == "\\":
+                        escaped = true
+                    else:
+                        if ch == "\"":
+                            tokens = append(tokens, Token(kind="string", lexeme=fragment, offset=start, end=cursor + 1, line=start_line, column=start_column))
+                            fragment = ""
+                            fragment_kind = ""
+                            in_string = false
+            else:
+                if ch == "#":
+                    if fragment != "":
+                        tokens = append(tokens, Token(kind=fragment_kind, lexeme=fragment, offset=start, end=cursor, line=start_line, column=start_column))
+                        fragment = ""
+                        fragment_kind = ""
+                    in_comment = true
+                else:
+                    if ch == "\"":
+                        if fragment != "":
+                            tokens = append(tokens, Token(kind=fragment_kind, lexeme=fragment, offset=start, end=cursor, line=start_line, column=start_column))
+                            fragment = ""
+                            fragment_kind = ""
+                        start = cursor
+                        start_line = line
+                        start_column = column
+                        fragment = ch
+                        fragment_kind = "string"
+                        in_string = true
+                    else:
+                        if contains(" \t\r\n", ch):
+                            if fragment != "":
+                                tokens = append(tokens, Token(kind=fragment_kind, lexeme=fragment, offset=start, end=cursor, line=start_line, column=start_column))
+                                fragment = ""
+                                fragment_kind = ""
+                        else:
+                            if contains("(){}[],:.+-*/=<>!", ch):
+                                if fragment != "":
+                                    tokens = append(tokens, Token(kind=fragment_kind, lexeme=fragment, offset=start, end=cursor, line=start_line, column=start_column))
+                                    fragment = ""
+                                    fragment_kind = ""
+                                operator = ch
+                                if cursor + 1 < text_length(source):
+                                    let next_ch = text_at(source, cursor + 1)
+                                    if next_ch == "=" and contains("=!<>", ch):
+                                        operator = concat(ch, next_ch)
+                                        cursor = cursor + 1
+                                    else:
+                                        if ch == "-" and next_ch == ">":
+                                            operator = "->"
+                                            cursor = cursor + 1
+                                if contains("+-*/=<>!", ch):
+                                    tokens = append(tokens, Token(kind="operator", lexeme=operator, offset=cursor + 1 - text_length(operator), end=cursor + 1, line=line, column=column))
+                                else:
+                                    tokens = append(tokens, Token(kind="punct", lexeme=operator, offset=cursor + 1 - text_length(operator), end=cursor + 1, line=line, column=column))
+                                if text_length(operator) == 2:
+                                    column = column + 1
+                            else:
+                                require ascii_letter(ch) or ascii_digit(ch)
+                                if fragment == "":
+                                    start = cursor
+                                    start_line = line
+                                    start_column = column
+                                    if ascii_digit(ch):
+                                        fragment_kind = "integer"
+                                    else:
+                                        fragment_kind = "identifier"
+                                else:
+                                    if fragment_kind == "integer":
+                                        require ascii_digit(ch)
+                                fragment = concat(fragment, ch)
+        if ch == "\n":
+            line = line + 1
+            column = 1
+        else:
+            column = column + 1
+        cursor = cursor + 1
+    require not in_string
+    require not escaped
+    if fragment != "":
+        tokens = append(tokens, Token(kind=fragment_kind, lexeme=fragment, offset=start, end=cursor, line=start_line, column=start_column))
+        fragment = ""
+        fragment_kind = ""
+action parse_assignment:
+    require count(tokens) == 3
+    let left = get(tokens, 1)
+    let equal_sign = get(tokens, 2)
+    let right = get(tokens, 3)
+    require left.kind == "identifier"
+    require equal_sign.kind == "operator" and equal_sign.lexeme == "="
+    require right.kind == "integer"
+    assignments = append(assignments, Assignment(name=left.lexeme, literal=right.lexeme, start=left.offset, end=right.end))
+
+test initially_empty: -> count(tokens) == 0
+screen main:
+    text "Experimental Sedrava A3: source spans and one assignment AST node."
