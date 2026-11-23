@@ -109,6 +109,12 @@ internal fun record(name: String, fields: Map<String, Any>): SdrRecord =
     SdrRecord(name, fields.toMap()).also { checkValue(it, SdrType.Record(name)) }
 
 internal fun builtin_text_length(value: String): Int = value.codePointCount(0, value.length)
+internal fun builtin_text_at(value: String, index: Int): String {
+    require(index >= 0 && index < value.codePointCount(0, value.length))
+    val codePoint = value.codePointAt(value.offsetByCodePoints(0, index))
+    require(codePoint !in 0xD800..0xDFFF)
+    return String(Character.toChars(codePoint))
+}
 internal fun builtin_trim(value: String): String = value.trim(' ', '\t', '\n', '\r')
 internal fun builtin_lower_ascii(value: String): String =
     value.map { if (it in 'A'..'Z') it.lowercaseChar() else it }.joinToString("")

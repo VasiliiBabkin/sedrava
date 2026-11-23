@@ -41,3 +41,7 @@ Rust-ядра, экспериментальной базы или работаю
 
 Состояние переноса: docs/RUST_FULL_MIGRATION.ru.md.
 Независимый движок СУБД: https://github.com/VasiliiBabkin/sedravasql/blob/main/docs/SELF_HOSTED_STORAGE.ru.md
+
+## Экспериментальный этап A0 (выполнен частично)
+
+Первый лексер ASCII-подмножества написан на Sedrava и выполняется экспериментальным Rust CLI по одному вызову step на символ. Добавлена Unicode-функция text_at() с проверкой границ. Паритетность Rust/Python/JS проверена; Kotlin компилятор не установлен на VDS, а внутренний цикл Sedrava и полноценная грамматика пока отсутствуют. [Протокол и ограничения](SELF_HOSTING_LEXER_A0.ru.md).

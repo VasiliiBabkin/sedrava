@@ -42,3 +42,7 @@ Rust remains the tested bootstrap compiler; stable 0.11.0 is Python-based.
 Read the [self-hosting roadmap](SELF_HOSTING_ROADMAP.ru.md) for exact gates.
 SedravaSQL is a separate database project and is not required for building
 the language compiler.
+
+### Self-hosting lexer A0 preview
+
+A limited ASCII-token scanner is implemented in real Sedrava source and executed via native Rust CLI. It requires one external CLI action per input scalar, so it is **not** autonomous or self-hosting. A new portable text_at(text,index) Unicode-scalar primitive has Rust/Python/JS parity tests; Kotlin runtime source was updated but a Kotlin compiler is unavailable in the tested VDS environment. See [detailed Russian evidence](SELF_HOSTING_LEXER_A0.ru.md).

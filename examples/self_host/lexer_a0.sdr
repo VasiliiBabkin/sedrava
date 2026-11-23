@@ -1,0 +1,62 @@
+# Stage 0 self-hosting experiment: a one-character-per-action ASCII lexer.
+# This is Sedrava source, not a Rust/Python tokenizer call.
+# The CLI drives step once per input Unicode scalar, then finish.
+# It accepts ASCII identifier characters, ASCII digits and ()=+,- punctuation.
+app "Self-host Lexer A0"
+
+record Token:
+    kind: text
+    lexeme: text
+    offset: int
+
+fn ascii_letter(ch: text) -> bool = contains("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_", ch)
+fn ascii_digit(ch: text) -> bool = contains("0123456789", ch)
+
+state source = "sum=42 (next)"
+state cursor = 0
+state start = 0
+state fragment = ""
+state fragment_kind = ""
+state tokens: list<Token>(max=100) = []
+
+action step:
+    require cursor < text_length(source)
+    let ch = text_at(source, cursor)
+    if ch == " ":
+        if fragment != "":
+            tokens = append(tokens, Token(kind=fragment_kind, lexeme=fragment, offset=start))
+            fragment = ""
+            fragment_kind = ""
+    else:
+        if contains("()=+,-", ch):
+            if fragment != "":
+                tokens = append(tokens, Token(kind=fragment_kind, lexeme=fragment, offset=start))
+                fragment = ""
+                fragment_kind = ""
+            tokens = append(tokens, Token(kind="punct", lexeme=ch, offset=cursor))
+        else:
+            require ascii_letter(ch) or ascii_digit(ch)
+            if fragment == "":
+                start = cursor
+                if ascii_digit(ch):
+                    fragment_kind = "integer"
+                else:
+                    fragment_kind = "identifier"
+            else:
+                if fragment_kind == "integer":
+                    require ascii_digit(ch)
+            fragment = concat(fragment, ch)
+    cursor = cursor + 1
+
+action finish:
+    require cursor == text_length(source)
+    if fragment != "":
+        tokens = append(tokens, Token(kind=fragment_kind, lexeme=fragment, offset=start))
+        fragment = ""
+        fragment_kind = ""
+
+test initially_empty: -> count(tokens) == 0
+
+screen main:
+    text "Self-hosting experiment: bounded ASCII lexer."
+    text "Run step once per character and finish once at EOF."
