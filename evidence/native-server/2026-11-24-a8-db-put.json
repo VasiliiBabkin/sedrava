@@ -1,0 +1,24 @@
+{
+  "schema": "sedrava.native-server.a8.managed-db-put.v1",
+  "date": "2026-11-24",
+  "source": "examples/native_server/sqlite_a8_put.sdr",
+  "test": "scripts/verify_native_server_db_put_a8.py",
+  "backend": "SedravaSQL SQLite managed KV",
+  "atomic_units": [
+    "records",
+    "audit",
+    "receipts",
+    "application_response"
+  ],
+  "supported_effect": "single literal key PUT of one text field",
+  "enforces_cas": true,
+  "enforces_idempotency": true,
+  "replay_after_external_update": true,
+  "replay_after_restart": true,
+  "two_independent_servers_tested": true,
+  "negative_dsl_cases_rejected": 11,
+  "debug_transaction_crash_windows_tested": 4,
+  "production_ready": false,
+  "hardware_power_loss_tested": false,
+  "cross_key_atomicity": false
+}

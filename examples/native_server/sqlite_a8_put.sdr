@@ -1,0 +1,10 @@
+# A8: only a literal managed KV key and one text request field.
+# Actual mutation is an atomic SedravaSQL managed row + audit + HTTP receipt.
+server "A8 SQL PUT"
+state enabled: bool = true
+route PUT "/note":
+    request value: text
+    db_put "public_notes/welcome" = request.value
+    respond 200 { note: request.value, saved: true }
+route GET "/note":
+    respond 200 { note: db_get("public_notes/welcome"), revision: db_revision("public_notes/welcome") }

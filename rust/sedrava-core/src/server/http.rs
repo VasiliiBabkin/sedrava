@@ -16,6 +16,8 @@ pub struct Response {
     pub body: Value,
     pub allow: Option<String>,
     pub revision: Option<u32>,
+    /// Business key revision for A8 managed KV writes, distinct from A6 state.
+    pub kv_revision: Option<u32>,
     pub replayed: bool,
 }
 
@@ -26,6 +28,7 @@ impl Response {
             body,
             allow: None,
             revision: None,
+            kv_revision: None,
             replayed: false,
         }
     }
@@ -38,6 +41,10 @@ impl Response {
     }
     pub fn with_revision(mut self, revision: u32) -> Self {
         self.revision = Some(revision);
+        self
+    }
+    pub fn with_kv_revision(mut self, revision: u32) -> Self {
+        self.kv_revision = Some(revision);
         self
     }
     pub fn as_replay(mut self) -> Self {
@@ -234,6 +241,9 @@ fn write_response(stream: &mut TcpStream, response: Response) -> std::io::Result
     }
     if let Some(revision) = response.revision {
         write!(stream, "X-Sedrava-Revision: {revision}\r\n")?;
+    }
+    if let Some(revision) = response.kv_revision {
+        write!(stream, "X-Sedrava-KV-Revision: {revision}\r\n")?;
     }
     if response.replayed {
         stream.write_all(b"X-Sedrava-Replayed: true\r\n")?;
