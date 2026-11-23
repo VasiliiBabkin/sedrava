@@ -1,0 +1,61 @@
+app "Проверка Sedrava"
+record Task:
+    title: text
+    done: bool
+state tasks: list<Task>(max=100) = []
+state selected = 0
+state title = ""
+state new_title = ""
+persist tasks
+derive empty = count(tasks) == 0
+derive chosen = has(tasks, selected)
+derive completed = chosen and get(tasks, selected).done
+derive pending = chosen and not get(tasks, selected).done
+
+action add_task:
+    require new_title != ""
+    tasks = append(tasks, Task(title=new_title, done=false))
+    new_title = ""
+
+action prepare_details:
+    require has(tasks, selected)
+    title = get(tasks, selected).title
+
+action rename_task:
+    require title != ""
+    tasks = update(tasks, selected, Task(title=title, done=get(tasks, selected).done))
+
+action toggle_task:
+    tasks = update(tasks, selected, Task(title=get(tasks, selected).title, done=not get(tasks, selected).done))
+
+action delete_task:
+    tasks = remove(tasks, selected)
+    selected = 0
+    title = ""
+
+test initial: -> count(tasks) == 0
+
+screen main:
+    text "Sedrava Native 0.12.0-alpha.1"
+    text "Добавь задачу, открой её, измени название. Закрой приложение и открой снова: задачи должны сохраниться."
+    input new_title label "Новая задача"
+    button "Добавить задачу" -> add_task
+    show empty : text "Список пуст. Добавь первую задачу."
+    list tasks select selected open open_details title title status done
+
+screen details when chosen:
+    text "Проверка работы с задачей"
+    display get(tasks, selected).title
+    show completed : text "Выполнено"
+    show pending : text "В работе"
+    input title label "Название задачи"
+    button "Сохранить название" -> rename_task
+    button "Изменить статус" -> toggle_task
+    button "Удалить задачу" -> delete_and_back
+    button "Назад к задачам" -> back_to_tasks
+
+navigation:
+    initial main
+    action open_details -> details using prepare_details
+    action delete_and_back -> pop using delete_task
+    action back_to_tasks -> pop
