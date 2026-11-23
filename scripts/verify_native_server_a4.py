@@ -100,7 +100,10 @@ def base_journal(tmp):
         finished(child,5)
     finally:stop(child)
     assert not (folder/LOCK).exists()
-    assert not (folder/"sedrava-state-v1.json").exists()
+    guard=folder/"sedrava-state-v1.json"
+    assert guard.is_file()
+    assert json.loads(guard.read_text())=={
+        "schema":"sedrava.server.redo-journal.guard.v1"}
     assert (folder/MARKER).is_file()
     assert [f.name for f in sorted(folder.glob("txn-*.json"))]==[
         "txn-00000001.json","txn-00000002.json"
@@ -133,6 +136,11 @@ def corruption_suite(tmp,base):
         ("wrong_manifest",lambda folder:(folder/MARKER).write_text(
             (folder/MARKER).read_text().replace('"max_receipts":32','"max_receipts":31'))),
         ("missing_manifest",lambda folder:(folder/MARKER).unlink()),
+        ("missing_guard",lambda folder:(folder/"sedrava-state-v1.json").unlink()),
+        ("forged_guard",lambda folder:(folder/"sedrava-state-v1.json").write_text('{"schema":"sedrava.server.state.v1"}')),
+        ("symlink_guard",lambda folder:(
+            (folder/"sedrava-state-v1.json").unlink(),
+            (folder/"sedrava-state-v1.json").symlink_to(MARKER))),
         ("unexpected_member",lambda folder:(folder/"unexpected").write_text("invalid")),
         ("insecure_commit",lambda folder:(folder/"txn-00000002.json").chmod(0o644)),
         ("insecure_manifest",lambda folder:(folder/MARKER).chmod(0o644)),
@@ -228,7 +236,7 @@ def crash_suite(tmp):
         # after confirming the child no longer exists.
         assert child.poll() is not None
         (folder/LOCK).unlink()
-        leftovers=[f for f in folder.iterdir() if f.name not in {MARKER}
+        leftovers=[f for f in folder.iterdir() if f.name not in {MARKER,"sedrava-state-v1.json"}
                    and not f.name.startswith("txn-")]
         if precommit:
             assert leftovers,(stage,"precommit temp was not retained")
