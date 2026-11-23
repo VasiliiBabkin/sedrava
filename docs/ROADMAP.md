@@ -86,3 +86,13 @@ Build Tools verified the APK, v2 debug signature, package, minSdk 26,
 targetSdk 35 and no dangerous system permissions. **Device install,
 on-phone behavior and OTA/upgrade are NOT TESTED** until user completes
 physical smoke. See [Android APK protocol](NATIVE_012_ANDROID_APK_SMOKE.ru.md).
+
+### Self-hosting lexer A2 (2026-11-23)
+
+A2 extends the one-action Sedrava-authored scanner to quoted Unicode
+strings with basic escapes, comments, whitespace and compound
+operators, still with <=256 scalar input and <=100 token limits.
+68 accepted + 16 rejected independent oracle cases PASS, A1 corpus
+and 81 Rust unit tests PASS. Native-generated Kotlin/Android
+assembleDebug succeeds. Full grammar/AST/self-hosting remain NO-GO.
+[RU evidence and reproduction](SELF_HOSTING_LEXER_A2.ru.md).

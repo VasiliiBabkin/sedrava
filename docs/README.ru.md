@@ -71,3 +71,6 @@ python -m http.server 8000 --directory build/site
 The integration preview adds shared composition, pure functions, bounded collection queries, forms/tables/dialogs, hash routes, local styling and typed public HTTP. It is now released in 0.11.0, but is not a generated backend/auth/database service.
 
 Реализованные возможности, сборка четырёх проектов и ограничения: [English guide](011_WEB_PLATFORM.en.md), [руководство](011_WEB_PLATFORM.ru.md), [actual status](011_IMPLEMENTATION_STATUS.md). Existing published 0.10.0 instructions above remain applicable to their original targets.
+
+
+[Лексер A2: строки, комментарии, операторы на Sedrava](SELF_HOSTING_LEXER_A2.ru.md).
