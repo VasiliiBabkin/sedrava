@@ -1,0 +1,7 @@
+# A7 explicit read-only managed value+revision from the same SedravaSQL row.
+server "A7 SQL Metadata"
+state enabled: bool = true
+route GET "/note":
+    respond 200 { note: db_get("public_notes/welcome"), revision: db_revision("public_notes/welcome"), enabled: state.enabled }
+route GET "/revision":
+    respond 200 { revision: db_revision("public_notes/welcome") }

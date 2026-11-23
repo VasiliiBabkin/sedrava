@@ -285,12 +285,16 @@ pub fn parse(source: &str) -> Result<Server> {
                 }
                 route.response = fields(value, &route.request, &states)?;
                 if route.method != "GET"
-                    && route
-                        .response
-                        .values()
-                        .any(|v| matches!(v, state::Expr::DbGet { .. }))
+                    && route.response.values().any(|v| {
+                        matches!(
+                            v,
+                            state::Expr::DbGet { .. } | state::Expr::DbRevision { .. }
+                        )
+                    })
                 {
-                    return fail("E_SERVER_DB: db_get permitted only in GET responses");
+                    return fail(
+                        "E_SERVER_DB: database expressions permitted only in GET responses",
+                    );
                 }
                 has_response = true;
             } else {
@@ -373,12 +377,15 @@ impl Session {
         sqlite_v2_state: Option<&Path>,
     ) -> Result<Self> {
         let uses_db = program.routes.iter().any(|r| {
-            r.response
-                .values()
-                .any(|v| matches!(v, state::Expr::DbGet { .. }))
+            r.response.values().any(|v| {
+                matches!(
+                    v,
+                    state::Expr::DbGet { .. } | state::Expr::DbRevision { .. }
+                )
+            })
         });
         if uses_db && sqlite_v2_state.is_none() {
-            return fail("E_SERVER_DB: db_get requires --sqlite-v2-state");
+            return fail("E_SERVER_DB: db_get requires --sqlite-v2-state (also db_revision)");
         }
         if transactional
             && state_dir.is_none()
@@ -630,27 +637,49 @@ pub(crate) fn reply_stateful(
     // Resolve read-only SedravaSQL key/value lookups for GET responses.
     // Transient DB values are never written into server state.
     let mut view = candidate.clone();
+    // Cache a single managed SQL row per key during a response.
+    // A db_get+db_revision pair is coherent for THAT key. Different
+    // keys are not a single database snapshot transaction.
+    let mut db_rows = BTreeMap::new();
     for expr in route.response.values() {
-        if let state::Expr::DbGet {
-            namespace,
-            key,
-            slot,
-        } = expr
-        {
-            let Some(db) = session.sqlite_v2.as_ref() else {
-                return http::Response::error(503, "DB_BACKEND_REQUIRED");
-            };
-            match db.read_text(namespace, key) {
-                Ok(Some(value)) => {
-                    view.insert(slot.clone(), Value::String(value));
-                }
+        let (namespace, key, slot, is_revision) = match expr {
+            state::Expr::DbGet {
+                namespace,
+                key,
+                slot,
+            } => (namespace, key, slot, false),
+            state::Expr::DbRevision {
+                namespace,
+                key,
+                slot,
+            } => (namespace, key, slot, true),
+            _ => continue,
+        };
+        let Some(db) = session.sqlite_v2.as_ref() else {
+            return http::Response::error(503, "DB_BACKEND_REQUIRED");
+        };
+        let row_key = (namespace.clone(), key.clone());
+        if !db_rows.contains_key(&row_key) {
+            let row = match db.read_text_and_revision(namespace, key) {
+                Ok(Some(row)) => row,
                 Ok(None) => return http::Response::error(404, "DB_KEY_NOT_FOUND"),
                 Err(_) => {
                     session.poisoned = true;
                     return http::Response::error(503, "DB_READ_FAILED");
                 }
-            }
+            };
+            db_rows.insert(row_key.clone(), row);
         }
+        let (value, revision) = db_rows.get(&row_key).expect("row already loaded");
+        let v = if is_revision {
+            let Ok(number) = i32::try_from(*revision) else {
+                return http::Response::error(503, "DB_REVISION_RANGE");
+            };
+            Value::from(number)
+        } else {
+            Value::String(value.clone())
+        };
+        view.insert(slot.clone(), v);
     }
     for (key, expr) in &route.response {
         match state::eval(expr, &request, &view) {
