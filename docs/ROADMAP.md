@@ -122,3 +122,14 @@ tests PASS. Not a general grammar, shared token stream or self-hosting.
 A real Android/Kotlin debug APK also compiled via Gradle on the VDS
 and its signature was verified; physical Android execution is NOT TESTED.
 [Detailed limitations (RU)](SELF_HOSTING_PARSER_A4.ru.md).
+
+### Experimental self-hosting A5.1: ordered token stream (2026-11-23)
+
+Three separately executed Sedrava actions scan lexical tokens, scan
+strict four-space layout and merge them by Unicode-scalar start offset
+into a single UnifiedToken list, prioritizing layout at equal offsets.
+91 accepted / 10 rejected oracle samples PASS; Rust 81 PASS; generated
+Android/Kotlin assembleDebug PASS (no device execution). The merger is
+limited to 100 output tokens, 256 input scalars, fresh-run IDs and a
+narrow subset with no strings in layout code. No full grammar/AST.
+[RU details](SELF_HOSTING_UNIFIED_A51.ru.md).
