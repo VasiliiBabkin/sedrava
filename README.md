@@ -205,3 +205,8 @@ Experimental Server A7: direct read-only SedravaSQL revision
 accessor db_revision("namespace/key") alongside db_get; one shared
 managed-row read per key and GET response.
 See docs/RUST_NATIVE_SERVER_A7_DB_METADATA.ru.md.
+
+Experimental Server A8: [atomic single-key SedravaSQL PUT](docs/RUST_NATIVE_SERVER_A8_DB_PUT.ru.md)
+from checked Sedrava server source, with per-key CAS, durable stored HTTP
+response, SQLite audit and idempotent replay. No arbitrary SQL, multi-key
+transaction, public listener or NativeLog switch.

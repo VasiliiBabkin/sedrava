@@ -143,3 +143,19 @@ Live independent CLI writes and Sedrava GET updates PASS; seven
 invalid DSL cases PASS, overflow fails closed, 82 Rust tests PASS,
 A6 integration regressions PASS. No arbitrary SQL/write/multi-key
 snapshot. See RUST_NATIVE_SERVER_A7_DB_METADATA.ru.md.
+
+### Experimental server A8: one-key SedravaSQL write (2026-11-24)
+
+Server DSL now supports bounded, statically checked
+`db_put "namespace/key" = request.FIELD` as the ONLY effect
+in a `PUT` route; the response is composed from immutable request
+scalars/literals. A8 delegates to SedravaSQL SQLite
+`Database::mutate_with_response` so business KV row, audit and
+original HTTP receipt are committed in ONE SQL transaction.
+Per-key CAS and source/route-scoped idempotency are replayable after
+restart; separate X-Sedrava-KV-Revision response header distinguishes
+the key from A6 server-state revision. Negative DSL cases, real
+cross-process HTTP/CLI and four controlled SQL commit windows tested
+on disposable loopback databases. No cross-key/state atomic
+transactions, general SQL, public network service or hardware
+power-loss certification. [RU details](RUST_NATIVE_SERVER_A8_DB_PUT.ru.md).

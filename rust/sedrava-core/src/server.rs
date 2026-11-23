@@ -16,6 +16,7 @@ use std::time::{Duration, Instant};
 mod backend;
 mod http;
 mod journal;
+mod kv_write;
 mod sqlite;
 mod sqlite_v2;
 mod state;
@@ -24,6 +25,7 @@ mod transaction;
 
 use backend::TransactionBackend;
 use journal::JournalStore;
+use kv_write::{DbPut, PutFailure};
 use sqlite::SqliteStore;
 use sqlite_v2::SqliteV2Store;
 use state::{StateDef, Step, Values};
@@ -53,6 +55,7 @@ pub struct Route {
     path: String,
     request: BTreeMap<String, ScalarType>,
     steps: Vec<Step>,
+    db_put: Option<DbPut>,
     response: BTreeMap<String, ResponseValue>,
     status: u16,
 }
@@ -231,6 +234,7 @@ pub fn parse(source: &str) -> Result<Server> {
                 path,
                 request: BTreeMap::new(),
                 steps: Vec::new(),
+                db_put: None,
                 response: BTreeMap::new(),
                 status: 200,
             });
@@ -263,7 +267,19 @@ pub fn parse(source: &str) -> Result<Server> {
                     _ => return fail("E_SERVER_PARSE: only int, bool, text supported"),
                 };
                 route.request.insert(key.to_string(), kind);
+            } else if content.starts_with("db_put ") {
+                if route.method != "PUT"
+                    || has_response
+                    || route.db_put.is_some()
+                    || !route.steps.is_empty()
+                {
+                    return fail("E_SERVER_DB_PUT: only one standalone PUT operation per route");
+                }
+                route.db_put = Some(DbPut::parse(content, &route.request)?);
             } else if content.starts_with("set ") || content.starts_with("require ") {
+                if route.db_put.is_some() {
+                    return fail("E_SERVER_DB_PUT: cannot mix KV put and state steps");
+                }
                 if has_response || route.steps.len() >= 32 {
                     return fail("E_SERVER_STEP: handler steps after response or over budget");
                 }
@@ -284,6 +300,16 @@ pub fn parse(source: &str) -> Result<Server> {
                     return fail("E_SERVER_PARSE: only 200, 201, 202 accepted in A1");
                 }
                 route.response = fields(value, &route.request, &states)?;
+                if route.db_put.is_some()
+                    && route
+                        .response
+                        .values()
+                        .any(|v| !matches!(v, state::Expr::Literal(_) | state::Expr::Request(_)))
+                {
+                    return fail(
+                        "E_SERVER_DB_PUT: response may use only request fields and literals",
+                    );
+                }
                 if route.method != "GET"
                     && route.response.values().any(|v| {
                         matches!(
@@ -317,6 +343,17 @@ pub fn parse(source: &str) -> Result<Server> {
     }
     let mut paths = BTreeSet::new();
     for route in &routes {
+        // Validate the FINISHED route: request declarations might have been
+        // appended after db_put, bypassing its initial one-field check.
+        if let Some(put) = &route.db_put {
+            if route.method != "PUT"
+                || !route.steps.is_empty()
+                || route.request.len() != 1
+                || route.request.get(&put.request_field) != Some(&ScalarType::Text)
+            {
+                return fail("E_SERVER_DB_PUT: only one declared text field, no state steps");
+            }
+        }
         if !paths.insert((&route.method, &route.path)) {
             return fail("E_SERVER_PARSE: duplicate route");
         }
@@ -377,12 +414,13 @@ impl Session {
         sqlite_v2_state: Option<&Path>,
     ) -> Result<Self> {
         let uses_db = program.routes.iter().any(|r| {
-            r.response.values().any(|v| {
-                matches!(
-                    v,
-                    state::Expr::DbGet { .. } | state::Expr::DbRevision { .. }
-                )
-            })
+            r.db_put.is_some()
+                || r.response.values().any(|v| {
+                    matches!(
+                        v,
+                        state::Expr::DbGet { .. } | state::Expr::DbRevision { .. }
+                    )
+                })
         });
         if uses_db && sqlite_v2_state.is_none() {
             return fail("E_SERVER_DB: db_get requires --sqlite-v2-state (also db_revision)");
@@ -527,7 +565,19 @@ pub(crate) fn reply_stateful(
     // Transactional replays must be resolved BEFORE evaluating user steps.
     // The fingerprint includes the exact payload and optional CAS condition.
     let mut transaction = None;
-    if session.active_revision().is_some() {
+    if route.db_put.is_some() {
+        // A8 uses per-KV CAS/revision and a business-row receipt, not the
+        // unrelated A6 server-state revision/receipt. No state mutation here.
+        let Some(key) = idempotency_key else {
+            return http::Response::error(428, "IDEMPOTENCY_KEY_REQUIRED");
+        };
+        if !valid_key(key) {
+            return http::Response::error(400, "INVALID_IDEMPOTENCY_KEY");
+        }
+        if expected_revision.is_none() {
+            return http::Response::error(428, "KV_REVISION_REQUIRED");
+        }
+    } else if session.active_revision().is_some() {
         if route.method != "GET" {
             let Some(key) = idempotency_key else {
                 return http::Response::error(428, "IDEMPOTENCY_KEY_REQUIRED");
@@ -691,6 +741,54 @@ pub(crate) fn reply_stateful(
             }
             Err(_) => return http::Response::error(500, "HANDLER_FAILED"),
         }
+    }
+    if let Some(put) = &route.db_put {
+        let Some(sql) = session.sqlite_v2.as_mut() else {
+            return http::Response::error(503, "DB_BACKEND_REQUIRED");
+        };
+        let Some(value) = request.get(&put.request_field).and_then(Value::as_str) else {
+            return http::Response::error(422, "REQUEST_SCHEMA_MISMATCH");
+        };
+        let key = idempotency_key.expect("A8 checked headers");
+        let expected = expected_revision.expect("A8 checked revision");
+        let digest = fingerprint(
+            method,
+            path,
+            content_type,
+            body,
+            Some(&expected.to_string()),
+        );
+        return match sql.put_text(
+            put,
+            method,
+            path,
+            value,
+            expected,
+            key,
+            &digest,
+            route.status,
+            output,
+        ) {
+            Ok((receipt, replayed)) => {
+                let response =
+                    http::Response::json(receipt.status, Value::Object(receipt.response))
+                        .with_kv_revision(receipt.revision);
+                if replayed {
+                    response.as_replay()
+                } else {
+                    response
+                }
+            }
+            Err(PutFailure::IdempotencyConflict) => {
+                http::Response::error(409, "IDEMPOTENCY_CONFLICT")
+            }
+            Err(PutFailure::RevisionConflict) => http::Response::error(412, "REVISION_CONFLICT"),
+            Err(PutFailure::Invalid) => http::Response::error(507, "KV_REVISION_EXHAUSTED"),
+            Err(PutFailure::Uncertain) => {
+                session.poisoned = true;
+                http::Response::error(503, "DB_PUT_UNCERTAIN")
+            }
+        };
     }
     if let Some((key, digest)) = transaction {
         let Some(revision) = session.active_revision().and_then(|v| v.checked_add(1)) else {

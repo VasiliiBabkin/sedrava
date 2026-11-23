@@ -84,3 +84,6 @@ The integration preview adds shared composition, pure functions, bounded collect
 A7: документированное чтение значения и ревизии ключа
 SedravaSQL на стороне сервера.
 См. RUST_NATIVE_SERVER_A7_DB_METADATA.ru.md.
+
+Экспериментальный [Sedrava Server A8: атомарная запись одного ключа в SedravaSQL](RUST_NATIVE_SERVER_A8_DB_PUT.ru.md).
+Рабочий `db_put` с CAS/идемпотентностью/аудитом, но без SQL и доступа к рабочей базе.
