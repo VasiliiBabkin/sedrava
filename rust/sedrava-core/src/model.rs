@@ -254,6 +254,9 @@ pub enum Stmt {
     Let(String, Expr),
     Require(Expr),
     Branch(Expr, Vec<Stmt>, Vec<Stmt>),
+    /// Bounded while: re-evaluate condition before each iteration; fail closed
+    /// if the explicit iteration cap is reached while still true.
+    While(Expr, u16, Vec<Stmt>),
     Match(Expr, Vec<MatchArm>),
 }
 
