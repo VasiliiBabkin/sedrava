@@ -1,0 +1,5 @@
+# Direct read-only SedravaSQL managed KV from native Sedrava server DSL.
+server "A6 SQL Read Example"
+state enabled: bool = true
+route GET "/note":
+    respond 200 { note: db_get("public_notes/welcome"), enabled: state.enabled }

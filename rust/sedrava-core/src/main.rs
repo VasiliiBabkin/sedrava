@@ -18,7 +18,7 @@ fn usage() {
            sedrava-native lock DIR\n           sedrava-native verify DIR\n           sedrava-native host check FILE
            sedrava-native host run FILE --root DIR --trusted [--allow-read] [--allow-write]
            sedrava-native server check FILE
-           sedrava-native server run FILE [--port PORT] [--max-requests N] [--idle-ms N] [--state-dir ABSOLUTE_PRIVATE_DIR] [--transactional] [--journaled] [--sqlite-state FILE]
+           sedrava-native server run FILE [--port PORT] [--max-requests N] [--idle-ms N] [--state-dir ABSOLUTE_PRIVATE_DIR] [--transactional] [--journaled] [--sqlite-state FILE] [--sqlite-v2-state FILE]
            sedrava-native check FILE\n\
            sedrava-native effects FILE [--target app|web|android]\n\
            sedrava-native test FILE\n\
@@ -244,6 +244,7 @@ fn server_command(args: &[String]) -> Result<()> {
             let mut transactional=false;
             let mut journaled=false;
             let mut sqlite_state=None;
+            let mut sqlite_v2_state=None;
             let mut seen=std::collections::BTreeSet::new();
             let mut next=options.iter();
             while let Some(flag)=next.next() {
@@ -269,12 +270,13 @@ fn server_command(args: &[String]) -> Result<()> {
                         .map_err(|_|Error("E_SERVER_CLI: invalid idle-ms".into()))?,
                      "--state-dir" => state_dir=Some(PathBuf::from(value)),
                     "--sqlite-state" => sqlite_state=Some(PathBuf::from(value)),
+                    "--sqlite-v2-state" => sqlite_v2_state=Some(PathBuf::from(value)),
                     _ => return Err(Error(format!("E_SERVER_CLI: unsupported option {flag}"))),
                 }
             }
-            server::serve(&program,settings,state_dir.as_deref(),transactional,journaled,sqlite_state.as_deref())
+            server::serve(&program,settings,state_dir.as_deref(),transactional,journaled,sqlite_state.as_deref(),sqlite_v2_state.as_deref())
         }
-        _ => Err(Error("Expected server check FILE or server run FILE [--port PORT] [--max-requests N] [--idle-ms N] [--state-dir ABSOLUTE_PRIVATE_DIR] [--transactional] [--journaled] [--sqlite-state FILE]".into())),
+        _ => Err(Error("Expected server check FILE or server run FILE [--port PORT] [--max-requests N] [--idle-ms N] [--state-dir ABSOLUTE_PRIVATE_DIR] [--transactional] [--journaled] [--sqlite-state FILE] [--sqlite-v2-state FILE]".into())),
     }
 }
 
