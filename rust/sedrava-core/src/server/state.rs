@@ -2,6 +2,7 @@
 use super::{identifier, ScalarType, MAX_SCALAR_TEXT};
 use crate::model::{fail, Error, Result};
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
 pub type Values = BTreeMap<String, Value>;
@@ -17,6 +18,12 @@ pub enum Expr {
     Literal(Value),
     Request(String),
     State(String),
+    /// Read-only, explicitly named SedravaSQL key/value lookup (A6 only).
+    DbGet {
+        namespace: String,
+        key: String,
+        slot: String,
+    },
     Add(Box<Expr>, Box<Expr>),
 }
 
@@ -135,6 +142,34 @@ pub fn atom(
     states: &BTreeMap<String, StateDef>,
 ) -> Result<(Expr, ScalarType)> {
     let raw = raw.trim();
+    if let Some(argument) = raw
+        .strip_prefix("db_get(")
+        .and_then(|r| r.strip_suffix(')'))
+    {
+        let path: String = serde_json::from_str(argument)
+            .map_err(|_| Error("E_SERVER_DB: expected quoted namespace/key".into()))?;
+        let (namespace, key) = path
+            .split_once('/')
+            .ok_or_else(|| Error("E_SERVER_DB: expected namespace/key".into()))?;
+        let id_ok = |v: &str| {
+            !v.is_empty()
+                && v.len() <= 128
+                && v.bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'_'))
+        };
+        if !id_ok(namespace) || !id_ok(key) || namespace.starts_with("sedrava_native") {
+            return fail("E_SERVER_DB: invalid or reserved namespace/key");
+        }
+        let slot = format!("_sql_{:x}", Sha256::digest(path.as_bytes()));
+        return Ok((
+            Expr::DbGet {
+                namespace: namespace.to_owned(),
+                key: key.to_owned(),
+                slot,
+            },
+            ScalarType::Text,
+        ));
+    }
     if let Some(name) = raw.strip_prefix("request.") {
         let Some(&kind) = request.get(name) else {
             return fail("E_SERVER_EXPR: unknown request field");
@@ -181,6 +216,9 @@ pub fn parse_step(
     states: &BTreeMap<String, StateDef>,
     is_get: bool,
 ) -> Result<Step> {
+    if text.contains("db_get(") {
+        return fail("E_SERVER_DB: db_get is read-only and supported only in GET responses");
+    }
     if let Some(raw) = text.strip_prefix("set ") {
         if is_get {
             return fail("E_SERVER_STEP: GET cannot change state");
@@ -238,6 +276,7 @@ pub fn eval(
         Expr::Literal(value) => Ok(value.clone()),
         Expr::Request(key) => request.get(key).cloned().ok_or(EvalError::Invalid),
         Expr::State(key) => state.get(key).cloned().ok_or(EvalError::Invalid),
+        Expr::DbGet { slot, .. } => state.get(slot).cloned().ok_or(EvalError::Invalid),
         Expr::Add(a, b) => {
             let a = eval(a, request, state)?;
             let b = eval(b, request, state)?;

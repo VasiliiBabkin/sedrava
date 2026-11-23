@@ -247,3 +247,13 @@ Issue #84 остаётся открытым.
 не меняются, серверный лимит 32 квитанций пока остаётся.
 Это первая работающая интеграция языка и независимой СУБД,
 не полный SQL/ORM API и не production.
+
+### Server A6 — persistent SQL receipts and read-only DSL lookup
+
+[Документация A6](RUST_NATIVE_SERVER_A6_SQLITE.ru.md): автономный
+Rust-сервер с отдельными SQL-квитанциями запросов вместо общего
+ограниченного JSON-списка (неограниченное число ключей без автоматической
+очистки); первая read-only операция из Sedrava:
+`db_get("namespace/key")` для GET-ответа, под управлением SedravaSQL.
+A1–A5 остаются неизменными. Нет произвольного SQL, DB-write DSL,
+power-loss гарантий и готовности к production.

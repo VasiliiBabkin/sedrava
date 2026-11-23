@@ -17,6 +17,7 @@ mod backend;
 mod http;
 mod journal;
 mod sqlite;
+mod sqlite_v2;
 mod state;
 mod storage;
 mod transaction;
@@ -24,6 +25,7 @@ mod transaction;
 use backend::TransactionBackend;
 use journal::JournalStore;
 use sqlite::SqliteStore;
+use sqlite_v2::SqliteV2Store;
 use state::{StateDef, Step, Values};
 use std::path::Path;
 use storage::{SaveFailure, Store};
@@ -282,6 +284,14 @@ pub fn parse(source: &str) -> Result<Server> {
                     return fail("E_SERVER_PARSE: only 200, 201, 202 accepted in A1");
                 }
                 route.response = fields(value, &route.request, &states)?;
+                if route.method != "GET"
+                    && route
+                        .response
+                        .values()
+                        .any(|v| matches!(v, state::Expr::DbGet { .. }))
+                {
+                    return fail("E_SERVER_DB: db_get permitted only in GET responses");
+                }
                 has_response = true;
             } else {
                 return fail(format!(
@@ -348,6 +358,8 @@ pub(crate) struct Session {
     store: Option<Store>,
     journal: Option<JournalStore>,
     sqlite: Option<SqliteStore>,
+    sqlite_v2: Option<SqliteV2Store>,
+    revision_a6: Option<u32>,
     ledger: Option<Ledger>,
     poisoned: bool,
 }
@@ -358,19 +370,47 @@ impl Session {
         transactional: bool,
         journaled: bool,
         sqlite_state: Option<&Path>,
+        sqlite_v2_state: Option<&Path>,
     ) -> Result<Self> {
-        if transactional && state_dir.is_none() && sqlite_state.is_none() {
+        let uses_db = program.routes.iter().any(|r| {
+            r.response
+                .values()
+                .any(|v| matches!(v, state::Expr::DbGet { .. }))
+        });
+        if uses_db && sqlite_v2_state.is_none() {
+            return fail("E_SERVER_DB: db_get requires --sqlite-v2-state");
+        }
+        if transactional
+            && state_dir.is_none()
+            && sqlite_state.is_none()
+            && sqlite_v2_state.is_none()
+        {
             return fail(
-                "E_SERVER_TRANSACTION: --transactional requires --state-dir or --sqlite-state",
+                "E_SERVER_TRANSACTION: --transactional requires --state-dir, --sqlite-state or --sqlite-v2-state",
             );
         }
         if sqlite_state.is_some() && (!transactional || state_dir.is_some() || journaled) {
             return fail("E_SERVER_SQLITE: --sqlite-state requires --transactional and forbids --state-dir/--journaled");
         }
+        if sqlite_v2_state.is_some()
+            && (!transactional || state_dir.is_some() || journaled || sqlite_state.is_some())
+        {
+            return fail(
+                "E_SERVER_SQLITE_V2: --sqlite-v2-state requires --transactional and is exclusive",
+            );
+        }
         if journaled && !transactional {
             return fail("E_SERVER_JOURNAL: --journaled requires --transactional");
         }
-        let (store, journal, sqlite, values, ledger) = if let Some(path) = sqlite_state {
+        let mut sqlite_v2 = None;
+        let mut revision_a6 = None;
+        let (store, journal, sqlite, values, ledger) = if let Some(path) = sqlite_v2_state {
+            let (backend, values, revision) =
+                SqliteV2Store::open(path, &program.name, &program.states, &program.source_sha)?;
+            sqlite_v2 = Some(backend);
+            revision_a6 = Some(revision);
+            (None, None, None, values, Ledger::default())
+        } else if let Some(path) = sqlite_state {
             let (sqlite, values, ledger) =
                 SqliteStore::open(path, &program.name, &program.states, &program.source_sha)?;
             (None, None, Some(sqlite), values, ledger)
@@ -401,9 +441,16 @@ impl Session {
             store,
             journal,
             sqlite,
-            ledger: transactional.then_some(ledger),
+            sqlite_v2,
+            revision_a6,
+            ledger: (transactional && sqlite_v2_state.is_none()).then_some(ledger),
             poisoned: false,
         })
+    }
+
+    fn active_revision(&self) -> Option<u32> {
+        self.revision_a6
+            .or_else(|| self.ledger.as_ref().map(Ledger::revision))
     }
 
     fn backend(&mut self) -> Option<&mut dyn TransactionBackend> {
@@ -427,7 +474,8 @@ pub(crate) fn reply(
     body: &[u8],
     content_type: Option<&str>,
 ) -> http::Response {
-    let mut session = Session::open(program, None, false, false, None).expect("in-memory state");
+    let mut session =
+        Session::open(program, None, false, false, None, None).expect("in-memory state");
     reply_stateful(
         program,
         &mut session,
@@ -472,7 +520,7 @@ pub(crate) fn reply_stateful(
     // Transactional replays must be resolved BEFORE evaluating user steps.
     // The fingerprint includes the exact payload and optional CAS condition.
     let mut transaction = None;
-    if let Some(ledger) = session.ledger.as_ref() {
+    if session.active_revision().is_some() {
         if route.method != "GET" {
             let Some(key) = idempotency_key else {
                 return http::Response::error(428, "IDEMPOTENCY_KEY_REQUIRED");
@@ -482,7 +530,20 @@ pub(crate) fn reply_stateful(
             }
             let expected = expected_revision.map(|r| r.to_string());
             let digest = fingerprint(method, path, content_type, body, expected.as_deref());
-            if let Some(prior) = ledger.get(key) {
+            let prior = if let Some(ledger) = session.ledger.as_ref() {
+                ledger.get(key).cloned()
+            } else if let Some(db) = session.sqlite_v2.as_ref() {
+                match db.lookup(key) {
+                    Ok(entry) => entry,
+                    Err(_) => {
+                        session.poisoned = true;
+                        return http::Response::error(503, "RECEIPT_LOOKUP_FAILED");
+                    }
+                }
+            } else {
+                None
+            };
+            if let Some(prior) = prior {
                 if prior.fingerprint == digest {
                     return http::Response::json(
                         prior.status,
@@ -493,10 +554,14 @@ pub(crate) fn reply_stateful(
                 }
                 return http::Response::error(409, "IDEMPOTENCY_CONFLICT");
             }
-            if ledger.receipts.len() >= MAX_RECEIPTS {
+            if session
+                .ledger
+                .as_ref()
+                .is_some_and(|ledger| ledger.receipts.len() >= MAX_RECEIPTS)
+            {
                 return http::Response::error(507, "TRANSACTION_LEDGER_FULL");
             }
-            if expected_revision.is_some_and(|rev| rev != ledger.revision()) {
+            if expected_revision.is_some_and(|rev| Some(rev) != session.active_revision()) {
                 return http::Response::error(412, "REVISION_CONFLICT");
             }
             transaction = Some((key.to_owned(), digest));
@@ -562,8 +627,33 @@ pub(crate) fn reply_stateful(
         };
     }
     let mut output = Map::new();
+    // Resolve read-only SedravaSQL key/value lookups for GET responses.
+    // Transient DB values are never written into server state.
+    let mut view = candidate.clone();
+    for expr in route.response.values() {
+        if let state::Expr::DbGet {
+            namespace,
+            key,
+            slot,
+        } = expr
+        {
+            let Some(db) = session.sqlite_v2.as_ref() else {
+                return http::Response::error(503, "DB_BACKEND_REQUIRED");
+            };
+            match db.read_text(namespace, key) {
+                Ok(Some(value)) => {
+                    view.insert(slot.clone(), Value::String(value));
+                }
+                Ok(None) => return http::Response::error(404, "DB_KEY_NOT_FOUND"),
+                Err(_) => {
+                    session.poisoned = true;
+                    return http::Response::error(503, "DB_READ_FAILED");
+                }
+            }
+        }
+    }
     for (key, expr) in &route.response {
-        match state::eval(expr, &request, &candidate) {
+        match state::eval(expr, &request, &view) {
             Ok(value) => {
                 output.insert(key.clone(), value);
             }
@@ -574,8 +664,9 @@ pub(crate) fn reply_stateful(
         }
     }
     if let Some((key, digest)) = transaction {
-        let ledger = session.ledger.as_ref().expect("transactional mode");
-        let revision = ledger.revision() + 1;
+        let Some(revision) = session.active_revision().and_then(|v| v.checked_add(1)) else {
+            return http::Response::error(507, "TRANSACTION_REVISION_EXHAUSTED");
+        };
         let receipt = Receipt {
             key,
             fingerprint: digest,
@@ -583,6 +674,27 @@ pub(crate) fn reply_stateful(
             status: route.status,
             response: output.clone(),
         };
+        if let Some(sqlite_v2) = session.sqlite_v2.as_mut() {
+            match sqlite_v2.commit(&candidate, &receipt) {
+                Ok(()) => {
+                    session.values = candidate;
+                    session.revision_a6 = Some(revision);
+                    return http::Response::json(route.status, Value::Object(output))
+                        .with_revision(revision);
+                }
+                Err(SaveFailure::RejectedBeforeCommit) => {
+                    return http::Response::error(503, "STATE_WRITE_FAILED");
+                }
+                Err(SaveFailure::DurabilityUncertain) => {
+                    session.poisoned = true;
+                    return http::Response::error(503, "STATE_COMMIT_UNCERTAIN");
+                }
+            }
+        }
+        let ledger = session
+            .ledger
+            .as_ref()
+            .expect("A3/A4/A5 transactional mode");
         let Some(next) = ledger.append(receipt) else {
             return http::Response::error(507, "TRANSACTION_LEDGER_FULL");
         };
@@ -620,8 +732,8 @@ pub(crate) fn reply_stateful(
         session.values = candidate;
     }
     let response = http::Response::json(route.status, Value::Object(output));
-    if let Some(ledger) = session.ledger.as_ref() {
-        response.with_revision(ledger.revision())
+    if let Some(revision) = session.active_revision() {
+        response.with_revision(revision)
     } else {
         response
     }
@@ -636,6 +748,7 @@ pub fn serve(
     transactional: bool,
     journaled: bool,
     sqlite_state: Option<&Path>,
+    sqlite_v2_state: Option<&Path>,
 ) -> Result<()> {
     if options.max_requests == 0
         || options.max_requests > 10_000
@@ -644,7 +757,14 @@ pub fn serve(
     {
         return fail("E_SERVER_RUN: max_requests 1..10000 and idle_ms 500..120000 required");
     }
-    let mut session = Session::open(program, state_dir, transactional, journaled, sqlite_state)?;
+    let mut session = Session::open(
+        program,
+        state_dir,
+        transactional,
+        journaled,
+        sqlite_state,
+        sqlite_v2_state,
+    )?;
     let listener = TcpListener::bind(("127.0.0.1", options.port))
         .map_err(|e| Error(format!("E_SERVER_BIND: unable to bind loopback: {e}")))?;
     listener
