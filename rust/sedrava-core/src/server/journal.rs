@@ -21,6 +21,7 @@ const FORMAT: &str = "sedrava.server.redo-journal.v1";
 const GENESIS: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 const LOCK: &str = ".sedrava-server.lock";
 const LEGACY: &str = "sedrava-state-v1.json";
+const GUARD_BYTES: &[u8] = b"{\"schema\":\"sedrava.server.redo-journal.guard.v1\"}\n";
 const MARKER: &str = "sedrava-journal-v1.manifest.json";
 const MARKER_FORMAT: &str = "sedrava.server.redo-journal.manifest.v1";
 
@@ -175,6 +176,27 @@ mod unix {
                     return fail("E_SERVER_JOURNAL: manifest absent in nonempty store");
                 }
             }
+            // Reserve the legacy filename with deliberately incompatible JSON.
+            // Pre-A4 executables do not know our manifest, but they DO attempt
+            // to load this filename and fail on its foreign schema, before bind.
+            // A crash between guard and manifest leaves a deliberately
+            // unopenable directory requiring explicit operator inspection.
+            let guard_path = dir.join(LEGACY);
+            let mut guard = tempfile::NamedTempFile::new_in(dir)
+                .map_err(|_| Error("E_SERVER_JOURNAL: guard temp create failed".into()))?;
+            guard
+                .write_all(GUARD_BYTES)
+                .map_err(|_| Error("E_SERVER_JOURNAL: guard write failed".into()))?;
+            guard
+                .as_file()
+                .sync_all()
+                .map_err(|_| Error("E_SERVER_JOURNAL: guard fsync failed".into()))?;
+            guard
+                .persist(&guard_path)
+                .map_err(|_| Error("E_SERVER_JOURNAL: legacy guard publish failed".into()))?;
+            File::open(dir)
+                .and_then(|f| f.sync_all())
+                .map_err(|_| Error("E_SERVER_JOURNAL: guard directory sync failed".into()))?;
             let manifest = Manifest {
                 schema: MARKER_FORMAT.into(),
                 signature: signature.into(),
@@ -237,6 +259,34 @@ mod unix {
         {
             return fail("E_SERVER_JOURNAL: incompatible manifest or source");
         }
+        let guard_path = dir.join(LEGACY);
+        let guard_meta = checked_file(&guard_path, uid)?
+            .ok_or_else(|| Error("E_SERVER_JOURNAL: missing legacy-format safety guard".into()))?;
+        if guard_meta.len() != GUARD_BYTES.len() as u64 {
+            return fail("E_SERVER_JOURNAL: invalid legacy-format safety guard");
+        }
+        let guard = OpenOptions::new()
+            .read(true)
+            .custom_flags(rustix::fs::OFlags::NOFOLLOW.bits() as i32)
+            .open(&guard_path)
+            .map_err(|_| Error("E_SERVER_JOURNAL: cannot open legacy safety guard".into()))?;
+        let opened = guard
+            .metadata()
+            .map_err(|_| Error("E_SERVER_JOURNAL: cannot stat legacy safety guard".into()))?;
+        if !metadata_regular(&opened, uid)
+            || opened.dev() != guard_meta.dev()
+            || opened.ino() != guard_meta.ino()
+        {
+            return fail("E_SERVER_JOURNAL: legacy guard changed during open");
+        }
+        let mut bytes = Vec::new();
+        guard
+            .take(GUARD_BYTES.len() as u64 + 1)
+            .read_to_end(&mut bytes)
+            .map_err(|_| Error("E_SERVER_JOURNAL: cannot read legacy safety guard".into()))?;
+        if bytes != GUARD_BYTES {
+            return fail("E_SERVER_JOURNAL: legacy safety guard mismatch");
+        }
         Ok(())
     }
 
@@ -256,7 +306,7 @@ mod unix {
                 .file_name()
                 .into_string()
                 .map_err(|_| Error("E_SERVER_JOURNAL: non-UTF8 directory member".into()))?;
-            if name == LOCK || name == MARKER {
+            if name == LOCK || name == MARKER || name == LEGACY {
                 continue;
             }
             let bytes = name.as_bytes();
@@ -328,12 +378,8 @@ mod unix {
                 return fail("E_SERVER_JOURNAL: state declaration required");
             }
             let dir = private_folder(path)?;
-            // A2/A3 snapshots and A4 journal may NEVER share one directory.
-            if fs::symlink_metadata(dir.join(LEGACY)).is_ok() {
-                return fail(
-                    "E_SERVER_JOURNAL: A2/A3 state file found; explicit migration required",
-                );
-            }
+            // Guard verification in ensure_manifest rejects real A2/A3
+            // snapshots while also blocking PRE-A4 binaries from this dir.
             let lock_path = dir.join(LOCK);
             let mut lock = OpenOptions::new()
                 .write(true)
