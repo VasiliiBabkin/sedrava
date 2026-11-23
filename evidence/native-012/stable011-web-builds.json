@@ -1,0 +1,124 @@
+{
+  "schema": "sedrava.native.stable011.web-builds.v1",
+  "stable_release_commit": "c9cde75e3d2e2c7eafeeaec10c73fec627816e68",
+  "stable_git_blobs_verified": 297,
+  "stable_source_bytes": 1444036,
+  "native_sha256": "623e4d0f78ba688156247a20dd5f73628e3a96fdaad3baa3989acf4387d3e7f3",
+  "node_version": "v20.20.2",
+  "cases": [
+    {
+      "source": "platform_site.sdr",
+      "mode": "site",
+      "stable011": {
+        "files": 12,
+        "html_pages": 3,
+        "checked_local_assets": 10,
+        "javascript_files_parsed": 0
+      },
+      "native012": {
+        "files": 11,
+        "html_pages": 3,
+        "checked_local_assets": 10,
+        "javascript_files_parsed": 0
+      }
+    },
+    {
+      "source": "web_ui_011_landing.sdr",
+      "mode": "site",
+      "stable011": {
+        "files": 6,
+        "html_pages": 2,
+        "checked_local_assets": 5,
+        "javascript_files_parsed": 0
+      },
+      "native012": {
+        "files": 5,
+        "html_pages": 2,
+        "checked_local_assets": 5,
+        "javascript_files_parsed": 0
+      }
+    },
+    {
+      "source": "platform_catalog.sdr",
+      "mode": "webapp",
+      "stable011": {
+        "files": 4,
+        "html_pages": 1,
+        "checked_local_assets": 2,
+        "javascript_files_parsed": 1
+      },
+      "native012": {
+        "files": 3,
+        "html_pages": 1,
+        "checked_local_assets": 2,
+        "javascript_files_parsed": 1
+      }
+    },
+    {
+      "source": "platform_crm.sdr",
+      "mode": "webapp",
+      "stable011": {
+        "files": 7,
+        "html_pages": 1,
+        "checked_local_assets": 3,
+        "javascript_files_parsed": 1
+      },
+      "native012": {
+        "files": 6,
+        "html_pages": 1,
+        "checked_local_assets": 3,
+        "javascript_files_parsed": 1
+      }
+    },
+    {
+      "source": "platform_tasks.sdr",
+      "mode": "webapp",
+      "stable011": {
+        "files": 4,
+        "html_pages": 1,
+        "checked_local_assets": 2,
+        "javascript_files_parsed": 1
+      },
+      "native012": {
+        "files": 3,
+        "html_pages": 1,
+        "checked_local_assets": 2,
+        "javascript_files_parsed": 1
+      }
+    },
+    {
+      "source": "webapp_011_counter.sdr",
+      "mode": "webapp",
+      "stable011": {
+        "files": 4,
+        "html_pages": 1,
+        "checked_local_assets": 2,
+        "javascript_files_parsed": 1
+      },
+      "native012": {
+        "files": 3,
+        "html_pages": 1,
+        "checked_local_assets": 2,
+        "javascript_files_parsed": 1
+      }
+    },
+    {
+      "source": "webapp_011_tasks.sdr",
+      "mode": "webapp",
+      "stable011": {
+        "files": 4,
+        "html_pages": 1,
+        "checked_local_assets": 2,
+        "javascript_files_parsed": 1
+      },
+      "native012": {
+        "files": 3,
+        "html_pages": 1,
+        "checked_local_assets": 2,
+        "javascript_files_parsed": 1
+      }
+    }
+  ],
+  "result": "PASS",
+  "limitations": "Generated assets and JavaScript syntax; no real browser engine or user UI interactions."
+}

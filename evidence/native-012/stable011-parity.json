@@ -1,0 +1,40 @@
+{
+  "schema": "sedrava.native.stable011.differential.v1",
+  "oracle": "published Sedrava Python 0.11.0 release source",
+  "stable_release_commit": "c9cde75e3d2e2c7eafeeaec10c73fec627816e68",
+  "stable_tree_verified_against_git": true,
+  "stable_tracked_files_verified": 297,
+  "stable_tracked_source_bytes": 1444036,
+  "stable_cli_version": "sedrava 0.11.0",
+  "native_binary_sha256": "623e4d0f78ba688156247a20dd5f73628e3a96fdaad3baa3989acf4387d3e7f3",
+  "seed": 12011,
+  "random_cases_per_app": 75,
+  "compared_apps": [
+    "counter.sdr",
+    "reference_09.sdr",
+    "countdown.sdr",
+    "daily_steps.sdr",
+    "derived_progress.sdr",
+    "input_goal.sdr",
+    "task_manager.sdr",
+    "task_manager_navigation.sdr",
+    "text_profile.sdr",
+    "timer.sdr",
+    "workflow.sdr"
+  ],
+  "checked_web_examples": [
+    "platform_catalog.sdr",
+    "platform_crm.sdr",
+    "platform_site.sdr",
+    "platform_tasks.sdr",
+    "web_ui_011_landing.sdr",
+    "webapp_011_counter.sdr",
+    "webapp_011_tasks.sdr"
+  ],
+  "comparisons": 898,
+  "python_accepted": 666,
+  "python_rejected": 232,
+  "mismatch_count": 0,
+  "mismatches": [],
+  "note": "Same rejection is not proof of same error semantics; no full Web output equivalence, Android, or security claim."
+}

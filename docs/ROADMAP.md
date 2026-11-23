@@ -62,3 +62,16 @@ Android APK, Windows/macOS, full 0.11 parity, cross-browser validation
 and release security review are still BLOCKERS for stable 0.12.
 [Release notes](RELEASE_NOTES_NATIVE_0_12_0_ALPHA1.ru.md) ·
 [gate matrix](NATIVE_012_ALPHA_ACCEPTANCE.md).
+
+### Verified published 0.11.0 compatibility sample and Kotlin/JVM (2026-11-23)
+
+Native 0.12 alpha was checked against the **exact published Python 0.11**
+tag (not the developing main): 297 Git blobs verified, 898 run/test/check
+comparisons without observed mismatch under the limited criteria.
+Seven published Site/WebApp sources build in both engines and pass
+determinism/assets/JS syntax checks. Four jsdom interactions pass in
+each relevant engine; generated Kotlin was really compiled/run with
+Gradle Kotlin/JVM. Real Chromium browser acceptance was attempted but
+the download was blocked, Android SDK/APK is unavailable. No new
+stable/beta release authorization is implied.
+[Detailed evidence (RU)](NATIVE_012_STABLE011_PARITY.ru.md).

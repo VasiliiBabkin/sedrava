@@ -18,6 +18,7 @@
 
 [Установка и ограничения](RELEASE_NOTES_NATIVE_0_12_0_ALPHA1.ru.md)
 · [Матрица проверок](NATIVE_012_ALPHA_ACCEPTANCE.md).
+[Проверка против опубликованного Python 0.11](NATIVE_012_STABLE011_PARITY.ru.md).
 
 ## Установка
 

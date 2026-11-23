@@ -11,6 +11,12 @@
 - Revalidate limited Python/Rust parity (390 comparisons), 81 Rust tests,
   Host and A6, and offline installer under constrained PATH.
 - No stable release, PyPI replacement, release tag, or production claim.
+- Follow-up acceptance: exactly published 0.11.0 release source with
+  297 Git blobs verified; 898 differential comparisons show zero
+  observed mismatches; seven stable-vs-native static Web builds
+  validated, four interactive jsdom cases passed, generated Kotlin
+  JVM was compiled and executed. Real Chromium and Android APK remain
+  unresolved, not PASS.
 
 
 ## 0.11.0 — stable released on GitHub and PyPI (2026-11-05)

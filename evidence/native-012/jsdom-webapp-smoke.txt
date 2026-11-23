@@ -1,0 +1,5 @@
+PASS stable011 counter: real DOM state, click, typed validation
+PASS stable011 tasks: real DOM add/select/rename/delete
+PASS native012 counter: real DOM state, click, typed validation
+PASS native012 tasks: real DOM add/select/rename/delete
+PASS 4 jsdom WebApp scenarios across exact stable 0.11 and native 0.12. Chromium NOT tested
