@@ -74,3 +74,5 @@ The integration preview adds shared composition, pure functions, bounded collect
 
 
 [Лексер A2: строки, комментарии, операторы на Sedrava](SELF_HOSTING_LEXER_A2.ru.md).
+
+[Лексер A3: границы токенов, строки/столбцы, первый AST](SELF_HOSTING_LEXER_A3.ru.md)

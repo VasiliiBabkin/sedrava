@@ -96,3 +96,16 @@ operators, still with <=256 scalar input and <=100 token limits.
 and 81 Rust unit tests PASS. Native-generated Kotlin/Android
 assembleDebug succeeds. Full grammar/AST/self-hosting remain NO-GO.
 [RU evidence and reproduction](SELF_HOSTING_LEXER_A2.ru.md).
+
+### Self-hosting A3: token source spans and tiny assignment AST (2026-11-23)
+
+A Sedrava-authored scanner preserves its A2 subset and now yields
+UTF-8-independent Unicode-scalar [offset,end) spans, 1-based line and
+column, and operator-vs-punctuation kinds. One additional action
+builds one typed Assignment(name,literal,start,end) AST node only for
+identifier = integer. 112 accepted / 19 rejected token cases and
+6 accepted / 9 rejected AST cases PASS. A1/A2 and 81 Rust tests PASS.
+A real generated Android/Kotlin debug APK was also compiled by
+Gradle/Android SDK on VDS and signature-verified (no device test).
+This does NOT implement a full parser or stage 1/2/3 self-hosting.
+[Protocol (RU)](SELF_HOSTING_LEXER_A3.ru.md).
