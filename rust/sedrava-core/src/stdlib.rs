@@ -5,6 +5,7 @@ use crate::model::{ensure_text, fail, Error, Kind, Result, Value};
 pub fn signature(name: &str) -> Option<(Vec<Kind>, Kind)> {
     let (args, result) = match name {
         "text_length" => (vec![Kind::Text], Kind::Int),
+        "text_at" => (vec![Kind::Text, Kind::Int], Kind::Text),
         "trim" | "lower_ascii" => (vec![Kind::Text], Kind::Text),
         "contains" => (vec![Kind::Text, Kind::Text], Kind::Bool),
         "concat" => (vec![Kind::Text, Kind::Text], Kind::Text),
@@ -99,6 +100,17 @@ pub fn apply(name: &str, args: &[Value]) -> Result<Value> {
     }
     let v = match name {
         "text_length" => Value::Int(text(&args[0])?.chars().count() as i32),
+        "text_at" => {
+            let index = int(&args[1])?;
+            if index < 0 {
+                return fail("Text index out of bounds");
+            }
+            let ch = text(&args[0])?
+                .chars()
+                .nth(index as usize)
+                .ok_or_else(|| Error("Text index out of bounds".into()))?;
+            Value::Text(ch.to_string())
+        }
         "trim" => Value::Text(
             text(&args[0])?
                 .trim_matches([' ', '\t', '\n', '\r'])
@@ -159,6 +171,28 @@ mod tests {
         ] {
             assert!(civil_date(invalid).is_err());
         }
+    }
+    #[test]
+    fn unicode_text_at_is_scalar_indexed_and_checked() {
+        let text = Value::Text("A😀е\u{301}".into());
+        assert_eq!(
+            apply("text_at", &[text.clone(), Value::Int(0)]).unwrap(),
+            Value::Text("A".into())
+        );
+        assert_eq!(
+            apply("text_at", &[text.clone(), Value::Int(1)]).unwrap(),
+            Value::Text("😀".into())
+        );
+        assert_eq!(
+            apply("text_at", &[text.clone(), Value::Int(2)]).unwrap(),
+            Value::Text("е".into())
+        );
+        assert_eq!(
+            apply("text_at", &[text.clone(), Value::Int(3)]).unwrap(),
+            Value::Text("\u{301}".into())
+        );
+        assert!(apply("text_at", &[text.clone(), Value::Int(-1)]).is_err());
+        assert!(apply("text_at", &[text, Value::Int(4)]).is_err());
     }
     #[test]
     fn string_functions() {

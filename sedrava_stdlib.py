@@ -3,7 +3,7 @@ import datetime
 import re
 
 SIGNATURES={
-    'text_length':((str,),int), 'trim':((str,),str), 'lower_ascii':((str,),str),
+    'text_length':((str,),int), 'text_at':((str,int),str), 'trim':((str,),str), 'lower_ascii':((str,),str),
     'contains':((str,str),bool), 'concat':((str,str),str),
     'is_date':((str,),bool),'date_days':((str,),int),'date_add':((str,int),str),
 }
@@ -17,6 +17,9 @@ def civil_date(value):
 
 def apply(name,args):
     if name=='text_length':return len(args[0])
+    if name=='text_at':
+        if not 0<=args[1]<len(args[0]):raise ValueError('Text index out of bounds')
+        return args[0][args[1]]
     if name=='trim':return args[0].strip(' \t\r\n')
     if name=='lower_ascii':return args[0].translate(str.maketrans('ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'))
     if name=='contains':return args[1] in args[0]
@@ -36,10 +39,17 @@ function sdrIsDate(value){try{sdrDate(value);return true;}catch(_){return false;
 function sdrDateDays(value){return sdrDate(value).valueOf()/86400000;}
 function sdrDateAdd(value,n){const days=sdrDateDays(value)+n;if(days< -719162||days>2932896)throw RangeError('Date outside 0001..9999');return new Date(days*86400000).toISOString().slice(0,10);}
 function sdrConcat(a,b){const result=a+b;if(!validText(result))throw RangeError('Text limit');return result;}
+function sdrTextAt(value,index){const cs=Array.from(value);if(!Number.isSafeInteger(index)||index<0||index>=cs.length||!validText(cs[index]))throw RangeError('Text index out of bounds');return cs[index];}
 '''
 
 KT_RUNTIME=r'''
 internal fun sdrTextLength(value:String):Int = value.codePointCount(0,value.length)
+internal fun sdrTextAt(value:String,index:Int):String {
+  require(index>=0 && index<value.codePointCount(0,value.length))
+  val codepoint=value.codePointAt(value.offsetByCodePoints(0,index))
+  require(codepoint !in 0xD800..0xDFFF)
+  return String(Character.toChars(codepoint))
+}
 internal fun sdrDate(value:String):java.time.LocalDate = try {
  require(Regex("[0-9]{4}-[0-9]{2}-[0-9]{2}").matches(value))
  java.time.LocalDate.parse(value).also{require(it.year in 1..9999)}
@@ -54,6 +64,7 @@ def js_call(name,args):
     a=args[0]
     return {
       'text_length':lambda:'Array.from('+a+').length',
+      'text_at':lambda:'sdrTextAt('+','.join(args)+')',
       'trim':lambda:'('+a+').replace(/^[ \\t\\r\\n]+|[ \\t\\r\\n]+$/g, "")',
       'lower_ascii':lambda:'('+a+').replace(/[A-Z]/g,c=>c.toLowerCase())',
       'contains':lambda:'('+a+').includes('+args[1]+')',
@@ -67,6 +78,7 @@ def kt_call(name,args):
     a=args[0]
     return {
       'text_length':lambda:'sdrTextLength('+a+')',
+      'text_at':lambda:'sdrTextAt('+','.join(args)+')',
       'trim':lambda:'('+a+").trim(' ', '\\t', '\\r', '\\n')",
       'lower_ascii':lambda:'('+a+').map{if(it in \'A\'..\'Z\') (it.code+32).toChar() else it}.joinToString("")',
       'contains':lambda:'('+a+').contains('+args[1]+')',

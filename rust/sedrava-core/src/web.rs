@@ -135,6 +135,7 @@ pub(crate) fn expr_js(expr: &Expr, scope: &BTreeMap<String, String>) -> Result<S
             }
             match name.as_str() {
                 "text_length" => format!("Array.from({first}).length"),
+                "text_at" => format!("sdrTextAt({first},{second})"),
                 "trim" => format!("({first}).replace(/^[ \\t\\r\\n]+|[ \\t\\r\\n]+$/g, '')"),
                 "lower_ascii" => format!("({first}).replace(/[A-Z]/g,c=>c.toLowerCase())"),
                 "contains" => format!("({first}).includes({second})"),
@@ -747,6 +748,7 @@ function checkStateValues(next) {
     // UTC-only checked scalar library, matching the bounded native types.
     output.push_str(r#"
 function sdrConcat(a,b){const result=a+b;if(!validText(result))throw RangeError('Text limit');return result;}
+function sdrTextAt(value,index){const chars=Array.from(value);if(!Number.isSafeInteger(index)||index<0||index>=chars.length||!validText(chars[index]))throw RangeError('Text index out of bounds');return chars[index];}
 function sdrDate(value){
     const match=/^([0-9]{4})-([0-9]{2})-([0-9]{2})$/.exec(value);
     if(!match)throw RangeError('Expected YYYY-MM-DD');
