@@ -33,3 +33,12 @@
 **Release discipline:** Python 3.10/3.12/3.13, actual browser and Android tests, clean-installed wheel/sdist, reproducibility, 0.10 and published RC upgrade/rollback, known limitations and explicit owner approval for exact source SHA and hashes. [0.11 RC upgrade audit](UPGRADE_AUDIT_011.md) · [EN guide](011_WEB_PLATFORM.en.md) · [RU guide](011_WEB_PLATFORM.ru.md) · [0.10 stability](STABILITY_AUDIT_010.md).
 
 The official [documentation website](https://sedrava.virtreal.ru/) is built separately with Astro/Starlight. A Sedrava-generated dev preview is separate. **Describe the application; get the application. / Опиши — получи.**
+
+## Long-term objective: Sedrava self-hosted compiler
+
+The goal is a compiler written in Sedrava that compiles its own source via
+reproducible stage-1/2/3 bootstrapping. **This is not implemented/released.**
+Rust remains the tested bootstrap compiler; stable 0.11.0 is Python-based.
+Read the [self-hosting roadmap](SELF_HOSTING_ROADMAP.ru.md) for exact gates.
+SedravaSQL is a separate database project and is not required for building
+the language compiler.
