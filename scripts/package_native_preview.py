@@ -9,6 +9,7 @@ import gzip
 import hashlib
 import io
 import json
+import re
 import subprocess
 import tarfile
 import zipfile
@@ -31,6 +32,24 @@ def main() -> int:
                 if line.startswith("host: "))
     binary = args.binary.resolve()
     data = binary.read_bytes()
+    # Do not label an older binary as a new release merely because Cargo.toml
+    # was edited. The binary itself is the authority for its identity.
+    cargo_text = (ROOT / "rust/sedrava-core/Cargo.toml").read_text(encoding="utf-8")
+    versions = re.findall(r'(?m)^version = "([^"]+)"$', cargo_text)
+    if len(versions) != 1:
+        raise ValueError("Ambiguous Rust package version in Cargo.toml")
+    declared_version = versions[0]
+    version_reply = subprocess.run(
+        [str(binary), "--version"], check=True, capture_output=True,
+        text=True, timeout=10,
+    ).stdout.strip()
+    expected_prefix = f"sedrava-native {declared_version} (experimental native preview;"
+    if not version_reply.startswith(expected_prefix):
+        raise ValueError(
+            f"Stale or wrong binary version: {version_reply!r}; Cargo expects {declared_version}"
+        )
+    if not re.fullmatch(r"0\.12\.0-alpha\.[1-9][0-9]*", declared_version):
+        raise ValueError("Only explicitly versioned 0.12.0 alpha candidates may use this packaging path")
     if len(data) < 1000:
         raise ValueError("Native binary unexpectedly small")
     name = "sedrava-native.exe" if "windows" in host else "sedrava-native"
@@ -42,15 +61,18 @@ def main() -> int:
                                 check=True, capture_output=True, text=True).stdout.strip())
     manifest = {
         "schema": "sedrava-native-preview-v1",
+        "version": declared_version, "channel": "alpha",
         "host": host, "source_sha": gitsha, "dirty_source": dirty,
         "binary_sha256": sha256(data),
+        "binary_version": version_reply,
         "status": "EXPERIMENTAL; partial language only; not a stable release"
     }
     files = {
         f"sedrava-native/{name}": data,
         "sedrava-native/LICENSE": (ROOT / "LICENSE").read_bytes(),
         "sedrava-native/README.txt": (
-            "EXPERIMENTAL Sedrava native core. Not yet the complete compiler.\n"
+            f"EXPERIMENTAL Sedrava Native {declared_version} for {host}.\n"
+            "Not yet the complete compiler.\n"
             "Do not replace the stable Python CLI or use production state files.\n"
             "Run sedrava-native --version or sedrava-native --help.\n"
             "Verify the SHA256 before execution.\n"
@@ -63,7 +85,7 @@ def main() -> int:
     ).encode("ascii")
     args.output.mkdir(parents=True, exist_ok=True)
     suffix = ".zip" if "windows" in host else ".tar.gz"
-    output = args.output / f"sedrava-native-preview-{host}{suffix}"
+    output = args.output / f"sedrava-native-{declared_version}-{host}{suffix}"
     if suffix == ".zip":
         with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as z:
             for path, data in sorted(files.items()):

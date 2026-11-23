@@ -1,5 +1,18 @@
 # Changelog
 
+## Native Rust 0.12.0-alpha.1 — Linux candidate (2026-11-23)
+
+- Version the experimental native CLI separately from Python 0.11 stable;
+  derive --version from Cargo package metadata rather than hardcoded text.
+- Add versioned, platform-specific native archive packaging and fail-closed
+  binary version verification.
+- Add seven native release-candidate acceptance scenarios, including a
+  bounded lexer, parser rejection and deterministic Site/WebApp outputs.
+- Revalidate limited Python/Rust parity (390 comparisons), 81 Rust tests,
+  Host and A6, and offline installer under constrained PATH.
+- No stable release, PyPI replacement, release tag, or production claim.
+
+
 ## 0.11.0 — stable released on GitHub and PyPI (2026-11-05)
 
 - [GitHub release](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0) and [PyPI](https://pypi.org/project/sedrava/0.11.0/) published from exact audited source `c9cde75e3d2e2c7eafeeaec10c73fec627816e68`. Web-platform scope matches [0.11.0rc1](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0rc1); Android versionCode 11002 exceeds RC 11001.

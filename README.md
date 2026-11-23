@@ -14,40 +14,34 @@
 
 Start with [Quick Start](docs/QUICKSTART.md), the [text reference](docs/LANGUAGE_0_10_TEXT.md), [text profile example](examples/text_profile.sdr), and [measured report](docs/TEXT_010_REPORT.md). The [task manager](examples/task_manager.sdr) now uses records and lists directly in `.sdr`; the [navigation example](docs/NAVIGATION_QUICKSTART.en.md) adds guarded screens and Back.
 
-## Experimental native Rust core (research branch)
+## Native Rust 0.12.0-alpha.1 candidate (experimental)
 
-A native Rust compiler/interpreter core now runs a deliberately restricted subset of
-Sedrava: checked scalar values, records, bounded lists, pure functions,
-collection queries, navigation, schema-1 persistent snapshots, experimental
-typed IR export, actions, derives, invariants, embedded tests and a standalone
-CLI. Rust now generates experimental multi-screen Web applications with
-typed record lists, pure functions, queries and schema-1 browser persistence.
-The experimental app-mode Web generator is tested on representative examples;
-Site/WebApp DSL, full Android code generation, Host Effects and real-browser
-acceptance remain pending. A separate experimental native Android scalar
-project generator is available but is not yet APK/device-verified. It is **not** the default compiler and
-does **not** replace the stable Python 0.11.0 toolchain.
+The separate native Rust CLI is now versioned **0.12.0-alpha.1**.
+It is a Linux x86_64 source/release **candidate**, not a stable release
+or published GitHub Release/PyPI package. The Python-based **0.11.0**
+remains the only published stable version; the sedrava command and
+existing user data are not changed.
 
-- [Rust migration and design decision](docs/ADR_RUST_CORE.md)
-- [Full native Rust migration coverage and release gates (RU)](docs/RUST_FULL_MIGRATION.ru.md)
-- [Rust native persistence and typed IR guide (RU)](docs/RUST_NATIVE_PERSISTENCE.ru.md)
-- [Native distribution strategy (RU)](docs/DISTRIBUTION_NATIVE.ru.md)
-- [Native app-mode Web generator status (RU)](docs/RUST_WEB_SCALAR.ru.md)
-- [Native Android preview generator and limitations (RU)](docs/RUST_ANDROID_GENERATOR.ru.md)
-- [Russian build/use guide and unsupported features](docs/RUST_CORE_MIGRATION.ru.md)
-- [Differential Python/Rust checker](scripts/verify_rust_core.py)
-- [Scoped CLI benchmark](scripts/benchmark_rust_core.py)
-- [Dated validation evidence and bounded performance results](evidence/rust-core/README.md)
+The Rust core implements a tested subset with records, bounded lists,
+functions, navigation, actions, typed errors, Host file effects,
+experimental Site/WebApp/Android source generators and a loopback-only
+Server A6. It also supports a bounded-loop lexer written in Sedrava.
+The Rust CLI is not yet proven compatible with the complete Python 0.11
+language, and an Android source tree is not evidence of a working APK.
 
-For example, from the repository root, after installing Rust:
+- [Native alpha notes / RU](docs/RELEASE_NOTES_NATIVE_0_12_0_ALPHA1.ru.md)
+- [Scope-specific acceptance gates](docs/NATIVE_012_ALPHA_ACCEPTANCE.md)
+- [Rust migration and limitations](docs/RUST_FULL_MIGRATION.ru.md)
+- [Native distribution and offline installer](docs/DISTRIBUTION_NATIVE.ru.md)
+- [Self-hosting roadmap](docs/SELF_HOSTING_ROADMAP.ru.md)
 
-    cargo build --manifest-path rust/Cargo.toml --locked --bin sedrava-native
-    cargo test --manifest-path rust/Cargo.toml --locked --workspace
-    ./rust/target/debug/sedrava-native run examples/reference_09.sdr add add
+Developers can build it with Cargo:
 
-This experiment makes no claims about Web/Android output speed, full 0.11
-language compatibility or production readiness. Published Python releases
-remain unchanged.
+    cargo build --manifest-path rust/Cargo.toml --locked --release --bin sedrava-native
+    ./rust/target/release/sedrava-native --version
+
+The eventual verified platform-specific archive can be installed
+without Python or Rust on the *target* Linux system.
 
 ## Getting started
 
