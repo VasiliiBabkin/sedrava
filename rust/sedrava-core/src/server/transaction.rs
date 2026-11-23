@@ -11,7 +11,7 @@ pub const MAX_RECEIPTS: usize = 32;
 pub const MAX_TRANSACTION_BYTES: u64 = 262_144;
 pub const SCHEMA: &str = "sedrava.server.transaction.v1";
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Receipt {
     pub key: String,

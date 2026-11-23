@@ -5,6 +5,7 @@ use crate::model::{fail, Error, Result};
 use serde::de::{self, MapAccess, Visitor};
 use serde::{Deserialize, Deserializer};
 use serde_json::{Map, Value};
+use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::io::Write;
@@ -12,11 +13,15 @@ use std::net::TcpListener;
 use std::thread;
 use std::time::{Duration, Instant};
 
+mod backend;
 mod http;
+mod journal;
 mod state;
 mod storage;
 mod transaction;
 
+use backend::TransactionBackend;
+use journal::JournalStore;
 use state::{StateDef, Step, Values};
 use std::path::Path;
 use storage::{SaveFailure, Store};
@@ -53,6 +58,7 @@ pub struct Server {
     pub name: String,
     routes: Vec<Route>,
     states: BTreeMap<String, StateDef>,
+    source_sha: String,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -303,6 +309,7 @@ pub fn parse(source: &str) -> Result<Server> {
         name,
         routes,
         states,
+        source_sha: format!("{:x}", Sha256::digest(source.as_bytes())),
     })
 }
 
@@ -337,20 +344,35 @@ impl<'de> Deserialize<'de> for StrictObject {
 pub(crate) struct Session {
     values: Values,
     store: Option<Store>,
+    journal: Option<JournalStore>,
     ledger: Option<Ledger>,
     poisoned: bool,
 }
 impl Session {
-    fn open(program: &Server, state_dir: Option<&Path>, transactional: bool) -> Result<Self> {
+    fn open(
+        program: &Server,
+        state_dir: Option<&Path>,
+        transactional: bool,
+        journaled: bool,
+    ) -> Result<Self> {
         if transactional && state_dir.is_none() {
             return fail("E_SERVER_TRANSACTION: --transactional requires --state-dir");
         }
-        let (store, values, ledger) = if let Some(dir) = state_dir {
+        if journaled && !transactional {
+            return fail("E_SERVER_JOURNAL: --journaled requires --transactional");
+        }
+        let (store, journal, values, ledger) = if journaled {
+            let dir = state_dir.expect("checked --state-dir");
+            let (journal, values, ledger) =
+                JournalStore::open(dir, &program.name, &program.states, &program.source_sha)?;
+            (None, Some(journal), values, ledger)
+        } else if let Some(dir) = state_dir {
             let (store, values, ledger) =
                 Store::open(dir, &program.name, &program.states, transactional)?;
-            (Some(store), values, ledger)
+            (Some(store), None, values, ledger)
         } else {
             (
+                None,
                 None,
                 program
                     .states
@@ -363,9 +385,19 @@ impl Session {
         Ok(Self {
             values,
             store,
+            journal,
             ledger: transactional.then_some(ledger),
             poisoned: false,
         })
+    }
+
+    fn backend(&mut self) -> Option<&mut dyn TransactionBackend> {
+        if let Some(journal) = self.journal.as_mut() {
+            return Some(journal);
+        }
+        self.store
+            .as_mut()
+            .map(|store| store as &mut dyn TransactionBackend)
     }
 }
 
@@ -377,7 +409,7 @@ pub(crate) fn reply(
     body: &[u8],
     content_type: Option<&str>,
 ) -> http::Response {
-    let mut session = Session::open(program, None, false).expect("in-memory state");
+    let mut session = Session::open(program, None, false, false).expect("in-memory state");
     reply_stateful(
         program,
         &mut session,
@@ -536,8 +568,8 @@ pub(crate) fn reply_stateful(
         let Some(next) = ledger.append(receipt) else {
             return http::Response::error(507, "TRANSACTION_LEDGER_FULL");
         };
-        if let Some(store) = session.store.as_mut() {
-            match store.save_transaction(&candidate, &next) {
+        if let Some(backend) = session.backend() {
+            match backend.commit(&candidate, &next) {
                 Ok(()) => {}
                 Err(SaveFailure::RejectedBeforeCommit) => {
                     return http::Response::error(503, "STATE_WRITE_FAILED")
@@ -584,6 +616,7 @@ pub fn serve(
     options: RuntimeOptions,
     state_dir: Option<&Path>,
     transactional: bool,
+    journaled: bool,
 ) -> Result<()> {
     if options.max_requests == 0
         || options.max_requests > 10_000
@@ -592,7 +625,7 @@ pub fn serve(
     {
         return fail("E_SERVER_RUN: max_requests 1..10000 and idle_ms 500..120000 required");
     }
-    let mut session = Session::open(program, state_dir, transactional)?;
+    let mut session = Session::open(program, state_dir, transactional, journaled)?;
     let listener = TcpListener::bind(("127.0.0.1", options.port))
         .map_err(|e| Error(format!("E_SERVER_BIND: unable to bind loopback: {e}")))?;
     listener

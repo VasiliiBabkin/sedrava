@@ -18,7 +18,7 @@ fn usage() {
            sedrava-native lock DIR\n           sedrava-native verify DIR\n           sedrava-native host check FILE
            sedrava-native host run FILE --root DIR --trusted [--allow-read] [--allow-write]
            sedrava-native server check FILE
-           sedrava-native server run FILE [--port PORT] [--max-requests N] [--idle-ms N] [--state-dir ABSOLUTE_PRIVATE_DIR] [--transactional]
+           sedrava-native server run FILE [--port PORT] [--max-requests N] [--idle-ms N] [--state-dir ABSOLUTE_PRIVATE_DIR] [--transactional] [--journaled]
            sedrava-native check FILE\n\
            sedrava-native effects FILE [--target app|web|android]\n\
            sedrava-native test FILE\n\
@@ -242,6 +242,7 @@ fn server_command(args: &[String]) -> Result<()> {
             };
             let mut state_dir=None;
             let mut transactional=false;
+            let mut journaled=false;
             let mut seen=std::collections::BTreeSet::new();
             let mut next=options.iter();
             while let Some(flag)=next.next() {
@@ -250,6 +251,10 @@ fn server_command(args: &[String]) -> Result<()> {
                 }
                 if flag=="--transactional" {
                     transactional=true;
+                    continue;
+                }
+                if flag=="--journaled" {
+                    journaled=true;
                     continue;
                 }
                 let value=next.next().ok_or_else(|| Error(
@@ -265,9 +270,9 @@ fn server_command(args: &[String]) -> Result<()> {
                     _ => return Err(Error(format!("E_SERVER_CLI: unsupported option {flag}"))),
                 }
             }
-            server::serve(&program,settings,state_dir.as_deref(),transactional)
+            server::serve(&program,settings,state_dir.as_deref(),transactional,journaled)
         }
-        _ => Err(Error("Expected server check FILE or server run FILE [--port PORT] [--max-requests N] [--idle-ms N] [--state-dir ABSOLUTE_PRIVATE_DIR] [--transactional]".into())),
+        _ => Err(Error("Expected server check FILE or server run FILE [--port PORT] [--max-requests N] [--idle-ms N] [--state-dir ABSOLUTE_PRIVATE_DIR] [--transactional] [--journaled]".into())),
     }
 }
 

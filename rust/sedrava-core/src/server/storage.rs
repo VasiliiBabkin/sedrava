@@ -23,7 +23,7 @@ const MAX_STATE_BYTES: u64 = 16_384;
 const FILE: &str = "sedrava-state-v1.json";
 const LOCK: &str = ".sedrava-server.lock";
 
-fn signature(server_name: &str, defs: &BTreeMap<String, StateDef>) -> Result<String> {
+pub(super) fn signature(server_name: &str, defs: &BTreeMap<String, StateDef>) -> Result<String> {
     let kinds: Vec<_> = defs
         .iter()
         .map(|(key, def)| {
@@ -45,7 +45,7 @@ fn signature(server_name: &str, defs: &BTreeMap<String, StateDef>) -> Result<Str
 
 /// Reject duplicate keys at *every* object nesting depth; reject all floating
 /// numbers, overlarge int32 values and excessive nested arrays/objects.
-struct Strict(Value);
+pub(super) struct Strict(pub(super) Value);
 impl<'de> Deserialize<'de> for Strict {
     fn deserialize<D: Deserializer<'de>>(d: D) -> std::result::Result<Self, D::Error> {
         struct Read;
@@ -216,14 +216,14 @@ mod unix {
         transactional: bool,
     }
 
-    fn metadata_regular(metadata: &fs::Metadata, uid: u32) -> bool {
+    pub(crate) fn metadata_regular(metadata: &fs::Metadata, uid: u32) -> bool {
         metadata.is_file()
             && metadata.uid() == uid
             && metadata.nlink() == 1
             && metadata.permissions().mode() & 0o077 == 0
     }
 
-    fn private_folder(dir: &Path) -> Result<PathBuf> {
+    pub(crate) fn private_folder(dir: &Path) -> Result<PathBuf> {
         if !dir.is_absolute()
             || dir
                 .components()
@@ -252,7 +252,7 @@ mod unix {
         Ok(absolute)
     }
 
-    fn checked_file(path: &Path, uid: u32) -> Result<Option<fs::Metadata>> {
+    pub(crate) fn checked_file(path: &Path, uid: u32) -> Result<Option<fs::Metadata>> {
         match fs::symlink_metadata(path) {
             Ok(meta) if metadata_regular(&meta, uid) => Ok(Some(meta)),
             Ok(_) => {
@@ -274,6 +274,11 @@ mod unix {
                 return fail("E_SERVER_STORAGE: persistence requires declared server states");
             }
             let dir = private_folder(path)?;
+            // Journals have an explicit format marker. An A2/A3 process
+            // must not load or overwrite the same directory.
+            if fs::symlink_metadata(dir.join("sedrava-journal-v1.manifest.json")).is_ok() {
+                return fail("E_SERVER_STORAGE: A4 journal directory requires --journaled");
+            }
             let uid = rustix::process::geteuid().as_raw();
             // Fail closed when stale lock remains after crash. Never unlink
             // a lock that an operator has not explicitly inspected.
@@ -490,6 +495,8 @@ mod unix {
 
 #[cfg(unix)]
 pub use unix::Store;
+#[cfg(unix)]
+pub(crate) use unix::{checked_file, metadata_regular, private_folder};
 
 #[cfg(not(unix))]
 pub struct Store;
