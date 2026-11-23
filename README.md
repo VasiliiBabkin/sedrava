@@ -196,3 +196,7 @@ A3 research: [Sedrava-written source spans and a first assignment AST](docs/SELF
 This is a one-shot subset parser, not an autonomous compiler or full Sedrava grammar.
 
 Experimental [Sedrava-authored A4 layout tokens and limited arithmetic AST](docs/SELF_HOSTING_PARSER_A4.ru.md): NEWLINE/INDENT/DEDENT on a strict 4-space subset, plus a small fixed precedence-aware binary assignment. This is not a complete parser or self-hosted compiler.
+
+A5.1 self-hosting research: [merge lexical and indentation tokens in
+Sedrava](docs/SELF_HOSTING_UNIFIED_A51.ru.md). Three bounded actions
+combine A3 and A4 streams in source order. This is not a full parser.
