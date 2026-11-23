@@ -1,0 +1,32 @@
+{
+  "schema": "sedrava.native.unicode.android.apk.v1",
+  "date": "2026-11-23",
+  "compiler_source_commit": "d8b53615cb106c16874cb41bce20e863c9203523",
+  "compiler_version": "0.12.0-alpha.1",
+  "app_source": "examples/android_unicode_loop_diagnostics.sdr",
+  "source_sha256": "8872bb0ae09e123da164e1ed58b917517cf9bd7c347c2876a9150b2cdb4d765f",
+  "rust_run_result": {
+    "chars": 14,
+    "spaces": 2,
+    "letters_a": 4,
+    "runs": 1
+  },
+  "rust_cli_check": "PASS",
+  "rust_cli_test": "PASS",
+  "gradle_assemble_debug": "PASS",
+  "apk_signature_v2": "PASS",
+  "apk_file_sha256": "ec01b75f4e5ca4bfd214d921e14ae811c3008563421453a564ee1192f5928eac",
+  "apk_bytes": 8772879,
+  "app_id": "ru.ladokod.sedrava.unicode012",
+  "min_sdk": 26,
+  "target_sdk": 35,
+  "https_url": "https://popizdim.tf7.ru/downloads/sedrava-native-unicode-0.12-alpha1.apk",
+  "http_status_checked": 200,
+  "downloaded_bytes_sha256_confirmed": true,
+  "device_installed": "NOT_TESTED",
+  "limitations": [
+    "Physical phone not tested",
+    "Runtime input longer than 256 not tested on phone",
+    "No app store signing"
+  ]
+}
