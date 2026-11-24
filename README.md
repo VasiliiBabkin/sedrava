@@ -228,3 +228,9 @@ Self-hosting A5.2 experimental: Sedrava-authored parser over actual
 A5.1 unified tokens, with bounded assignment+indent AST and
 Unicode-scalar spans. Independent 30 valid / 22 invalid tests PASS.
 See docs/SELF_HOSTING_PARSER_A52.ru.md. Not self-hosted compiler.
+
+Experimental [self-hosting parser A5.3](docs/SELF_HOSTING_PARSER_A53.ru.md):
+Sedrava-authored bounded 1..3-integer arithmetic expression AST
+with precedence, left-associativity, layout depth and Unicode spans.
+37 accepted / 23 rejected independently verified source cases PASS.
+No full language grammar or self-hosted compiler.
