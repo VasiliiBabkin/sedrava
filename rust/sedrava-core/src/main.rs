@@ -18,7 +18,7 @@ fn usage() {
            sedrava-native lock DIR\n           sedrava-native verify DIR\n           sedrava-native host check FILE
            sedrava-native host run FILE --root DIR --trusted [--allow-read] [--allow-write]
            sedrava-native server check FILE
-           sedrava-native server run FILE [--port PORT] [--max-requests N] [--idle-ms N] [--state-dir ABSOLUTE_PRIVATE_DIR] [--transactional] [--journaled] [--sqlite-state FILE] [--sqlite-v2-state FILE] [--native-index FILE --native-index-sha256 SHA256] [--native-log FILE]
+           sedrava-native server run FILE [--port PORT] [--max-requests N] [--idle-ms N] [--state-dir ABSOLUTE_PRIVATE_DIR] [--transactional] [--journaled] [--sqlite-state FILE] [--sqlite-v2-state FILE] [--native-index FILE --native-index-sha256 SHA256] [--native-log FILE [--native-max-bytes N --native-max-transactions N]]
            sedrava-native check FILE\n\
            sedrava-native effects FILE [--target app|web|android]\n\
            sedrava-native test FILE\n\
@@ -247,6 +247,8 @@ fn server_command(args: &[String]) -> Result<()> {
             let mut sqlite_v2_state=None;
             let mut native_index=None;
             let mut native_log=None;
+            let mut native_max_bytes=None;
+            let mut native_max_transactions=None;
             let mut native_index_sha=None;
             let mut seen=std::collections::BTreeSet::new();
             let mut next=options.iter();
@@ -275,6 +277,8 @@ fn server_command(args: &[String]) -> Result<()> {
                     "--sqlite-state" => sqlite_state=Some(PathBuf::from(value)),
                     "--sqlite-v2-state" => sqlite_v2_state=Some(PathBuf::from(value)),
                     "--native-log" => native_log=Some(PathBuf::from(value)),
+                    "--native-max-bytes" => native_max_bytes=Some(value.parse::<u64>().map_err(|_|Error("E_SERVER_CLI: invalid native byte limit".into()))?),
+                    "--native-max-transactions" => native_max_transactions=Some(value.parse::<u64>().map_err(|_|Error("E_SERVER_CLI: invalid native transaction limit".into()))?),
                     "--native-index" => native_index=Some(PathBuf::from(value)),
                     "--native-index-sha256" => native_index_sha=Some(value.as_str()),
                     _ => return Err(Error(format!("E_SERVER_CLI: unsupported option {flag}"))),
@@ -285,9 +289,14 @@ fn server_command(args: &[String]) -> Result<()> {
                 (None, None) => None,
                 _ => return Err(Error("E_SERVER_NATIVE_INDEX: both native index flags required".into())),
             };
-            server::serve_with_native_backends(&program,settings,state_dir.as_deref(),transactional,journaled,sqlite_state.as_deref(),sqlite_v2_state.as_deref(),native,native_log.as_deref())
+            let limits = match (native_max_bytes,native_max_transactions) {
+                (None,None) => sedravasql::native_log::NativeLimits::default(),
+                (Some(max_bytes),Some(max_transactions)) if native_log.is_some() => sedravasql::native_log::NativeLimits {max_bytes,max_transactions},
+                _ => return Err(Error("E_SERVER_NATIVE_LOG: both limit flags and native log required".into())),
+            };
+            server::serve_with_native_limits(&program,settings,state_dir.as_deref(),transactional,journaled,sqlite_state.as_deref(),sqlite_v2_state.as_deref(),native,native_log.as_deref(),limits)
         }
-        _ => Err(Error("Expected server check FILE or server run FILE [--port PORT] [--max-requests N] [--idle-ms N] [--state-dir ABSOLUTE_PRIVATE_DIR] [--transactional] [--journaled] [--sqlite-state FILE] [--sqlite-v2-state FILE] [--native-index FILE --native-index-sha256 SHA256] [--native-log FILE]".into())),
+        _ => Err(Error("Expected server check FILE or server run FILE [--port PORT] [--max-requests N] [--idle-ms N] [--state-dir ABSOLUTE_PRIVATE_DIR] [--transactional] [--journaled] [--sqlite-state FILE] [--sqlite-v2-state FILE] [--native-index FILE --native-index-sha256 SHA256] [--native-log FILE [--native-max-bytes N --native-max-transactions N]]".into())),
     }
 }
 

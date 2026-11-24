@@ -246,3 +246,7 @@ Experimental [A12/A13 native journal transactions and restart verification](docs
 Experimental [A5.6a compound if conditions](docs/SELF_HOSTING_PARSER_A56A.ru.md).
 
 Experimental [A5.6b linked if/else branches](docs/SELF_HOSTING_PARSER_A56B.ru.md).
+
+Experimental [A5.6c function call AST](docs/SELF_HOSTING_PARSER_A56C.ru.md).
+
+Native Server: [B15a write limits](docs/RUST_NATIVE_SERVER_B15A_BUDGET.ru.md).

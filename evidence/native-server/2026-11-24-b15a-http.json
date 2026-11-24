@@ -1,0 +1,1 @@
+{"stage":"B15a-http","environment":"VDS Linux","sedravasql_commit":"db2054efaeda0fd5cb4724f86c11586bdae45266","rust_tests_pass":83,"capacity_http":"PASS","a10_regression":"PASS","a11_regression":"PASS","a12_a13_regression":"PASS","a10_reads":242,"a10_generations":81,"production":false}

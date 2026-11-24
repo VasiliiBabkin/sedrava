@@ -3,7 +3,7 @@ use super::kv_write::{BatchFailure, BatchPut, ServerBatchReceipt};
 use super::state::{scalar_type, StateDef, Values};
 use super::storage::signature;
 use crate::model::{fail, Error, Result};
-use sedravasql::native_log::{NativeChange, NativeLog, NativeMutation, TransactionalStore, MAX_VALUE_BYTES};
+use sedravasql::native_log::{NativeChange, NativeLimits, NativeLog, NativeMutation, TransactionalStore, MAX_VALUE_BYTES};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
@@ -38,7 +38,7 @@ fn put(ns: &str,key: &str,rev:u64,value:String)->NativeMutation {
     NativeMutation { namespace:ns.into(), key:key.into(), expected_revision:rev, change:NativeChange::Put(value) }
 }
 impl NativeLogStore {
-    pub(super) fn open(path:&Path,name:&str,defs:&BTreeMap<String,StateDef>,source_sha:&str)->Result<(Self,Values,u32)> {
+    pub(super) fn open(path:&Path,name:&str,defs:&BTreeMap<String,StateDef>,source_sha:&str,limits:NativeLimits)->Result<(Self,Values,u32)> {
         if !path.is_absolute() || defs.is_empty() {
             return fail("E_SERVER_NATIVE_LOG: absolute existing log and declared state required");
         }
@@ -47,6 +47,7 @@ impl NativeLogStore {
             .map_err(|_|Error("E_SERVER_NATIVE_LOG: signature failed".into()))?;
         let signature=format!("{:x}",Sha256::digest(raw));
         let mut db=NativeLog::open(path).map_err(|_|Error("E_SERVER_NATIVE_LOG: open/lock/verification failed".into()))?;
+        db.set_limits(limits).map_err(|_|Error("E_SERVER_NATIVE_LOG: invalid write limits".into()))?;
         db.verify().map_err(|_|Error("E_SERVER_NATIVE_LOG: verify failed".into()))?;
         let saved=db.read(NS,STATE_KEY).map_err(|_|Error("E_SERVER_NATIVE_LOG: state read failed".into()))?;
         let (values,revision)=match saved {
@@ -153,6 +154,7 @@ impl NativeLogStore {
                 Ok((app,false))
             }
             Err(sedravasql::native_log::Error::Conflict(_))=>Err(BatchFailure::RevisionConflict),
+            Err(sedravasql::native_log::Error::Capacity(_))=>Err(BatchFailure::Capacity),
             Err(sedravasql::native_log::Error::Invalid(_))=>Err(BatchFailure::Invalid),
             Err(_)=>Err(BatchFailure::Uncertain),
         }

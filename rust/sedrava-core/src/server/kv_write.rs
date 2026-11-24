@@ -134,6 +134,7 @@ pub struct ServerBatchReceipt {
 }
 #[derive(Debug)]
 pub enum BatchFailure {
+    Capacity,
     RevisionConflict,
     IdempotencyConflict,
     Invalid,

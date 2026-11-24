@@ -245,3 +245,11 @@ Explicit header IDs, matching depth, nonempty body and structured orphan/duplica
 Pin staged native replay engine; preserve existing A10–A13 backend contracts.
 
 VDS: 83 Rust tests and A10/A11/A12/A13 integration regressions PASS with pinned B14 (70236fa8db2e2761a5f1a9672056b201d42fdb98).
+
+### Self-hosting A5.6c: function call AST
+
+[Named calls with positional arguments](SELF_HOSTING_PARSER_A56C.ru.md), nested calls and source spans. Name resolution and types pending.
+
+### Native server B15a: write admission limits
+
+[HTTP 507 capacity with continued reads and replay](RUST_NATIVE_SERVER_B15A_BUDGET.ru.md). VDS 83 Rust tests and A10–A13 regressions PASS.

@@ -113,3 +113,7 @@ A12/A13: [атомарная запись в нативный журнал и п
 A5.6a: [составные условия if](SELF_HOSTING_PARSER_A56A.ru.md).
 
 A5.6b: [связанные ветви if/else](SELF_HOSTING_PARSER_A56B.ru.md).
+
+A5.6c: [AST вызовов функций](SELF_HOSTING_PARSER_A56C.ru.md).
+
+Native Server: [ограничения записи B15a](RUST_NATIVE_SERVER_B15A_BUDGET.ru.md).

@@ -32,6 +32,7 @@ use sqlite::SqliteStore;
 use sqlite_v2::SqliteV2Store;
 use native_index::NativeIndexStore;
 use native_log::NativeLogStore;
+use sedravasql::native_log::NativeLimits;
 use state::{StateDef, Step, Values};
 use std::path::Path;
 use storage::{SaveFailure, Store};
@@ -468,6 +469,7 @@ impl Session {
         sqlite_v2_state: Option<&Path>,
         native_index: Option<(&Path, &str)>,
         native_log_path: Option<&Path>,
+        native_limits: NativeLimits,
     ) -> Result<Self> {
         let uses_db = program.routes.iter().any(|r| {
             !r.batch_puts.is_empty()
@@ -532,7 +534,7 @@ impl Session {
         let mut sqlite_v2 = None;
         let mut revision_a6 = None;
         let (store, journal, sqlite, values, ledger) = if let Some(path) = native_log_path {
-            let (backend, values, revision) = NativeLogStore::open(path, &program.name, &program.states, &program.source_sha)?;
+            let (backend, values, revision) = NativeLogStore::open(path, &program.name, &program.states, &program.source_sha, native_limits)?;
             native_log = Some(backend);
             revision_a6 = Some(revision);
             (None, None, None, values, Ledger::default())
@@ -614,7 +616,7 @@ pub(crate) fn reply(
     content_type: Option<&str>,
 ) -> http::Response {
     let mut session =
-        Session::open(program, None, false, false, None, None, None, None).expect("in-memory state");
+        Session::open(program, None, false, false, None, None, None, None, NativeLimits::default()).expect("in-memory state");
     reply_stateful(
         program,
         &mut session,
@@ -951,6 +953,7 @@ pub(crate) fn reply_stateful(
                 http::Response::error(409, "IDEMPOTENCY_CONFLICT")
             }
             Err(BatchFailure::Invalid) => http::Response::error(422, "BATCH_INVALID_REVISION"),
+            Err(BatchFailure::Capacity) => http::Response::error(507, "NATIVE_LOG_CAPACITY"),
             Err(BatchFailure::Uncertain) => {
                 session.poisoned = true;
                 http::Response::error(503, "DB_BATCH_UNCERTAIN")
@@ -1122,6 +1125,27 @@ pub fn serve_with_native_backends(
     native_index: Option<(&Path, &str)>,
     native_log_path: Option<&Path>,
 ) -> Result<()> {
+    serve_with_native_limits(program, options, state_dir, transactional, journaled,
+        sqlite_state, sqlite_v2_state, native_index, native_log_path, NativeLimits::default())
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn serve_with_native_limits(
+    program: &Server,
+    options: RuntimeOptions,
+    state_dir: Option<&Path>,
+    transactional: bool,
+    journaled: bool,
+    sqlite_state: Option<&Path>,
+    sqlite_v2_state: Option<&Path>,
+    native_index: Option<(&Path, &str)>,
+    native_log_path: Option<&Path>,
+    native_limits: NativeLimits,
+) -> Result<()> {
+    native_limits.validate().map_err(|_| Error("E_SERVER_NATIVE_LOG: invalid write limits".into()))?;
+    if native_log_path.is_none() && native_limits != NativeLimits::default() {
+        return fail("E_SERVER_NATIVE_LOG: limits require native log");
+    }
     if options.max_requests == 0
         || options.max_requests > 10_000
         || options.idle_ms < 500
@@ -1138,6 +1162,7 @@ pub fn serve_with_native_backends(
         sqlite_v2_state,
         native_index,
         native_log_path,
+        native_limits,
     )?;
     let listener = TcpListener::bind(("127.0.0.1", options.port))
         .map_err(|e| Error(format!("E_SERVER_BIND: unable to bind loopback: {e}")))?;
