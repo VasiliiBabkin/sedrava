@@ -223,3 +223,8 @@ Existing db_get and db_revision responses now fetch all referenced
 managed records in one SQLite read-only WAL snapshot (B7), pinned by
 commit. This does NOT snapshot in-memory server state, allow general
 SQL queries, or provide a public production API.
+
+Self-hosting A5.2 experimental: Sedrava-authored parser over actual
+A5.1 unified tokens, with bounded assignment+indent AST and
+Unicode-scalar spans. Independent 30 valid / 22 invalid tests PASS.
+See docs/SELF_HOSTING_PARSER_A52.ru.md. Not self-hosted compiler.

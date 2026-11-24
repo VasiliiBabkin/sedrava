@@ -1,0 +1,23 @@
+{
+  "schema": "sedrava.selfhost.a52.unified-ast.v1",
+  "date": "2026-11-24",
+  "program": "examples/self_host/parser_a52.sdr",
+  "verifier": "scripts/verify_selfhost_parser_a52.py",
+  "accepted_sources": 30,
+  "rejected_sources": 22,
+  "lexer_layout_merge_actual_sedrava_actions": true,
+  "ast_actual_sedrava_action": true,
+  "independent_oracle_passed": true,
+  "ast_fields": [
+    "name",
+    "literal",
+    "depth",
+    "line",
+    "start",
+    "end"
+  ],
+  "rust_unit_tests_passed": 83,
+  "full_language_grammar": false,
+  "android_apk_built_this_milestone": false,
+  "compiler_self_hosted": false
+}
