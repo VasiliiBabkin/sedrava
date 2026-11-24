@@ -25,7 +25,7 @@ mod transaction;
 
 use backend::TransactionBackend;
 use journal::JournalStore;
-use kv_write::{DbPut, PutFailure};
+use kv_write::{BatchFailure, BatchPut, DbPut, PutFailure};
 use sqlite::SqliteStore;
 use sqlite_v2::SqliteV2Store;
 use state::{StateDef, Step, Values};
@@ -56,6 +56,7 @@ pub struct Route {
     request: BTreeMap<String, ScalarType>,
     steps: Vec<Step>,
     db_put: Option<DbPut>,
+    batch_puts: Vec<BatchPut>,
     response: BTreeMap<String, ResponseValue>,
     status: u16,
 }
@@ -235,6 +236,7 @@ pub fn parse(source: &str) -> Result<Server> {
                 request: BTreeMap::new(),
                 steps: Vec::new(),
                 db_put: None,
+                batch_puts: Vec::new(),
                 response: BTreeMap::new(),
                 status: 200,
             });
@@ -267,11 +269,24 @@ pub fn parse(source: &str) -> Result<Server> {
                     _ => return fail("E_SERVER_PARSE: only int, bool, text supported"),
                 };
                 route.request.insert(key.to_string(), kind);
+            } else if content.starts_with("db_batch_put ") {
+                if route.method != "PUT"
+                    || has_response
+                    || route.db_put.is_some()
+                    || route.batch_puts.len() >= 2
+                    || !route.steps.is_empty()
+                {
+                    return fail("E_SERVER_BATCH: exactly two batch puts precede a state update");
+                }
+                route
+                    .batch_puts
+                    .push(BatchPut::parse(content, &route.request)?);
             } else if content.starts_with("db_put ") {
                 if route.method != "PUT"
                     || has_response
                     || route.db_put.is_some()
                     || !route.steps.is_empty()
+                    || !route.batch_puts.is_empty()
                 {
                     return fail("E_SERVER_DB_PUT: only one standalone PUT operation per route");
                 }
@@ -279,6 +294,13 @@ pub fn parse(source: &str) -> Result<Server> {
             } else if content.starts_with("set ") || content.starts_with("require ") {
                 if route.db_put.is_some() {
                     return fail("E_SERVER_DB_PUT: cannot mix KV put and state steps");
+                }
+                if !route.batch_puts.is_empty()
+                    && (route.batch_puts.len() != 2
+                        || !content.starts_with("set ")
+                        || !route.steps.is_empty())
+                {
+                    return fail("E_SERVER_BATCH: requires one state set after two puts");
                 }
                 if has_response || route.steps.len() >= 32 {
                     return fail("E_SERVER_STEP: handler steps after response or over budget");
@@ -354,6 +376,32 @@ pub fn parse(source: &str) -> Result<Server> {
                 return fail("E_SERVER_DB_PUT: only one declared text field, no state steps");
             }
         }
+        if !route.batch_puts.is_empty() {
+            if route.method != "PUT"
+                || route.db_put.is_some()
+                || route.batch_puts.len() != 2
+                || !matches!(route.steps.as_slice(), [Step::Set { .. }])
+                || route.request.len() != 4
+            {
+                return fail(
+                    "E_SERVER_BATCH: two literal keys, four request fields and one state set",
+                );
+            }
+            let a = &route.batch_puts[0];
+            let b = &route.batch_puts[1];
+            if (a.namespace.as_str(), a.key.as_str()) == (b.namespace.as_str(), b.key.as_str()) {
+                return fail("E_SERVER_BATCH: duplicate managed key");
+            }
+            let names = [
+                &a.value_field,
+                &a.revision_field,
+                &b.value_field,
+                &b.revision_field,
+            ];
+            if names.iter().collect::<BTreeSet<_>>().len() != 4 {
+                return fail("E_SERVER_BATCH: duplicate request field use");
+            }
+        }
         if !paths.insert((&route.method, &route.path)) {
             return fail("E_SERVER_PARSE: duplicate route");
         }
@@ -414,7 +462,8 @@ impl Session {
         sqlite_v2_state: Option<&Path>,
     ) -> Result<Self> {
         let uses_db = program.routes.iter().any(|r| {
-            r.db_put.is_some()
+            !r.batch_puts.is_empty()
+                || r.db_put.is_some()
                 || r.response.values().any(|v| {
                     matches!(
                         v,
@@ -450,8 +499,13 @@ impl Session {
         let mut sqlite_v2 = None;
         let mut revision_a6 = None;
         let (store, journal, sqlite, values, ledger) = if let Some(path) = sqlite_v2_state {
-            let (backend, values, revision) =
-                SqliteV2Store::open(path, &program.name, &program.states, &program.source_sha)?;
+            let (backend, values, revision) = SqliteV2Store::open(
+                path,
+                &program.name,
+                &program.states,
+                &program.source_sha,
+                program.routes.iter().any(|r| !r.batch_puts.is_empty()),
+            )?;
             sqlite_v2 = Some(backend);
             revision_a6 = Some(revision);
             (None, None, None, values, Ledger::default())
@@ -565,7 +619,55 @@ pub(crate) fn reply_stateful(
     // Transactional replays must be resolved BEFORE evaluating user steps.
     // The fingerprint includes the exact payload and optional CAS condition.
     let mut transaction = None;
-    if route.db_put.is_some() {
+    if !route.batch_puts.is_empty() {
+        let Some(key) = idempotency_key else {
+            return http::Response::error(428, "IDEMPOTENCY_KEY_REQUIRED");
+        };
+        if !valid_key(key) {
+            return http::Response::error(400, "INVALID_IDEMPOTENCY_KEY");
+        }
+        let Some(expected) = expected_revision else {
+            return http::Response::error(428, "STATE_REVISION_REQUIRED");
+        };
+        let Some(db) = session.sqlite_v2.as_ref() else {
+            return http::Response::error(503, "DB_BACKEND_REQUIRED");
+        };
+        let digest = fingerprint(
+            method,
+            path,
+            content_type,
+            body,
+            Some(&expected.to_string()),
+        );
+        match db.lookup_route_batch(method, path, key) {
+            Ok(Some(saved)) => {
+                if saved.fingerprint != digest {
+                    return http::Response::error(409, "IDEMPOTENCY_CONFLICT");
+                }
+                // Replay from a different process may refer to a state
+                // revision this live Session has not loaded. Return the
+                // original receipt but never keep serving stale state.
+                if session
+                    .active_revision()
+                    .is_some_and(|r| r < saved.state_revision)
+                {
+                    session.poisoned = true;
+                }
+                return http::Response::json(saved.status, Value::Object(saved.response))
+                    .with_revision(saved.state_revision)
+                    .with_batch_kv_revisions(saved.key_revisions)
+                    .as_replay();
+            }
+            Ok(None) => {}
+            Err(_) => {
+                session.poisoned = true;
+                return http::Response::error(503, "BATCH_RECEIPT_FAILED");
+            }
+        }
+        if session.active_revision() != Some(expected) {
+            return http::Response::error(412, "STATE_REVISION_CONFLICT");
+        }
+    } else if route.db_put.is_some() {
         // A8 uses per-KV CAS/revision and a business-row receipt, not the
         // unrelated A6 server-state revision/receipt. No state mutation here.
         let Some(key) = idempotency_key else {
@@ -741,6 +843,57 @@ pub(crate) fn reply_stateful(
             }
             Err(_) => return http::Response::error(500, "HANDLER_FAILED"),
         }
+    }
+    if !route.batch_puts.is_empty() {
+        let Some(sql) = session.sqlite_v2.as_mut() else {
+            return http::Response::error(503, "DB_BACKEND_REQUIRED");
+        };
+        let key = idempotency_key.expect("A9 headers checked");
+        let expected = expected_revision.expect("A9 state revision checked");
+        let digest = fingerprint(
+            method,
+            path,
+            content_type,
+            body,
+            Some(&expected.to_string()),
+        );
+        return match sql.commit_route_batch(
+            &route.batch_puts,
+            &request,
+            &candidate,
+            expected,
+            method,
+            path,
+            key,
+            &digest,
+            route.status,
+            output,
+        ) {
+            Ok((receipt, replayed)) => {
+                session.values = candidate;
+                session.revision_a6 = Some(receipt.state_revision);
+                let response =
+                    http::Response::json(receipt.status, Value::Object(receipt.response))
+                        .with_revision(receipt.state_revision)
+                        .with_batch_kv_revisions(receipt.key_revisions);
+                if replayed {
+                    response.as_replay()
+                } else {
+                    response
+                }
+            }
+            Err(BatchFailure::RevisionConflict) => {
+                http::Response::error(412, "BATCH_REVISION_CONFLICT")
+            }
+            Err(BatchFailure::IdempotencyConflict) => {
+                http::Response::error(409, "IDEMPOTENCY_CONFLICT")
+            }
+            Err(BatchFailure::Invalid) => http::Response::error(422, "BATCH_INVALID_REVISION"),
+            Err(BatchFailure::Uncertain) => {
+                session.poisoned = true;
+                http::Response::error(503, "DB_BATCH_UNCERTAIN")
+            }
+        };
     }
     if let Some(put) = &route.db_put {
         let Some(sql) = session.sqlite_v2.as_mut() else {

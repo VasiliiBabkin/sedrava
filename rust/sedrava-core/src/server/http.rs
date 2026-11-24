@@ -18,6 +18,8 @@ pub struct Response {
     pub revision: Option<u32>,
     /// Business key revision for A8 managed KV writes, distinct from A6 state.
     pub kv_revision: Option<u32>,
+    /// A9 revisions, in declared db_batch_put order (two managed public keys).
+    pub batch_kv_revisions: Option<Vec<u32>>,
     pub replayed: bool,
 }
 
@@ -29,6 +31,7 @@ impl Response {
             allow: None,
             revision: None,
             kv_revision: None,
+            batch_kv_revisions: None,
             replayed: false,
         }
     }
@@ -45,6 +48,10 @@ impl Response {
     }
     pub fn with_kv_revision(mut self, revision: u32) -> Self {
         self.kv_revision = Some(revision);
+        self
+    }
+    pub fn with_batch_kv_revisions(mut self, revisions: Vec<u32>) -> Self {
+        self.batch_kv_revisions = Some(revisions);
         self
     }
     pub fn as_replay(mut self) -> Self {
@@ -244,6 +251,15 @@ fn write_response(stream: &mut TcpStream, response: Response) -> std::io::Result
     }
     if let Some(revision) = response.kv_revision {
         write!(stream, "X-Sedrava-KV-Revision: {revision}\r\n")?;
+    }
+    if let Some(revisions) = &response.batch_kv_revisions {
+        if revisions.len() == 2 {
+            write!(
+                stream,
+                "X-Sedrava-Batch-KV-Revisions: {},{}\r\n",
+                revisions[0], revisions[1]
+            )?;
+        }
     }
     if response.replayed {
         stream.write_all(b"X-Sedrava-Replayed: true\r\n")?;

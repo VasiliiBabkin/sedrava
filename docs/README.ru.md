@@ -87,3 +87,6 @@ SedravaSQL на стороне сервера.
 
 Экспериментальный [Sedrava Server A8: атомарная запись одного ключа в SedravaSQL](RUST_NATIVE_SERVER_A8_DB_PUT.ru.md).
 Рабочий `db_put` с CAS/идемпотентностью/аудитом, но без SQL и доступа к рабочей базе.
+
+A9: [атомарная транзакция двух ключей и состояния Sedrava Server](RUST_NATIVE_SERVER_A9_ATOMIC_BATCH.ru.md).
+Поддержаны CAS, общая квитанция, повтор и проверяемые аварийные сценарии.

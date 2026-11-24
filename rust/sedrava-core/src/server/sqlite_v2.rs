@@ -1,11 +1,15 @@
 //! A6 experimental SQLite-backed state and permanently retained HTTP receipts.
 //! Uses the separate, pinned SedravaSQL transaction API. No silent eviction;
 //! operator-controlled archive/migration is not implemented.
-use super::kv_write::{DbPut, PutFailure, PutReceipt, RECEIPT_SCHEMA};
+use super::kv_write::{
+    BatchFailure, BatchPut, DbPut, PutFailure, PutReceipt, ServerBatchReceipt, BATCH_HTTP_SCHEMA,
+    RECEIPT_SCHEMA,
+};
 use super::state::{scalar_type, StateDef, Values};
 use super::storage::{signature, SaveFailure};
 use super::transaction::Receipt as HttpReceipt;
 use crate::model::{fail, Error, Result};
+use sedravasql::managed_batch::ManagedPut;
 use sedravasql::{Change, Database, MAX_VALUE_BYTES};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -39,6 +43,7 @@ impl SqliteV2Store {
         name: &str,
         defs: &BTreeMap<String, StateDef>,
         source_sha: &str,
+        enable_batches: bool,
     ) -> Result<(Self, Values, u32)> {
         if defs.is_empty() {
             return fail("E_SERVER_SQLITE_V2: state declarations required");
@@ -48,8 +53,12 @@ impl SqliteV2Store {
             .map_err(|_| Error("E_SERVER_SQLITE_V2: signature encode failed".into()))?;
         let signature = format!("{:x}", Sha256::digest(raw));
         let key = format!("s_{signature}");
-        let db = Database::init(path)
+        let mut db = Database::init(path)
             .map_err(|_| Error("E_SERVER_SQLITE_V2: database open failed".into()))?;
+        if enable_batches {
+            db.enable_managed_batches()
+                .map_err(|_| Error("E_SERVER_BATCH: opt-in schema failed".into()))?;
+        }
         db.verify()
             .map_err(|_| Error("E_SERVER_SQLITE_V2: database verification failed".into()))?;
         let saved = db
@@ -288,6 +297,187 @@ impl SqliteV2Store {
         }
     }
 
+    fn route_batch_scope(&self, method: &str, path: &str) -> String {
+        let tuple = serde_json::to_vec(&(BATCH_HTTP_SCHEMA, &self.signature, method, path))
+            .expect("static scope tuple");
+        format!("s{:x}", Sha256::digest(tuple))
+    }
+
+    /// Read a durable A9 whole-response before touching ANY candidate
+    /// server state. This is required for exact replay of an older request.
+    pub fn lookup_route_batch(
+        &self,
+        method: &str,
+        path: &str,
+        client_key: &str,
+    ) -> Result<Option<ServerBatchReceipt>> {
+        let scope = self.route_batch_scope(method, path);
+        let saved = self
+            .db
+            .lookup_managed_batch(&scope, client_key)
+            .map_err(|_| Error("E_SERVER_BATCH: receipt lookup failed".into()))?;
+        let Some(saved) = saved else { return Ok(None) };
+        if saved.revisions.len() != 3 {
+            return fail("E_SERVER_BATCH: receipt does not contain two keys and state");
+        }
+        let parsed: ServerBatchReceipt = serde_json::from_str(&saved.application_response)
+            .map_err(|_| Error("E_SERVER_BATCH: invalid persisted app receipt".into()))?;
+        if parsed.schema != BATCH_HTTP_SCHEMA
+            || parsed.program_signature != self.signature
+            || parsed.route != format!("{method} {path}")
+            || parsed.client_key != client_key
+            || parsed.state_revision as u64 != saved.revisions[2]
+            || parsed.key_revisions.len() != 2
+            || parsed
+                .key_revisions
+                .iter()
+                .zip(saved.revisions.iter())
+                .any(|(a, b)| u64::from(*a) != *b)
+            || !matches!(parsed.status, 200..=202)
+            || parsed.fingerprint.len() != 64
+            || !parsed
+                .fingerprint
+                .bytes()
+                .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+        {
+            return fail("E_SERVER_BATCH: persisted receipt metadata mismatch");
+        }
+        Ok(Some(parsed))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn commit_route_batch(
+        &mut self,
+        declarations: &[BatchPut],
+        request: &Values,
+        candidate: &Values,
+        expected_state: u32,
+        method: &str,
+        path: &str,
+        client_key: &str,
+        fingerprint: &str,
+        status: u16,
+        response: Map<String, Value>,
+    ) -> std::result::Result<(ServerBatchReceipt, bool), BatchFailure> {
+        if declarations.len() != 2
+            || method != "PUT"
+            || !matches!(status, 200 | 201 | 202)
+            || expected_state != self.db_revision as u32
+            || !Self::valid_state(&self.defs, candidate)
+        {
+            return Err(BatchFailure::Uncertain);
+        }
+        let state_revision = expected_state
+            .checked_add(1)
+            .filter(|r| *r <= i32::MAX as u32)
+            .ok_or(BatchFailure::Invalid)?;
+        let mut ops = Vec::with_capacity(3);
+        let mut kv_revisions = Vec::with_capacity(2);
+        for entry in declarations {
+            let Some(value) = request.get(&entry.value_field).and_then(Value::as_str) else {
+                return Err(BatchFailure::Invalid);
+            };
+            if value.chars().count() > 1024 || value.chars().any(char::is_control) {
+                return Err(BatchFailure::Invalid);
+            }
+            let Some(expected) = request
+                .get(&entry.revision_field)
+                .and_then(Value::as_i64)
+                .and_then(|v| u32::try_from(v).ok())
+            else {
+                return Err(BatchFailure::Invalid);
+            };
+            let next = expected
+                .checked_add(1)
+                .filter(|r| *r <= i32::MAX as u32)
+                .ok_or(BatchFailure::Invalid)?;
+            ops.push(ManagedPut {
+                namespace: entry.namespace.clone(),
+                key: entry.key.clone(),
+                value: value.to_owned(),
+                expected_revision: u64::from(expected),
+            });
+            kv_revisions.push(next);
+        }
+        let state = StateSnapshot {
+            schema: SCHEMA.into(),
+            signature: self.signature.clone(),
+            revision: state_revision,
+            state: candidate.clone(),
+        };
+        let snapshot = serde_json::to_string(&state).map_err(|_| BatchFailure::Uncertain)?;
+        if snapshot.len() > MAX_VALUE_BYTES {
+            return Err(BatchFailure::Invalid);
+        }
+        ops.push(ManagedPut {
+            namespace: NAMESPACE.into(),
+            key: self.key.clone(),
+            value: snapshot,
+            expected_revision: self.db_revision,
+        });
+        let app = ServerBatchReceipt {
+            schema: BATCH_HTTP_SCHEMA.into(),
+            program_signature: self.signature.clone(),
+            route: format!("{method} {path}"),
+            client_key: client_key.into(),
+            fingerprint: fingerprint.into(),
+            state_revision,
+            key_revisions: kv_revisions,
+            status,
+            response,
+        };
+        let json = serde_json::to_string(&app).map_err(|_| BatchFailure::Uncertain)?;
+        let scope = self.route_batch_scope(method, path);
+        let result = self
+            .db
+            .commit_managed_batch(&scope, client_key, &ops, &json);
+        match result {
+            Ok(result) => {
+                if result.revisions.len() != 3
+                    || result.revisions[2] != u64::from(state_revision)
+                    || result.application_response != json
+                {
+                    return Err(BatchFailure::Uncertain);
+                }
+                self.db_revision = u64::from(state_revision);
+                Ok((app, result.replayed))
+            }
+            Err(sedravasql::Error::Conflict(_)) => {
+                // Potentially a concurrent A9 or A6 writer. The caller
+                // does not publish candidate state until commit succeeds.
+                match self.lookup_route_batch(method, path, client_key) {
+                    Ok(Some(existing)) if existing.fingerprint != fingerprint => {
+                        Err(BatchFailure::IdempotencyConflict)
+                    }
+                    Ok(Some(existing)) if existing == app => {
+                        self.db_revision = u64::from(existing.state_revision);
+                        Ok((existing, true))
+                    }
+                    Ok(Some(_)) => Err(BatchFailure::Uncertain),
+                    Ok(None) => {
+                        // If another process has advanced the server-state
+                        // row, this Session is stale: reject and poison it.
+                        // A mere public-key CAS mismatch leaves state live.
+                        let current = self.db.read(NAMESPACE, &self.key);
+                        match current {
+                            Ok(row) => {
+                                let revision = row.as_ref().map_or(0, |v| v.revision);
+                                if revision != self.db_revision {
+                                    Err(BatchFailure::Uncertain)
+                                } else {
+                                    Err(BatchFailure::RevisionConflict)
+                                }
+                            }
+                            Err(_) => Err(BatchFailure::Uncertain),
+                        }
+                    }
+                    Err(_) => Err(BatchFailure::Uncertain),
+                }
+            }
+            Err(_) => Err(BatchFailure::Uncertain),
+        }
+    }
+
     pub fn lookup(&self, client_key: &str) -> Result<Option<HttpReceipt>> {
         let found = self
             .db
@@ -309,7 +499,7 @@ impl SqliteV2Store {
                     .map_err(|_| Error("E_SERVER_SQLITE_V2: corrupt application receipt".into()))?;
                 if parsed.key != client_key
                     || u64::from(parsed.revision) != receipt.revision
-                    || !matches!(parsed.status, 200 | 201 | 202)
+                    || !matches!(parsed.status, 200..=202)
                     || parsed.fingerprint.len() != 64
                     || !parsed
                         .fingerprint
