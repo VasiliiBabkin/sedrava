@@ -1,0 +1,3 @@
+database SelectOrder
+    param id: text
+    query "SELECT id,amount,paid,note FROM Orders WHERE id=?"

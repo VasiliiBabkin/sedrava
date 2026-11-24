@@ -15,7 +15,7 @@ fn usage() {
     println!(
         "Sedrava native Rust core (EXPERIMENTAL)\n\
          Usage:\n\
-           sedrava-native lock DIR\n           sedrava-native verify DIR\n           sedrava-native host check FILE
+           sedrava-native lock DIR\n           sedrava-native verify DIR\n           sedrava-native database check FILE\n           sedrava-native database run FILE --database ABSOLUTE_FILE --trusted [--arg NAME=JSON ...] [--allow-write --request-key KEY]\n           sedrava-native host check FILE
            sedrava-native host run FILE --root DIR --trusted [--allow-read] [--allow-write]
            sedrava-native server check FILE
            sedrava-native server run FILE [--port PORT] [--max-requests N] [--idle-ms N] [--state-dir ABSOLUTE_PRIVATE_DIR] [--transactional] [--journaled] [--sqlite-state FILE] [--sqlite-v2-state FILE] [--native-index FILE --native-index-sha256 SHA256] [--native-log FILE [--native-max-bytes N --native-max-transactions N]]
@@ -300,6 +300,38 @@ fn server_command(args: &[String]) -> Result<()> {
     }
 }
 
+fn database_command(args:&[String])->Result<()> {
+    use sedrava_core::database;
+    match args {
+        [cmd,source] if cmd=="check"=>{
+            let program=database::parse(&read_source(source)?)?;
+            println!("OK: database {} (native SQL host)",program.name);
+            Ok(())
+        }
+        [cmd,source,rest @ ..] if cmd=="run"=>{
+            let program=database::parse(&read_source(source)?)?;
+            let mut path=None;let mut trusted=false;let mut write=false;let mut key=None;
+            let mut supplied=Vec::new();let mut seen=std::collections::BTreeSet::new();let mut it=rest.iter();
+            while let Some(flag)=it.next(){
+                if flag!="--arg"&&!seen.insert(flag.as_str()){return Err(Error("E_DATABASE_CLI: duplicate option".into()));}
+                match flag.as_str(){
+                    "--trusted"=>trusted=true,
+                    "--allow-write"=>write=true,
+                    "--database"=>path=it.next().map(PathBuf::from),
+                    "--request-key"=>key=it.next().map(String::as_str),
+                    "--arg" if supplied.len()<32=>supplied.push(it.next().ok_or_else(||Error("E_DATABASE_CLI: missing argument".into()))?.clone()),
+                    _=>return Err(Error("E_DATABASE_CLI: invalid option".into())),
+                }
+            }
+            let path=path.ok_or_else(||Error("E_DATABASE_CLI: database path required".into()))?;
+            let result=database::run(&program,&path,trusted,write,key,&supplied)?;
+            println!("{}",serde_json::to_string(&result).map_err(|e|Error(e.to_string()))?);
+            Ok(())
+        }
+        _=>Err(Error("Expected database check FILE or database run FILE with explicit policy".into()))
+    }
+}
+
 fn run() -> Result<()> {
     let args: Vec<String> = env::args().collect();
     if args.len() == 1 || args.get(1).is_some_and(|s| s == "--help" || s == "-h") {
@@ -318,6 +350,7 @@ fn run() -> Result<()> {
         return Err(Error("Expected a command and a .sdr file".into()));
     }
     let command = &args[1];
+    if command == "database" { return database_command(&args[2..]); }
     if command == "host" {
         return host_command(&args[2..]);
     }

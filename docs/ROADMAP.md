@@ -261,3 +261,11 @@ VDS: 83 Rust tests and A10/A11/A12/A13 integration regressions PASS with pinned 
 ### Native server A15: verified offline archive restore
 
 [Operator procedure and HTTP regression](RUST_NATIVE_SERVER_A15_ARCHIVE.ru.md). VDS: 83 Rust tests, A10–A13, B15a and A15 PASS. A14 wider DSL transactions remain pending.
+
+### Native SQL host A16
+
+[Typed SQL parameters from a dedicated Sedrava source domain](RUST_NATIVE_DATABASE_A16.ru.md).
+
+### Self-host A5.8a/b
+
+[Inline declarations and typed expression IR](SELF_HOSTING_PARSER_A58.ru.md).

@@ -1,0 +1,3 @@
+database MarkPaid
+    param id: text
+    execute "UPDATE Orders SET paid=true WHERE id=?"

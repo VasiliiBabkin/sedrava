@@ -254,3 +254,5 @@ Native Server: [B15a write limits](docs/RUST_NATIVE_SERVER_B15A_BUDGET.ru.md).
 Experimental [A5.7 symbol and type analysis](docs/SELF_HOSTING_PARSER_A57.ru.md).
 
 Native Server: [A15 offline archive restore](docs/RUST_NATIVE_SERVER_A15_ARCHIVE.ru.md).
+
+Experimental [A5.8a/b declarations and expression IR](docs/SELF_HOSTING_PARSER_A58.ru.md), [A16 database host](docs/RUST_NATIVE_DATABASE_A16.ru.md).

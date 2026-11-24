@@ -6,6 +6,7 @@
 
 pub mod android;
 pub mod collections;
+pub mod database;
 pub mod effects;
 pub mod expr;
 #[cfg(unix)]

@@ -133,3 +133,7 @@ stage 1/2/3 ещё отсутствуют.
 ## A5.7: символы и типы
 
 [Скалярный статический анализ с явным контекстом](SELF_HOSTING_PARSER_A57.ru.md). Далее разбор деклараций, области видимости и lowering.
+
+### A5.8a/b: inline declarations and typed expression IR
+
+[Prototype declaration parsing and register IR](SELF_HOSTING_PARSER_A58.ru.md). Function bodies, scopes and control-flow lowering pending.

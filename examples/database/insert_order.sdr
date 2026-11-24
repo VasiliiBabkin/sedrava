@@ -1,0 +1,5 @@
+database InsertOrder
+    param id: text
+    param amount: int
+    param note: text
+    execute "INSERT INTO Orders (id,amount,paid,note) VALUES (?,?,false,?)"

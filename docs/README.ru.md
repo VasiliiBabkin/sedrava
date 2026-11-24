@@ -121,3 +121,5 @@ Native Server: [ограничения записи B15a](RUST_NATIVE_SERVER_B15
 A5.7: [таблица символов и скалярный анализ](SELF_HOSTING_PARSER_A57.ru.md).
 
 Native Server: [A15 восстановление из архива](RUST_NATIVE_SERVER_A15_ARCHIVE.ru.md).
+
+[A5.8a/b объявления и IR](SELF_HOSTING_PARSER_A58.ru.md); [A16 SQL host](RUST_NATIVE_DATABASE_A16.ru.md).

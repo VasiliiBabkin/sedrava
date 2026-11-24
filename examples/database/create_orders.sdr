@@ -1,0 +1,2 @@
+database CreateOrders
+    execute "CREATE TABLE Orders (id TEXT PRIMARY KEY, amount INT, paid BOOL, note TEXT)"
