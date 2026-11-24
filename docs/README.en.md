@@ -33,7 +33,7 @@ cargo build --manifest-path rust/Cargo.toml --locked --release --bin sedrava
 | Android | Kotlin/Compose sources; explicit application ID, tested debug APK build; limited device acceptance |
 | Host | Trusted bounded local file effects |
 | Server | Local HTTP and typed SQL API A21, bearer roles, bounded transactions and durable receipts |
-| Storage | [SedravaSQL](https://sql.virtreal.ru/): NativeLog SQL; separate experimental pager/tree B25 |
+| Storage | [SedravaSQL](https://sql.virtreal.ru/): NativeLog SQL B28 in main; B31 separate storage research |
 | Self-host | Experimental compiler A5.11b written in Sedrava, not the primary compiler |
 
 One source can target different runtimes when its constructs are supported by the chosen generator. Unsupported constructs fail rather than silently switching implementation. Public deployment, complete platform coverage and production security are not established.
@@ -47,3 +47,5 @@ For maintainers: run cargo test --manifest-path rust/Cargo.toml --locked --all-t
 [Dedication / Посвящение](../DEDICATION.md): Геннадию Ивановичу Смирных.
 
 Apache-2.0 license.
+
+**Development checkpoint:** [B31 status and evidence](DEVELOPMENT_STATUS.en.md). Public binaries are unchanged; B31 is not the SQL backend.

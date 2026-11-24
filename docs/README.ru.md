@@ -57,3 +57,5 @@ cargo test --manifest-path rust/Cargo.toml --locked --all-targets
 [Быстрый старт](QUICKSTART.md) · [Распространение](DISTRIBUTION_NATIVE.ru.md) · [Заметки к выпуску](RELEASE_NOTES_0_12_0_ALPHA2.md) · [Дорожная карта](ROADMAP.md) · [Примеры](../examples/README.md) · [Измерения](BENCHMARK_2026_11_24.ru.md) · [История](HISTORY.md).
 
 Посвящение: [Геннадию Ивановичу Смирных](../DEDICATION.md). Лицензия Apache-2.0.
+
+**Контрольная точка:** [состояние B31 и отчёты](DEVELOPMENT_STATUS.ru.md). В main — NativeLog SQL B28; B31 — отдельная исследовательская ветка. Публичные выпуски не изменены.
