@@ -1,0 +1,1 @@
+{"stage":"A5.4a","base":"7fc213159d80d666346efe768c2d4110c8d5f617","environment":"VDS Linux","release_build":"PASS","rust_pass":83,"accepted":42,"rejected":17,"sequencing_guards":2,"a53_accepted":37,"a53_rejected":23,"debug_long_case":"45-second timeout","production":false}

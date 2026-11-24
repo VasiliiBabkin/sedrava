@@ -234,3 +234,5 @@ Sedrava-authored bounded 1..3-integer arithmetic expression AST
 with precedence, left-associativity, layout depth and Unicode spans.
 37 accepted / 23 rejected independently verified source cases PASS.
 No full language grammar or self-hosted compiler.
+
+Experimental [self-hosting A5.4a](docs/SELF_HOSTING_PARSER_A54.ru.md): bounded arithmetic stack parser with nested parentheses; not a full compiler.

@@ -211,3 +211,7 @@ and left-associativity for equal ranks. Independent Python oracle
 acceptance: 37 valid and 23 invalid source cases PASS. Rust 83 tests
 PASS. No parentheses, identifiers RHS, general expression grammar,
 type checker, IR or stage 1/2/3. [RU report](SELF_HOSTING_PARSER_A53.ru.md).
+
+### Self-hosting A5.4a: bounded stack-based arithmetic parser
+
+Sedrava-authored two-stack parser supports more than three integer operands and nested groups within existing token/source budgets. Independent recursive tree oracle; block headers, structured diagnostics, RHS identifiers and full grammar remain pending. [RU protocol](SELF_HOSTING_PARSER_A54.ru.md).
