@@ -165,3 +165,7 @@ stage 1/2/3 ещё отсутствуют.
 ### A5.11a — while loops and local assignments
 
 [Bounded loops](SELF_HOSTING_FUNCTION_COMPILER_A511A.ru.md). Nested control flow and broader types remain pending.
+
+### A5.11b — nested control blocks
+
+[Two-level while/if](SELF_HOSTING_FUNCTION_COMPILER_A511B.ru.md). Statement else and broad type system pending.

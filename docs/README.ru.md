@@ -137,3 +137,5 @@ Native Server: [A15 восстановление из архива](RUST_NATIVE_
 [A5.10d условные выражения](SELF_HOSTING_FUNCTION_COMPILER_A510D.ru.md); [A21 последовательные транзакции](SALES_DEMO_A21.ru.md).
 
 [A5.11a циклы и изменяемые локальные переменные](SELF_HOSTING_FUNCTION_COMPILER_A511A.ru.md).
+
+[A5.11b вложенные блоки](SELF_HOSTING_FUNCTION_COMPILER_A511B.ru.md); [журнал сервисных заявок](SERVICE_JOURNAL_DEMO.ru.md).

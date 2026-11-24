@@ -1,0 +1,73 @@
+webapp "Журнал сервисных заявок"
+theme light:
+    background "#f4f6fa"
+    surface "#ffffff"
+    foreground "#172334"
+    accent "#215d85"
+    gold "#795800"
+    muted "#526275"
+    border "#d8e0e8"
+theme-state theme_mode
+record Ticket:
+    title: text
+    site: text
+    done: bool
+state theme_mode = "light"
+state tickets: list<Ticket>(max=100) = []
+state selected = 0
+state title = ""
+state site_name = ""
+state search_text = ""
+state new_title = ""
+persist tickets
+derive ticket_count = count(tickets)
+derive done_count = count(filter(tickets, "done", true))
+derive open_count = ticket_count-done_count
+derive chosen = has(tickets, selected)
+action add:
+    require title != "" and site_name != ""
+    tickets = append(tickets, Ticket(title=title, site=site_name, done=false))
+    title = ""
+    site_name = ""
+action rename:
+    require has(tickets, selected)
+    require new_title != ""
+    let previous = get(tickets, selected)
+    tickets = update(tickets, selected, Ticket(title=new_title, site=previous.site, done=previous.done))
+    new_title = ""
+action toggle:
+    require has(tickets, selected)
+    let previous = get(tickets, selected)
+    tickets = update(tickets, selected, Ticket(title=previous.title, site=previous.site, done=not previous.done))
+action delete:
+    require has(tickets, selected)
+    tickets = remove(tickets, selected)
+    selected = 0
+view main:
+    container max 1040 padding 24:
+        column gap 20:
+            heading "Журнал сервисных заявок"
+            paragraph "Объекты, работы и их статус. Записи сохраняются в этом браузере." variant lead
+            grid columns 3:
+                card:
+                    value ticket_count label "Всего"
+                card:
+                    value open_count label "В работе"
+                card:
+                    value done_count label "Выполнено"
+            card:
+                column gap 12:
+                    heading "Новая заявка" level 2
+                    input site_name label "Объект"
+                    input title label "Неисправность или работа"
+                    button "Добавить заявку" action add
+            input search_text label "Поиск"
+            table tickets select selected title title fields "title site done" search search_text sort title label "Заявки"
+            when chosen:
+                card:
+                    column gap 12:
+                        heading "Выбранная заявка" level 2
+                        input new_title label "Новое описание"
+                        button "Сохранить описание" action rename
+                        button "Изменить статус" action toggle
+                        button "Удалить заявку" action delete variant secondary

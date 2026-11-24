@@ -1,0 +1,5 @@
+# Журнал сервисных заявок — практический WebApp на Sedrava
+
+`examples/service_journal.sdr` declares typed tickets (title, site, done), validated creation, editing, selection, search, deletion, completion toggle, derived totals and browser-local persistence. All application source is Sedrava; HTML/CSS/JS are produced by the native webapp generator. Run `sedrava-native check examples/service_journal.sdr` then `sedrava-native build webapp examples/service_journal.sdr --output NEW_DIR`. Serve the output using a local static HTTP server, e.g. `python3 -m http.server 8000 --bind 127.0.0.1 --directory NEW_DIR`.
+
+VDS: actual generated output exercised with jsdom; create/search/select/rename/status/delete, derived counts, localStorage restore in new DOM PASS. Real browser layout and accessibility, multi-user sharing, authentication, backup and API integration not verified/implemented for this app. Up to 100 tickets; data stored in browser localStorage and may be lost if storage is cleared. Not a production service. `scripts/verify_service_journal_dom.js NEW_DIR` with SEDRAVA_JSDOM_PATH pointing to jsdom.

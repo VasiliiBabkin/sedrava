@@ -270,3 +270,5 @@ Experimental [A5.10c function bodies](docs/SELF_HOSTING_FUNCTION_COMPILER_A510C.
 Experimental [A5.10d recursive source functions](docs/SELF_HOSTING_FUNCTION_COMPILER_A510D.ru.md) and [A21 sequential routes](docs/SALES_DEMO_A21.ru.md).
 
 Experimental [A5.11a loops](docs/SELF_HOSTING_FUNCTION_COMPILER_A511A.ru.md).
+
+Experimental [A5.11b nested control blocks](docs/SELF_HOSTING_FUNCTION_COMPILER_A511B.ru.md) and [service journal WebApp](docs/SERVICE_JOURNAL_DEMO.ru.md).
