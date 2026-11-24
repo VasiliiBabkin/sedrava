@@ -1,3 +1,5 @@
+> Milestone-specific technical record. For current installation and supported scope, see [Sedrava Rust](README.ru.md). Commands below may use the transitional Rust CLI name.
+
 # Нативные HTTP-возможности WebApp и файловый Host
 
 Python 0.11 остаётся эталоном WebApp. Файловый Host сверяется с

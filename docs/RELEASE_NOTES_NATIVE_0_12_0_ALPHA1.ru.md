@@ -1,3 +1,5 @@
+> Historical milestone / Исторический этап. The current primary implementation is Rust. See [current guide](README.ru.md) and [history](HISTORY.md).
+
 # Sedrava Native 0.12.0-alpha.1 — предварительный кандидат
 
 Дата: 23 ноября 2026. Статус: проверенный на VDS Linux x86_64

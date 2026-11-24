@@ -10,10 +10,11 @@ import subprocess
 import tempfile
 
 ROOT=Path(__file__).resolve().parents[1]
+from legacy_reference import legacy_root
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("--native", type=Path,
-                    default=ROOT/"rust/target/debug/sedrava-native")
+                    default=ROOT/"rust/target/debug/sedrava")
     args=ap.parse_args()
     binary=args.native.resolve()
     with tempfile.TemporaryDirectory(prefix="sdr-native-web-") as directory:
@@ -50,7 +51,7 @@ def main():
                                                  if line.startswith("RESULT_JSON ")))
         rust_query=subprocess.run([str(binary),"run",str(queries_source),"add_one","add_two"],
                                   cwd=ROOT,check=True,capture_output=True,text=True,timeout=30)
-        python_query=subprocess.run([__import__("sys").executable,str(ROOT/"sedrava_cli.py"),
+        python_query=subprocess.run([__import__("sys").executable,str(legacy_root() / "sedrava_cli.py"),
                                      "run",str(queries_source),"add_one","add_two"],
                                     cwd=ROOT,check=True,capture_output=True,text=True,timeout=30)
         assert query_json==__import__("json").loads(rust_query.stdout)
@@ -70,7 +71,7 @@ def main():
                                   "--state-file",str(item_file)],
                                  cwd=ROOT,check=True,capture_output=True,text=True,timeout=30)
         python_rows=subprocess.run([__import__("sys").executable,
-                                    str(ROOT/"sedrava_cli.py"),"run",
+                                    str(legacy_root() / "sedrava_cli.py"),"run",
                                     str(collections_source),"--state-file",str(item_file)],
                                    cwd=ROOT,check=True,capture_output=True,text=True,timeout=30)
         assert __import__("json").loads(rust_rows.stdout)==__import__("json").loads(python_rows.stdout)

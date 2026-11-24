@@ -1,3 +1,5 @@
+> Milestone-specific technical record. For current installation and supported scope, see [Sedrava Rust](README.ru.md). Commands below may use the transitional Rust CLI name.
+
 # Rust → Kotlin/Android: типизированные Error, Result и match
 
 Экспериментальное расширение генератора Android для номинальных ошибок

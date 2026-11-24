@@ -1,3 +1,5 @@
+> Historical reference; not a current release or installation guide. [Current Rust documentation](README.ru.md).
+
 # Records and collections / Записи и коллекции — Sedrava 0.10.0
 
 Normative 0.10.0 syntax (published experimental implementation):

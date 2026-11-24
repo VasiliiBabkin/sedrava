@@ -1,3 +1,5 @@
+> Historical reference; not a current release or installation guide. [Current Rust documentation](README.ru.md).
+
 # Sedrava open-source policy
 
 Sedrava source code is licensed under **Apache License 2.0** (see [LICENSE](../LICENSE)). Use, modification and distribution, including commercial use, are permitted subject to the license conditions.

@@ -1,3 +1,5 @@
+> Milestone-specific technical record. For current installation and supported scope, see [Sedrava Rust](README.ru.md). Commands below may use the transitional Rust CLI name.
+
 # Native Rust: Effects & Targets A1 (экспериментальный этап)
 
 Этот этап переносит **ограниченный контракт типизированных чистых функций**

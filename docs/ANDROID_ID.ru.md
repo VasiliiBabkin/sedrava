@@ -1,3 +1,5 @@
+> Historical reference; not a current release or installation guide. [Current Rust documentation](README.ru.md).
+
 # Идентификатор Android-приложения (Sedrava 0.10.0)
 
 Название на экране и в лаунчере задаётся `app "…"`. Идентификатор установки — настройка сборки, не новая конструкция языка.

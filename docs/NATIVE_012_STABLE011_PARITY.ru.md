@@ -1,3 +1,5 @@
+> Historical milestone / Исторический этап. The current primary implementation is Rust. See [current guide](README.ru.md) and [history](HISTORY.md).
+
 # Sedrava Native 0.12: проверка относительно опубликованной Python 0.11.0
 
 Дата: 23 ноября 2026.

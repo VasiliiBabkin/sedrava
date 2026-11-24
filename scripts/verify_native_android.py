@@ -12,7 +12,8 @@ import sys
 import tempfile
 import xml.etree.ElementTree as ET
 ROOT=Path(__file__).resolve().parents[1]
-sys.path.insert(0,str(ROOT))
+from legacy_reference import legacy_root
+sys.path.insert(0,str(legacy_root()))
 from sedrava_android_identity import project_identity
 
 def run(binary,src,out,app_id,success=True):
@@ -25,7 +26,7 @@ def run(binary,src,out,app_id,success=True):
 
 def main()->int:
     p=argparse.ArgumentParser()
-    p.add_argument("--native",type=Path,default=ROOT/"rust/target/debug/sedrava-native")
+    p.add_argument("--native",type=Path,default=ROOT/"rust/target/debug/sedrava")
     args=p.parse_args()
     binary=args.native.resolve()
     cases=[

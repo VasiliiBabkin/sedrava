@@ -10,7 +10,8 @@ import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path[:0] = [str(ROOT), str(ROOT / "tests")]
+from legacy_reference import legacy_root
+sys.path[:0] = [str(legacy_root()), str(legacy_root() / "tests")]
 from android_codegen_v03 import quoted
 from navigation_cases import SOURCE, steps, trace
 from sedrava_core import parse, resolve, transition
@@ -160,7 +161,7 @@ def execute(command, **kwargs):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--native", type=Path, default=ROOT / "rust/target/debug/sedrava-native")
+    parser.add_argument("--native", type=Path, default=ROOT / "rust/target/debug/sedrava")
     parser.add_argument("--gradle", type=Path, required=True)
     parser.add_argument("--gradle-user-home", type=Path)
     args = parser.parse_args()
@@ -206,7 +207,7 @@ def main():
                 if line.startswith("ANDROID_SNAPSHOT=")]
         state_file = work / "state.json"
         state_file.write_text(raw, encoding="utf-8")
-        py = execute([sys.executable, str(ROOT / "sedrava_cli.py"), "run", str(nav),
+        py = execute([sys.executable, str(legacy_root() / "sedrava_cli.py"), "run", str(nav),
                       "--state-file", str(state_file)], stdout=subprocess.PIPE)
         rs = execute([native, "run", str(nav), "--state-file", str(state_file)], stdout=subprocess.PIPE)
         assert json.loads(py.stdout) == json.loads(rs.stdout)

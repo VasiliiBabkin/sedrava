@@ -1,274 +1,51 @@
-<p align="center">
-  <img src="assets/brand/sedrava-logo-primary.png" width="220" alt="Sedrava logo" />
-</p>
+<p align="center"><img src="assets/brand/sedrava-logo-primary.png" width="220" alt="Sedrava logo" /></p>
 
-# Sedrava — stable 0.11.0 published on GitHub and PyPI
+# Sedrava — Rust toolchain
 
-**Describe the application; get the application. / Описал — получил.**
+**Describe the application; get the application.**
 
-**[Dedication / Посвящение](DEDICATION.md):** Геннадию Ивановичу Смирных — учителю информатики, благодаря которому автор Sedrava понял и полюбил программирование.
+Sedrava is a declarative programming language with a Rust compiler and runtime. The current release line is **0.12.0-alpha.2**. It is experimental, not a production-ready release.
 
-**Current stable release:** [Sedrava 0.11.0](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0) ([PyPI](https://pypi.org/project/sedrava/0.11.0/)), Android versionCode **11002**. The previous stable [0.10.0](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.10.0) ([PyPI](https://pypi.org/project/sedrava/0.10.0/)) and historical RCs remain available.
+[Download Linux x86-64](https://sedrava.virtreal.ru/downloads/0.12.0-alpha.2/) · [GitHub release](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.12.0-alpha.2) · [Official documentation](https://sedrava.virtreal.ru/) · [Русский](docs/README.ru.md)
 
-**Historical prerelease:** [0.11.0rc1](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0rc1) ([PyPI](https://pypi.org/project/sedrava/0.11.0rc1/)) preceded the stable 0.11.0 release. Verified 0.10 and RC upgrade/rollback, browsers and Android API35 are documented in [stable release notes](docs/RELEASE_NOTES_0_11_0.ru.md).
+## Get started
 
-Start with [Quick Start](docs/QUICKSTART.md), the [text reference](docs/LANGUAGE_0_10_TEXT.md), [text profile example](examples/text_profile.sdr), and [measured report](docs/TEXT_010_REPORT.md). The [task manager](examples/task_manager.sdr) now uses records and lists directly in `.sdr`; the [navigation example](docs/NAVIGATION_QUICKSTART.en.md) adds guarded screens and Back.
+The release archive includes the standalone executable **sedrava**, a manifest and SHA-256 checksums. The offline installer refuses to overwrite an existing executable. Install into a separate prefix and put its bin directory first on PATH. No Python or Rust needed on the target system. GNU Linux x86-64 tested on Ubuntu 24.04; Windows/macOS not verified.
 
-## Native Rust 0.12.0-alpha.1 candidate (experimental)
+Build from source:
 
-The separate native Rust CLI is now versioned **0.12.0-alpha.1**.
-It is a Linux x86_64 experimental native preview, not a stable release or PyPI package. Official Linux downloads: https://sedrava.virtreal.ru/downloads/0.12.0-alpha.1/ . The Python-based **0.11.0**
-remains the only published stable version; the sedrava command and
-existing user data are not changed.
-
-The Rust core implements a tested subset with records, bounded lists,
-functions, navigation, actions, typed errors, Host file effects,
-experimental Site/WebApp/Android generators and loopback-only SQL API A21, including bounded transactions with durable receipts. It also supports a bounded-loop lexer written in Sedrava.
-The Rust CLI is not yet proven compatible with the complete Python 0.11
-language, and an Android source tree is not evidence of a working APK.
-
-- [Native alpha notes / RU](docs/RELEASE_NOTES_NATIVE_0_12_0_ALPHA1.ru.md)
-- [Real Android debug APK build and device smoke protocol (RU)](docs/NATIVE_012_ANDROID_APK_SMOKE.ru.md)
-- [Scope-specific acceptance gates](docs/NATIVE_012_ALPHA_ACCEPTANCE.md)
-- [Published 0.11.0 differential and Web/Kotlin follow-up (RU)](docs/NATIVE_012_STABLE011_PARITY.ru.md)
-- [Rust migration and limitations](docs/RUST_FULL_MIGRATION.ru.md)
-- [Native distribution and offline installer](docs/DISTRIBUTION_NATIVE.ru.md)
-- [Self-hosting roadmap](docs/SELF_HOSTING_ROADMAP.ru.md)
-
-Developers can build it with Cargo:
-
-    cargo build --manifest-path rust/Cargo.toml --locked --release --bin sedrava-native
-    ./rust/target/release/sedrava-native --version
-
-A verified platform-specific archive can be installed
-without Python or Rust on the *target* Linux system.
-
-## Getting started
-
-**Describe the application; get the application. / Опиши приложение — получи приложение.**
-
-Sedrava is an experimental declarative programming language for small applications: describe text/int32/boolean state, typed record collections, derived values, atomic actions, invariants and a simple UI; generate a standalone Web app or an Android/Compose project from the same source.
-
-**For learning and experimental development, not production.** The 0.11.0 package is public; historical Intent 0.7 packages belong to a separate project history.
-
-[Quick Start / Быстрый старт](docs/QUICKSTART.md) · [Русский](docs/README.ru.md) · [English](docs/README.en.md)
-
-## Install and try
-
-Python 3.10+ is required; Git is optional for installation from PyPI. In a virtual environment:
-
-```sh
-python -m pip install sedrava==0.11.0
-sedrava --version
-# Clone the source repository for checked-in example files:
+~~~sh
 git clone https://github.com/VasiliiBabkin/sedrava.git
 cd sedrava
-sedrava check examples/reference_09.sdr
-sedrava test examples/reference_09.sdr
-sedrava run examples/reference_09.sdr add add
-sedrava build web examples/reference_09.sdr --output build/web/index.html
-python -m http.server 8000 --directory build/web
-```
+cargo build --manifest-path rust/Cargo.toml --locked --release --bin sedrava
+./rust/target/release/sedrava --version
+./rust/target/release/sedrava check examples/counter.sdr
+./rust/target/release/sedrava test examples/counter.sdr
+./rust/target/release/sedrava run examples/counter.sdr increment increment
+./rust/target/release/sedrava build web examples/counter.sdr --output build/counter.html
+~~~
 
-Open http://localhost:8000. Android generation:
+## Current scope
 
-```sh
-sedrava build android examples/reference_09.sdr --output build/reference-09-android
-```
+| Capability | Status |
+| --- | --- |
+| Language | Typed state, rules, records, bounded collections, functions, navigation, Unicode, imports and package locks |
+| CLI | check, test, run, inspect, expand, IR, effects |
+| Web | Standalone HTML, Site, interactive WebApp; verified DOM subset |
+| Android | Kotlin/Compose sources; explicit application ID, tested debug APK build; limited device acceptance |
+| Host | Trusted bounded local file effects |
+| Server | Local HTTP and typed SQL API A21, bearer roles, bounded transactions and durable receipts |
+| Storage | [SedravaSQL](https://sql.virtreal.ru/): NativeLog SQL; separate experimental pager/tree B25 |
+| Self-host | Experimental compiler A5.11b written in Sedrava, not the primary compiler |
 
-To produce an APK, install a full JDK, SDK 35 and Gradle 8.11.1 and follow the [build guide](docs/BUILD.md). `build android` generates sources; it does not invoke Gradle. No accounts, telemetry, advertising or cloud runtime services.
+One source can target different runtimes when its constructs are supported by the chosen generator. Unsupported constructs fail rather than silently switching implementation. Public deployment, complete platform coverage and production security are not established.
 
-## Documentation
+## Learn and develop
 
-- [Quick Start: installation and first program](docs/QUICKSTART.md)
-- [0.10 text semantics](docs/LANGUAGE_0_10_TEXT.md), [records and collections](docs/RECORDS_COLLECTIONS_010.md), [navigation](docs/NAVIGATION_010_CONTRACT.md); [historical 0.9 reference](docs/LANGUAGE_0_9.md)
-- [Web and Android builds](docs/BUILD.md)
-- [Complete executable examples](examples/README.md): constrained counter, manual countdown, habit progress, validated input and Sedrava 0.9 Lab
-- [FAQ and troubleshooting](docs/FAQ.md) · [Known limitations](docs/KNOWN_LIMITATIONS.md)
-- [Changelog](CHANGELOG.md) · [0.10.0 release notes](docs/RELEASE_NOTES_0_10_0.md) · [historical 0.9 notes](docs/RELEASE_NOTES_0_9_0a1.md)
-- [Roadmap](docs/ROADMAP.md) · [0.10 design](docs/PLAN_0_10_UI.md)
+[Quickstart](docs/QUICKSTART.md) · [Distribution](docs/DISTRIBUTION_NATIVE.ru.md) · [Release notes](docs/RELEASE_NOTES_0_12_0_ALPHA2.md) · [Roadmap](docs/ROADMAP.md) · [Language examples](examples/README.md) · [Benchmarks](docs/BENCHMARK_2026_11_24.ru.md) · [Security](docs/SECURITY.md).
 
-**Post-release manual smoke test:** On 2026-11-01, `sedrava==0.10.0` was installed from PyPI on Linux/Python 3.13; CLI checks, one embedded test, two actions and Web HTML generation passed. Browser functionality was confirmed by the tester. [Full evidence and limitations](docs/MANUAL_LINUX_WEB_SMOKE_0_10_0_2026-11-01.md). This does not close physical Android acceptance.
+For maintainers: run cargo test --manifest-path rust/Cargo.toml --locked --all-targets. Python scripts in scripts/ are test/packaging helpers only; the old implementation and package publishing are not part of the current toolchain. For past releases and comparison oracles see [History](docs/HISTORY.md).
 
-## Architecture and verification
+[Dedication / Посвящение](DEDICATION.md): Геннадию Ивановичу Смирных.
 
-Source → restricted typed AST (`sedrava_core.py`) → interpreter / Web (`web_codegen.py`) / Android (`android_codegen_v03.py`). Builds run embedded language tests. Actions change a candidate state sequentially; all final rules must hold before atomic commit. Integers and arithmetic intermediates are checked signed 32-bit values. Python runtime has no third-party dependencies and never executes source through `eval`/`exec`.
-
-```sh
-python -m pip install ".[test]"
-python -m unittest discover -s tests -v
-python -m pip install playwright
-python -m playwright install --with-deps chromium
-python scripts/test_web_browser.py
-python -m pip install build twine
-python -m build
-python -m twine check dist/*
-python scripts/audit_dist.py
-```
-
-Node.js is needed for differential conformance tests; Chromium tests are a separate real-browser suite. Android build/Lint is separate from UI acceptance. Previously supplied manual Android 16 results are preserved in [acceptance evidence](docs/ANDROID_09_ACCEPTANCE.md); they do not verify newly changed APKs. See the audit for current results and infrastructure limitations.
-
-**License:** [Apache 2.0](LICENSE) · [Contributing](CONTRIBUTING.md) · [Code of Conduct](CODE_OF_CONDUCT.md). Official documentation website: [sedrava.virtreal.ru](https://sedrava.virtreal.ru/), maintained separately in [sedrava-site](https://github.com/VasiliiBabkin/sedrava-site).
-
-## Records and collections / Записи и коллекции (0.10)
-
-Version 0.10.0 includes typed records and bounded ordered lists, stable IDs, atomic actions, strict snapshots and generated Web/Compose UI.
-Записи и списки входят в опубликованную 0.10.0.
-
-- [English task-manager guide](docs/RECORDS_QUICKSTART.en.md)
-- [Руководство на русском](docs/RECORDS_QUICKSTART.ru.md)
-- [Measured coverage / Фактические проверки](docs/COLLECTIONS_010_REPORT.md)
-
-## Multi-screen navigation / Многоэкранная навигация (0.10)
-
-Named screens, guarded atomic transitions and a bounded Back stack are implemented
-in the core and both generators. One `.sdr` file generates the two-screen task manager.
-Экраны и переходы входят в опубликованную 0.10.0.
-
-- [English guide](docs/NAVIGATION_QUICKSTART.en.md)
-- [Русское руководство](docs/NAVIGATION_QUICKSTART.ru.md)
-- [Syntax and semantics](docs/NAVIGATION_010_CONTRACT.md)
-- [Measured report](docs/NAVIGATION_010_REPORT.md)
-
-## Release engineering / Подготовка и проверка релиза 0.10
-
-Independent deterministic Android IDs and `--application-id` are implemented.
-Независимые Android-приложения собираются с постоянным ID; название отделено от пакета.
-[English identity/build guide](docs/ANDROID_ID.en.md) · [Русская инструкция](docs/ANDROID_ID.ru.md).
-Wheel/sdist include examples, documentation and license under `sys.prefix/share/sedrava`.
-Дистрибутив с примерами, документацией и лицензией опубликован на PyPI.
-
-Measured RC readiness / Фактическая готовность RC: [report / отчёт](docs/RELEASE_READINESS_010_REPORT.md).
-
-## 0.10.0rc1 preparation / Подготовка RC (not published)
-
-[Release notes EN](docs/RELEASE_NOTES_0_10_0rc1.en.md) · [RU](docs/RELEASE_NOTES_0_10_0rc1.ru.md) · [Upgrade/rollback EN](docs/UPGRADE_0_10_0rc1.en.md) · [RU](docs/UPGRADE_0_10_0rc1.ru.md) · [RC report](docs/RC_010_REPORT.md).
-Use a verified local wheel in a separate environment; no PyPI/TestPyPI RC has been published.
-Установка — из проверенного локального wheel в отдельное окружение; автоматической миграции данных нет.
-
-Stability / стабильность: [audit](docs/STABILITY_AUDIT_010.md), [compatibility](docs/COMPATIBILITY_010.md), [release gates](docs/STABLE_RELEASE_GATES_010.md). Stabilization changes are not a new release; rc1 artifacts remain unchanged.
-
-## 0.10.0rc2 preparation / Подготовка RC2 (not published)
-
-[Release notes EN](docs/RELEASE_NOTES_0_10_0rc2.en.md) · [RU](docs/RELEASE_NOTES_0_10_0rc2.ru.md) · [Upgrade/rollback EN](docs/UPGRADE_0_10_0rc2.en.md) · [RU](docs/UPGRADE_0_10_0rc2.ru.md) · [RC2 report](docs/RC2_010_REPORT.md).
-Historical rc1/rc2 artifacts remain unchanged.
-
-## Published 0.10.0 / Опубликованная 0.10.0
-
-Tag **v0.10.0** resolves to commit `688a320025a0d38235eb90c780362ec26b0708e2`; wheel and sdist are published to PyPI. Android versionCode **10003**. Release workflow and CI succeeded; physical-device acceptance of the final 0.10 APK is **not documented**. See [release notes](docs/RELEASE_NOTES_0_10_0.md), [physical-device checklist](docs/PHYSICAL_DEVICE_010.md), [stable gates](docs/STABLE_RELEASE_GATES_010.md), and [owner's publishing checklist](docs/PUBLISH_0_10_0.md).
-
-
-**Version boundary:** Responsive site and WebApp generation are available in [stable 0.11.0](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0), not in 0.10.0. Official Astro/Starlight documentation and the separate Sedrava-generated site remain different build systems.
-
-## Experimental Web UI 0.11 / Экспериментальный Web UI 0.11
-
-Source-branch feature, separate from published RC2. Режим из этой ветки, отдельно от опубликованного RC2.
-
-```sh
-sedrava check examples/web_ui_011_landing.sdr
-sedrava build site examples/web_ui_011_landing.sdr --output build/site
-python -m http.server 8000 --directory build/site
-```
-
-13 static primitives, responsive layouts and safe assets; no deployment. 13 статических компонентов, адаптивность и безопасные ресурсы; без публикации сайта. [English](docs/WEB_UI_011.en.md) · [Русский](docs/WEB_UI_011.ru.md). Existing application commands are unchanged. Команды приложений не изменены.
-
-
-## Experimental 0.11 integration / Экспериментальная интеграция
-
-The released 0.11 integration adds shared composition, pure functions, bounded collection queries, forms/tables/dialogs, hash routes, local styling and typed public HTTP. It is included in published stable 0.11.0, but is not a generated backend/auth/database service.
-
-Реализованные возможности, сборка четырёх проектов и ограничения: [English guide](docs/011_WEB_PLATFORM.en.md), [руководство](docs/011_WEB_PLATFORM.ru.md), [actual status](docs/011_IMPLEMENTATION_STATUS.md). Existing published 0.10.0 instructions above remain applicable to their original targets.
-
-
-## Published stable 0.11.0 and historical 0.11.0rc1
-
-The [experimental RC](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0rc1) is available from [PyPI](https://pypi.org/project/sedrava/0.11.0rc1/) after exact-source CI, distribution checks and practical 0.10 upgrade/rollback testing. It provides responsive `site` generation, interactive `webapp`, typed Web state/components/functions, forms, routes, collection queries and validated public HTTP clients.
-
-The [stable 0.11.0](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0) is now **published** on [PyPI](https://pypi.org/project/sedrava/0.11.0/) following exact-source CI, practical upgrade/rollback verification and a successful one-time Trusted Publishing workflow. [Stable gates](docs/STABLE_RELEASE_GATES_011.md) · [EN release notes](docs/RELEASE_NOTES_0_11_0.en.md) · [RU](docs/RELEASE_NOTES_0_11_0.ru.md). Namespaces, package lockfiles, trusted server, SQLite, authentication and automatic migration are not in 0.11. The official documentation website still uses Astro/Starlight.
-
-Native A2 research: [self-hosting lexer written in Sedrava](docs/SELF_HOSTING_LEXER_A2.ru.md)
-now handles basic quoted Unicode text, comments and compound punctuation.
-Tested on Rust and generated Android Kotlin; not a self-hosted compiler.
-
-A3 research: [Sedrava-written source spans and a first assignment AST](docs/SELF_HOSTING_LEXER_A3.ru.md).
-This is a one-shot subset parser, not an autonomous compiler or full Sedrava grammar.
-
-Experimental [Sedrava-authored A4 layout tokens and limited arithmetic AST](docs/SELF_HOSTING_PARSER_A4.ru.md): NEWLINE/INDENT/DEDENT on a strict 4-space subset, plus a small fixed precedence-aware binary assignment. This is not a complete parser or self-hosted compiler.
-
-A5.1 self-hosting research: [merge lexical and indentation tokens in
-Sedrava](docs/SELF_HOSTING_UNIFIED_A51.ru.md). Three bounded actions
-combine A3 and A4 streams in source order. This is not a full parser.
-
-Experimental Server A7: direct read-only SedravaSQL revision
-accessor db_revision("namespace/key") alongside db_get; one shared
-managed-row read per key and GET response.
-See docs/RUST_NATIVE_SERVER_A7_DB_METADATA.ru.md.
-
-Experimental Server A8: [atomic single-key SedravaSQL PUT](docs/RUST_NATIVE_SERVER_A8_DB_PUT.ru.md)
-from checked Sedrava server source, with per-key CAS, durable stored HTTP
-response, SQLite audit and idempotent replay. No arbitrary SQL, multi-key
-transaction, public listener or NativeLog switch.
-
-Experimental Server A9: [atomic two-key SedravaSQL PUT and Sedrava
-server-state update](docs/RUST_NATIVE_SERVER_A9_ATOMIC_BATCH.ru.md).
-The compiler pins a tested B6 SedravaSQL commit. One SQLite commit
-persists both managed keys, the signed server-state snapshot, all
-per-key audits/receipts and the original HTTP response. No general SQL,
-cross-key GET snapshot, public API or production safety claim.
-
-Experimental A10: [coherent SedravaSQL multi-key GET responses](docs/RUST_NATIVE_SERVER_A10_COHERENT_GET.ru.md).
-Existing db_get and db_revision responses now fetch all referenced
-managed records in one SQLite read-only WAL snapshot (B7), pinned by
-commit. This does NOT snapshot in-memory server state, allow general
-SQL queries, or provide a public production API.
-
-Self-hosting A5.2 experimental: Sedrava-authored parser over actual
-A5.1 unified tokens, with bounded assignment+indent AST and
-Unicode-scalar spans. Independent 30 valid / 22 invalid tests PASS.
-See docs/SELF_HOSTING_PARSER_A52.ru.md. Not self-hosted compiler.
-
-Experimental [self-hosting parser A5.3](docs/SELF_HOSTING_PARSER_A53.ru.md):
-Sedrava-authored bounded 1..3-integer arithmetic expression AST
-with precedence, left-associativity, layout depth and Unicode spans.
-37 accepted / 23 rejected independently verified source cases PASS.
-No full language grammar or self-hosted compiler.
-
-Experimental [self-hosting A5.4a](docs/SELF_HOSTING_PARSER_A54.ru.md): bounded arithmetic stack parser with nested parentheses; not a full compiler.
-
-Experimental [A5.4b block parser](docs/SELF_HOSTING_PARSER_A54B.ru.md): restricted action/if headers and structured first syntax diagnostic.
-
-Experimental [A5.5 compound expression AST](docs/SELF_HOSTING_PARSER_A55.ru.md) and [A11 read-only SedravaSQL native index HTTP backend](docs/RUST_NATIVE_SERVER_A11_INDEX.ru.md).
-
-Experimental [A12/A13 native journal transactions and restart verification](docs/RUST_NATIVE_SERVER_A12_LOG.ru.md).
-
-Experimental [A5.6a compound if conditions](docs/SELF_HOSTING_PARSER_A56A.ru.md).
-
-Experimental [A5.6b linked if/else branches](docs/SELF_HOSTING_PARSER_A56B.ru.md).
-
-Experimental [A5.6c function call AST](docs/SELF_HOSTING_PARSER_A56C.ru.md).
-
-Native Server: [B15a write limits](docs/RUST_NATIVE_SERVER_B15A_BUDGET.ru.md).
-
-Experimental [A5.7 symbol and type analysis](docs/SELF_HOSTING_PARSER_A57.ru.md).
-
-Native Server: [A15 offline archive restore](docs/RUST_NATIVE_SERVER_A15_ARCHIVE.ru.md).
-
-Experimental [A5.8a/b declarations and expression IR](docs/SELF_HOSTING_PARSER_A58.ru.md), [A16 database host](docs/RUST_NATIVE_DATABASE_A16.ru.md).
-
-Experimental [A5.9a IR execution](docs/SELF_HOSTING_EXECUTOR_A59A.ru.md) and [A17 SQL HTTP API](docs/RUST_NATIVE_SQL_API_A17.ru.md).
-
-Experimental [A5.9b branch execution](docs/SELF_HOSTING_EXECUTOR_A59B.ru.md) and [A18 SQL API authentication](docs/RUST_NATIVE_SQL_API_A18.ru.md).
-
-Experimental [A5.10a function VM](docs/SELF_HOSTING_FUNCTION_VM_A510A.ru.md), [A19 sales demo](docs/SALES_DEMO_A19.ru.md).
-
-Experimental [A5.10b source compiler](docs/SELF_HOSTING_FUNCTION_COMPILER_A510B.ru.md), [A20 SQL transaction routes](docs/SALES_DEMO_A20.ru.md).
-
-Experimental [A5.10c function bodies](docs/SELF_HOSTING_FUNCTION_COMPILER_A510C.ru.md).
-
-Experimental [A5.10d recursive source functions](docs/SELF_HOSTING_FUNCTION_COMPILER_A510D.ru.md) and [A21 sequential routes](docs/SALES_DEMO_A21.ru.md).
-
-Experimental [A5.11a loops](docs/SELF_HOSTING_FUNCTION_COMPILER_A511A.ru.md).
-
-Experimental [A5.11b nested control blocks](docs/SELF_HOSTING_FUNCTION_COMPILER_A511B.ru.md) and [service journal WebApp](docs/SERVICE_JOURNAL_DEMO.ru.md).
-
-[Internal comparative benchmark, 24 Nov 2026](docs/BENCHMARK_2026_11_24.ru.md).
+Apache-2.0 license.

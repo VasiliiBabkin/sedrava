@@ -43,8 +43,8 @@ def main() -> int:
         [str(binary), "--version"], check=True, capture_output=True,
         text=True, timeout=10,
     ).stdout.strip()
-    expected_prefix = f"sedrava-native {declared_version} (experimental native preview;"
-    if not version_reply.startswith(expected_prefix):
+    expected_prefix = f"sedrava {declared_version} (Rust alpha)"
+    if version_reply != expected_prefix:
         raise ValueError(
             f"Stale or wrong binary version: {version_reply!r}; Cargo expects {declared_version}"
         )
@@ -52,7 +52,7 @@ def main() -> int:
         raise ValueError("Only explicitly versioned 0.12.0 alpha candidates may use this packaging path")
     if len(data) < 1000:
         raise ValueError("Native binary unexpectedly small")
-    name = "sedrava-native.exe" if "windows" in host else "sedrava-native"
+    name = "sedrava.exe" if "windows" in host else "sedrava"
     if binary.name != name:
         raise ValueError("Binary filename does not match host OS")
     gitsha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT,
@@ -60,32 +60,32 @@ def main() -> int:
     dirty = bool(subprocess.run(["git", "status", "--porcelain"], cwd=ROOT,
                                 check=True, capture_output=True, text=True).stdout.strip())
     manifest = {
-        "schema": "sedrava-native-preview-v1",
+        "schema": "sedrava-preview-v1",
         "version": declared_version, "channel": "alpha",
         "host": host, "source_sha": gitsha, "dirty_source": dirty,
         "binary_sha256": sha256(data),
         "binary_version": version_reply,
-        "status": "EXPERIMENTAL; partial language only; not a stable release"
+        "status": "ALPHA; primary Rust toolchain; not production-ready"
     }
     files = {
-        f"sedrava-native/{name}": data,
-        "sedrava-native/LICENSE": (ROOT / "LICENSE").read_bytes(),
-        "sedrava-native/README.txt": (
+        f"sedrava/{name}": data,
+        "sedrava/LICENSE": (ROOT / "LICENSE").read_bytes(),
+        "sedrava/README.txt": (
             f"EXPERIMENTAL Sedrava Native {declared_version} for {host}.\n"
-            "Not yet the complete compiler.\n"
-            "Do not replace the stable Python CLI or use production state files.\n"
-            "Run sedrava-native --version or sedrava-native --help.\n"
+            "Primary Rust toolchain; alpha scope.\n"
+            "Install separately from older commands; do not use production state files.\n"
+            "Run sedrava --version or sedrava --help.\n"
             "Verify the SHA256 before execution.\n"
         ).encode(),
-        "sedrava-native/manifest.json":
+        "sedrava/manifest.json":
             (json.dumps(manifest, sort_keys=True, indent=2) + "\n").encode(),
     }
-    files["sedrava-native/SHA256SUMS.txt"] = "".join(
+    files["sedrava/SHA256SUMS.txt"] = "".join(
         f"{sha256(data)}  {path}\n" for path, data in sorted(files.items())
     ).encode("ascii")
     args.output.mkdir(parents=True, exist_ok=True)
     suffix = ".zip" if "windows" in host else ".tar.gz"
-    output = args.output / f"sedrava-native-{declared_version}-{host}{suffix}"
+    output = args.output / f"sedrava-{declared_version}-{host}{suffix}"
     if suffix == ".zip":
         with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as z:
             for path, data in sorted(files.items()):

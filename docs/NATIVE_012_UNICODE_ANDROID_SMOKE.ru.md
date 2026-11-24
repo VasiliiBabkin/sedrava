@@ -1,3 +1,5 @@
+> Milestone-specific technical record. For current installation and supported scope, see [Sedrava Rust](README.ru.md). Commands below may use the transitional Rust CLI name.
+
 # Sedrava Native 0.12 — Unicode и bounded while на Android
 
 Дата: 23 ноября 2026. Это **новое** тестовое приложение, не ранее

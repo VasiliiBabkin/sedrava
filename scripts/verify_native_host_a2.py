@@ -10,7 +10,7 @@ import tempfile
 from concurrent.futures import ThreadPoolExecutor
 
 ROOT = Path(__file__).resolve().parents[1]
-BIN = ROOT / "rust/target/debug/sedrava-native"
+BIN = ROOT / "rust/target/debug/sedrava"
 
 
 def execute(source: str, root: Path, *, grants=(), args=(), scopes=()):

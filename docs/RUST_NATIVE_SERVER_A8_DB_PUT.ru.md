@@ -1,3 +1,5 @@
+> Milestone-specific technical record. For current installation and supported scope, see [Sedrava Rust](README.ru.md). Commands below may use the transitional Rust CLI name.
+
 # Sedrava Server A8 — атомарная запись в SedravaSQL из языка
 
 Дата: 24 ноября 2026. Статус: экспериментальный локальный Server DSL, **не публичный API, не SQL и не стабильный выпуск языка**.

@@ -1,5 +1,3 @@
-# Sedrava 0.9.0a1 / Примечания к выпуску
+# Historical document / Исторический документ
 
-Canonical bilingual candidate notes: [RELEASE_NOTES_0_9_0a1.md](RELEASE_NOTES_0_9_0a1.md).
-
-Единый актуальный документ содержит возможности, исправления, ограничения и условия публикации. Версия остаётся кандидатом до проверки точного коммита. Исторические результаты Android 16 не заменяют испытания новых APK. Публикация в PyPI не выполняется.
+This page describes an earlier release, not the current Rust toolchain. [Original archived document](https://github.com/VasiliiBabkin/sedrava/blob/v0.12.0-alpha.1/docs/RELEASE_NOTES_0_9_0a1.ru-en.md). [Current documentation](README.ru.md).

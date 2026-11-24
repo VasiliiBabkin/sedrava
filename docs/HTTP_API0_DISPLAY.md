@@ -1,3 +1,5 @@
+> Historical reference; not a current release or installation guide. [Current Rust documentation](README.ru.md).
+
 # Experimental HTTP API0: declarative card fields
 
 Status: **draft PR #31**, Web-only, not included in released Sedrava 0.10.0.

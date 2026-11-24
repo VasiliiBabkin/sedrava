@@ -1,3 +1,5 @@
+> Milestone-specific technical record. For current installation and supported scope, see [Sedrava Rust](README.ru.md). Commands below may use the transitional Rust CLI name.
+
 # Нативный Sedrava Host A2: JSON и каталоги
 
 Это **экспериментальное расширение доверенного POSIX Host**. Оно сохраняет

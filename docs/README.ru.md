@@ -1,143 +1,59 @@
-<p align="center"><img src="../assets/brand/sedrava-logo-primary.png" width="160" alt="Sedrava" /></p>
+# Sedrava — язык и инструментарий на Rust
 
-# Sedrava — документация (стабильная 0.11.0)
+**Описал — получил.**
 
-**Последняя стабильная:** [Sedrava 0.11.0](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0) ([PyPI](https://pypi.org/project/sedrava/0.11.0/)). Предыдущая [0.10.0](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.10.0) ([PyPI](https://pypi.org/project/sedrava/0.10.0/)) доступна. Язык остаётся экспериментальным и не сертифицирован для промышленного использования.
+Sedrava — декларативный язык программирования. Основная и единственная развиваемая реализация — Rust. Текущая линия **0.12.0-alpha.2**: экспериментальная, не для промышленной эксплуатации.
 
-## Состояние выпусков
+[Загрузить Linux x86-64](https://sedrava.virtreal.ru/downloads/0.12.0-alpha.2/) · [Релиз GitHub](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.12.0-alpha.2) · [Официальный сайт](https://sedrava.virtreal.ru/ru/) · [English](README.en.md).
 
-Действующая стабильная **0.11.0 опубликована** ([GitHub](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0) · [PyPI](https://pypi.org/project/sedrava/0.11.0/)); Android versionCode 11002. Историческая экспериментальная [0.11.0rc1](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0rc1) ([PyPI](https://pypi.org/project/sedrava/0.11.0rc1/)) сохраняется для сравнения. [Критерии](STABLE_RELEASE_GATES_011.md) · [заметки](RELEASE_NOTES_0_11_0.ru.md).
+## Установка и первая программа
 
-В опубликованной стабильной 0.11.0 есть `build site`, `build webapp`, типизированные Web-компоненты, функции и ограниченный HTTP-клиент. Нет встроенного сервера, SQLite, авторизации, миграций и пакетов с пространствами имён.
+Готовый бинарник **sedrava** работает без установки Python или Rust. На Linux x86-64 GNU проверен Ubuntu 24.04. Установщик проверяет SHA-256 и не перезаписывает существующий файл. Windows/macOS не проверены.
 
-## Отдельный нативный кандидат 0.12.0-alpha.1
+Создайте UTF-8 файл hello.sdr:
 
-Экспериментальный CLI sedrava-native на Rust теперь имеет собственную
-предварительную версию 0.12.0-alpha.1. Это проверенный Linux-кандидат,
-не стабильный и не замена Python 0.11.0 или существующих проектов.
+~~~text
+app "Hello Sedrava"
+state count = 0
+action add: count = count + 1
+rule count >= 0 and count <= 10
+test once: add -> count == 1
+screen main:
+    text "Hello Sedrava"
+    value count
+    button "Add" -> add
+~~~
 
-[Установка и ограничения](RELEASE_NOTES_NATIVE_0_12_0_ALPHA1.ru.md)
-· [Матрица проверок](NATIVE_012_ALPHA_ACCEPTANCE.md).
-[Проверка против опубликованного Python 0.11](NATIVE_012_STABLE011_PARITY.ru.md).
+~~~sh
+sedrava check hello.sdr
+sedrava test hello.sdr
+sedrava run hello.sdr add add
+sedrava build web hello.sdr --output build/hello.html
+sedrava build android hello.sdr --output build/hello-android --application-id org.example.hello
+~~~
 
-## Установка
+Android-команда создаёт Kotlin/Compose-проект; для APK нужны JDK, SDK и Gradle. См. [сборку](BUILD.md). Для новых проектов используйте отдельные тестовые данные и новые выходные каталоги.
 
-Нужен Python **3.10+**:
+## Сборка из исходников
 
-```sh
-python -m venv .venv
-# Linux/macOS:
-. .venv/bin/activate
-# Windows PowerShell: .venv\Scripts\Activate.ps1
-python -m pip install sedrava==0.11.0
-sedrava --version
-```
+~~~sh
+git clone https://github.com/VasiliiBabkin/sedrava.git
+cd sedrava
+cargo build --manifest-path rust/Cargo.toml --locked --release --bin sedrava
+./rust/target/release/sedrava --version
+cargo test --manifest-path rust/Cargo.toml --locked --all-targets
+~~~
 
-Для разработки из исходников можно клонировать репозиторий и выполнить `python -m pip install .`.
+## Что поддерживается
 
-## Руководства
+- Типизированное состояние, действия, инварианты, записи, ограниченные списки, функции, навигация, Unicode, импорты и локальные пакеты.
+- Генерация автономного Web, Site, WebApp и поддерживаемых Android-приложений.
+- Ограниченный trusted Host, локальный HTTP, типизированный SQL API A21 с ролями, квитанциями и последовательными транзакциями.
+- [SedravaSQL](https://sql.virtreal.ru/): NativeLog SQL; страничное B+Tree B25 пока отдельный эксперимент.
+- Self-host A5.11b — отдельный эксперимент собственного компилятора, не основной компилятор.
 
-- [Быстрый старт](QUICKSTART.md), [список примеров](../examples/README.md).
-- [Текстовые значения](LANGUAGE_0_10_TEXT.md), [записи и коллекции](RECORDS_COLLECTIONS_010.md), [многоэкранная навигация](NAVIGATION_010_CONTRACT.md).
-- [Менеджер задач](RECORDS_QUICKSTART.ru.md), [двухэкранный пример](NAVIGATION_QUICKSTART.ru.md).
-- [Сборка Web и Android](BUILD.md), [идентификаторы приложений](ANDROID_ID.ru.md).
-- [FAQ](FAQ.md), [совместимость](COMPATIBILITY_010.md), [ограничения](KNOWN_LIMITATIONS.md), [безопасность](SECURITY.md).
-- [Дорожная карта](ROADMAP.md), [описание релиза](RELEASE_NOTES_0_10_0.md), [исторический справочник 0.9](LANGUAGE_0_9.md).
+Не все конструкции поддерживаются всеми целевыми генераторами. Полная матрица браузеров/устройств, Windows/macOS, совместимость старых проектов и промышленная безопасность не установлены.
 
-Команды `check`, `test`, `run`, `build web` и `build android` доступны в 0.10.0. Последняя создаёт исходники Kotlin/Compose, **не APK**.
+[Быстрый старт](QUICKSTART.md) · [Распространение](DISTRIBUTION_NATIVE.ru.md) · [Заметки к выпуску](RELEASE_NOTES_0_12_0_ALPHA2.md) · [Дорожная карта](ROADMAP.md) · [Примеры](../examples/README.md) · [Измерения](BENCHMARK_2026_11_24.ru.md) · [История](HISTORY.md).
 
-В 0.10.0 входят int32, bool, строки, типизированные записи, ограниченные коллекции, инварианты, атомарные действия и навигация. Не предусмотрены автоматические миграции хранилища, шифрование состояния или гарантии совместимости API 1.0.
-
-**Граница проверки:** испытания конечного APK 0.10 на физическом телефоне [не подтверждены протоколом](PHYSICAL_DEVICE_010.md), хотя проверки на эмуляторе выполнялись. `sedrava build site` уже доступна в [опубликованной экспериментальной 0.11.0rc1](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0rc1), а [сайт документации](https://github.com/VasiliiBabkin/sedrava-site) собирается отдельно через Astro/Starlight.
-
-
-**Проверка релиза на Linux:** [ручной smoke-test 1 ноября 2026 года](MANUAL_LINUX_WEB_SMOKE_0_10_0_2026-11-01.md) (установка из PyPI, CLI и Web); испытания физического Android этим не подтверждаются.
-
-## Experimental Web UI 0.11 / Экспериментальный Web UI 0.11
-
-Source-branch feature, separate from published RC2. Режим из этой ветки, отдельно от опубликованного RC2.
-
-```sh
-sedrava check examples/web_ui_011_landing.sdr
-sedrava build site examples/web_ui_011_landing.sdr --output build/site
-python -m http.server 8000 --directory build/site
-```
-
-13 static primitives, responsive layouts and safe assets; no deployment. 13 статических компонентов, адаптивность и безопасные ресурсы; без публикации сайта. [English](WEB_UI_011.en.md) · [Русский](WEB_UI_011.ru.md). Existing application commands are unchanged. Команды приложений не изменены.
-
-
-## Experimental 0.11 integration / Экспериментальная интеграция
-
-The integration preview adds shared composition, pure functions, bounded collection queries, forms/tables/dialogs, hash routes, local styling and typed public HTTP. It is now released in 0.11.0, but is not a generated backend/auth/database service.
-
-Реализованные возможности, сборка четырёх проектов и ограничения: [English guide](011_WEB_PLATFORM.en.md), [руководство](011_WEB_PLATFORM.ru.md), [actual status](011_IMPLEMENTATION_STATUS.md). Existing published 0.10.0 instructions above remain applicable to their original targets.
-
-
-[Лексер A2: строки, комментарии, операторы на Sedrava](SELF_HOSTING_LEXER_A2.ru.md).
-
-[Лексер A3: границы токенов, строки/столбцы, первый AST](SELF_HOSTING_LEXER_A3.ru.md)
-
-[Парсер A4 на Sedrava: отступы и небольшой арифметический AST](SELF_HOSTING_PARSER_A4.ru.md).
-
-[Этап A5.1: единый поток лексических токенов и отступов](SELF_HOSTING_UNIFIED_A51.ru.md).
-
-A7: документированное чтение значения и ревизии ключа
-SedravaSQL на стороне сервера.
-См. RUST_NATIVE_SERVER_A7_DB_METADATA.ru.md.
-
-Экспериментальный [Sedrava Server A8: атомарная запись одного ключа в SedravaSQL](RUST_NATIVE_SERVER_A8_DB_PUT.ru.md).
-Рабочий `db_put` с CAS/идемпотентностью/аудитом, но без SQL и доступа к рабочей базе.
-
-A9: [атомарная транзакция двух ключей и состояния Sedrava Server](RUST_NATIVE_SERVER_A9_ATOMIC_BATCH.ru.md).
-Поддержаны CAS, общая квитанция, повтор и проверяемые аварийные сценарии.
-
-A10: [согласованное чтение нескольких ключей SedravaSQL](RUST_NATIVE_SERVER_A10_COHERENT_GET.ru.md)
-в одном HTTP GET без изменения синтаксиса db_get/db_revision.
-
-A5.2: парсер на Sedrava из объединённых токенов с позициями и
-уровнями отступов; пока не полный парсер и не самокомпиляция.
-Документ: SELF_HOSTING_PARSER_A52.ru.md.
-
-A5.3: [AST арифметических выражений, построенное на самом Sedrava](SELF_HOSTING_PARSER_A53.ru.md).
-Только до трёх целых операндов и ограниченные отступы;
-это не полноценная грамматика и не самокомпиляция.
-
-A5.4a: [стековый арифметический парсер с вложенными скобками](SELF_HOSTING_PARSER_A54.ru.md), написанный на Sedrava; пока не полный синтаксический анализатор.
-
-A5.4b: [ограниченные блоки action/if и структурированная синтаксическая диагностика](SELF_HOSTING_PARSER_A54B.ru.md).
-
-A5.5: [составные выражения в AST](SELF_HOSTING_PARSER_A55.ru.md). A11: [чтение нативного индекса SedravaSQL через HTTP-сервер](RUST_NATIVE_SERVER_A11_INDEX.ru.md).
-
-A12/A13: [атомарная запись в нативный журнал и проверка перезапуска](RUST_NATIVE_SERVER_A12_LOG.ru.md).
-
-A5.6a: [составные условия if](SELF_HOSTING_PARSER_A56A.ru.md).
-
-A5.6b: [связанные ветви if/else](SELF_HOSTING_PARSER_A56B.ru.md).
-
-A5.6c: [AST вызовов функций](SELF_HOSTING_PARSER_A56C.ru.md).
-
-Native Server: [ограничения записи B15a](RUST_NATIVE_SERVER_B15A_BUDGET.ru.md).
-
-A5.7: [таблица символов и скалярный анализ](SELF_HOSTING_PARSER_A57.ru.md).
-
-Native Server: [A15 восстановление из архива](RUST_NATIVE_SERVER_A15_ARCHIVE.ru.md).
-
-[A5.8a/b объявления и IR](SELF_HOSTING_PARSER_A58.ru.md); [A16 SQL host](RUST_NATIVE_DATABASE_A16.ru.md).
-
-[A5.9a исполнение IR](SELF_HOSTING_EXECUTOR_A59A.ru.md); [A17 SQL HTTP API](RUST_NATIVE_SQL_API_A17.ru.md).
-
-[A5.9b ветвления](SELF_HOSTING_EXECUTOR_A59B.ru.md); [A18 права SQL API](RUST_NATIVE_SQL_API_A18.ru.md).
-
-[A5.10a функции и стек](SELF_HOSTING_FUNCTION_VM_A510A.ru.md); [A19 демонстрация продаж](SALES_DEMO_A19.ru.md).
-
-[A5.10b компилятор функций](SELF_HOSTING_FUNCTION_COMPILER_A510B.ru.md); [A20 атомарные SQL-маршруты](SALES_DEMO_A20.ru.md).
-
-[A5.10c тела функций и локальные переменные](SELF_HOSTING_FUNCTION_COMPILER_A510C.ru.md).
-
-[A5.10d условные выражения](SELF_HOSTING_FUNCTION_COMPILER_A510D.ru.md); [A21 последовательные транзакции](SALES_DEMO_A21.ru.md).
-
-[A5.11a циклы и изменяемые локальные переменные](SELF_HOSTING_FUNCTION_COMPILER_A511A.ru.md).
-
-[A5.11b вложенные блоки](SELF_HOSTING_FUNCTION_COMPILER_A511B.ru.md); [журнал сервисных заявок](SERVICE_JOURNAL_DEMO.ru.md).
-
-**Нативная alpha:** [официальные Linux x86_64 загрузки](https://sedrava.virtreal.ru/downloads/0.12.0-alpha.1/), [измерения](BENCHMARK_2026_11_24.ru.md), SQL API A21 и отдельный SedravaSQL B25. Python 0.11.0 не заменяется.
+Посвящение: [Геннадию Ивановичу Смирных](../DEDICATION.md). Лицензия Apache-2.0.

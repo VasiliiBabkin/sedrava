@@ -73,7 +73,7 @@ internal fun runVerification() {
 
 def main():
     ap=argparse.ArgumentParser()
-    ap.add_argument("--native",type=Path,default=ROOT/"rust/target/debug/sedrava-native")
+    ap.add_argument("--native",type=Path,default=ROOT/"rust/target/debug/sedrava")
     ap.add_argument("--gradle",type=Path,required=True)
     ap.add_argument("--gradle-user-home",type=Path)
     args=ap.parse_args()

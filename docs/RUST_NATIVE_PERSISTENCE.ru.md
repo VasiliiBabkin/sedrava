@@ -1,3 +1,5 @@
+> Milestone-specific technical record. For current installation and supported scope, see [Sedrava Rust](README.ru.md). Commands below may use the transitional Rust CLI name.
+
 # Sedrava Native: сохранения и типизированный IR (эксперимент)
 
 Последнее обновление: 22 ноября 2026 г.

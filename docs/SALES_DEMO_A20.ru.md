@@ -1,3 +1,5 @@
+> Milestone-specific technical record. For current installation and supported scope, see [Sedrava Rust](README.ru.md). Commands below may use the transitional Rust CLI name.
+
 # A20 — SQL transactions in the Sedrava database host and API
 
 An alternative to single query/execute: one `transaction` line with JSON array of 1..15 static step objects {"sql":"INSERT ... ?","using":["param_name"]}. Named parameter mapping is positional per step; each declared parameter must be used. Only INSERT/UPDATE/DELETE, no arbitrary user SQL. Source check validates statement syntax and bound arity; schema-dependent single-row, PK and FK requirements checked at execution. CLI and database-api both use the same transaction dispatch; existing single statements unchanged. Explicit write capability and stable request key remain required. B20 disjoint-row starting-generation semantics apply. Do not replay old keys across changed statement kind.

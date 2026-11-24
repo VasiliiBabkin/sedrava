@@ -1,3 +1,5 @@
+> Historical milestone / Исторический этап. The current primary implementation is Rust. See [current guide](README.ru.md) and [history](HISTORY.md).
+
 # Sedrava → Rust: полный перенос языка
 
 **Статус документа: 22 ноября 2026 г.** Это карта миграции, не объявление

@@ -1,3 +1,5 @@
+> Milestone-specific technical record. For current installation and supported scope, see [Sedrava Rust](README.ru.md). Commands below may use the transitional Rust CLI name.
+
 # Sedrava A5.3 — AST арифметических выражений из объединённого потока токенов
 
 Дата: 24 ноября 2026. Статус: экспериментальный шаг к self-hosting, **не полноценный компилятор**.

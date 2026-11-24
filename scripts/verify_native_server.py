@@ -16,7 +16,7 @@ import tempfile
 import time
 
 ROOT=Path(__file__).resolve().parents[1]
-NATIVE=ROOT/"rust/target/debug/sedrava-native"
+NATIVE=ROOT/"rust/target/debug/sedrava"
 DSL=ROOT/"examples/native_server/hello.sdr"
 
 def invoke(*args,ok=True):

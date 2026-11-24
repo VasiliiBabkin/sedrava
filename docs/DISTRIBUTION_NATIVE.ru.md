@@ -1,116 +1,29 @@
-# Распространение Sedrava после полного перехода на Rust
+# Распространение Sedrava
 
-Статус: проектируемая схема. Готового стабильного нативного релиза пока нет.
-Python 0.11 остаётся основным компилятором, а задача №65 открыта.
+Основной CLI: **sedrava**, Rust 0.12.0-alpha.2. [GitHub Releases](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.12.0-alpha.2) · [официальные загрузки](https://sedrava.virtreal.ru/downloads/0.12.0-alpha.2/).
 
-## Текущий кандидат Rust 0.12.0-alpha.1
+## Готовый Linux-дистрибутив
 
-Cargo.toml и sedrava-native --version теперь согласованы с экспериментальной
-линией 0.12.0-alpha.1. Для Linux x86_64 проверены release build,
-versioned TAR.GZ, повторяемость упаковки одного бинарника и офлайн-
-установщик с проверкой SHA-256 и запретом перезаписи.
+Скачайте архив, SHA256SUMS, manifest.json, install_native_preview.sh и RELEASE_NOTES.md. Сверьте контрольные суммы с доверенным источником. Пример для нового пользовательского префикса:
 
-Упаковщик отказывается подменять старый бинарник новым названием версии.
-Итоговый архив должен строиться только после коммита из чистого исходника
-и не публиковаться без идентифицируемого SHA-256 и отдельного контроля.
-Это локальный кандидат, не опубликованный GitHub Release.
-Стабильный Python 0.11.0 не переключён.
+~~~sh
+sha256sum -c SHA256SUMS
+ARCHIVE=sedrava-0.12.0-alpha.2-x86_64-unknown-linux-gnu.tar.gz
+HASH=$(sha256sum "$ARCHIVE" | cut -d ' ' -f 1)
+sh install_native_preview.sh "$ARCHIVE" "$HASH" "$HOME/.local/sedrava/0.12.0-alpha.2"
+export PATH="$HOME/.local/sedrava/0.12.0-alpha.2/bin:$PATH"
+sedrava --version
+~~~
 
-[Заметки к 0.12 alpha](RELEASE_NOTES_NATIVE_0_12_0_ALPHA1.ru.md)
-· [матрица](NATIVE_012_ALPHA_ACCEPTANCE.md).
+Затем сохраните нужный PATH в профиле оболочки. Не перезаписывайте старые команды и данные. Для отката переключите PATH на прежний префикс; для удаления удалите только выбранный бинарник и при необходимости пустой каталог версии. SHA-256 подтверждает целостность, не заменяет подпись.
 
-## Предлагаемый порядок
+Linux x86-64 GNU, проверено Ubuntu 24.04; Windows/macOS не проверены. Пользователю не нужны Python и Rust. При самостоятельной сборке требуется Rust/Cargo (закреплённый toolchain в rust/rust-toolchain.toml).
 
-1. Основной способ: готовый исполняемый файл sedrava через GitHub Releases
-   под поддерживаемые Windows, Linux и macOS. Python и Rust пользователю не нужны.
-2. Для разработчиков Rust: cargo install после публикации в crates.io.
-   До публикации можно установить экспериментальный sedrava-native из исходников.
-3. Для пользователей Python: временно сохраняем pip install sedrava.
-   Позднее возможен совместимый пакет-обёртка, но без подмены движка и
-   неожиданной смены семантики.
-4. Пакетные менеджеры winget, Homebrew и другие — только после появления
-   проверенных архивов на соответствующих ОС.
+~~~sh
+cargo build --manifest-path rust/Cargo.toml --locked --release --bin sedrava
+cargo install --path rust/sedrava-core --bin sedrava --locked
+~~~
 
-Прямо сейчас экспериментальный CLI из рабочего клона можно установить:
+Совместимое имя sedrava-native остаётся отдельной Cargo-целью переходного периода, исполняет тот же Rust код. Основная команда — sedrava. Не устанавливайте два несовместимых инструментария в один префикс.
 
-    cargo install --path rust/sedrava-core --bin sedrava-native --locked
-    sedrava-native --version
-
-Подтверждена и установка без предварительного клонирования GitHub-репозитория
-на Linux x86_64 (Cargo 1.100.0, коммит fcec9d5):
-
-    cargo install --git https://github.com/VasiliiBabkin/sedrava sedrava-core --bin sedrava-native --locked
-
-Cargo скачает исходники и соберёт бинарник. Для этого способа нужен Rust/Cargo,
-но Python и pip не требуются. Это всё ещё неполный экспериментальный компилятор.
-
-При наличии Rust и исходников пользователь может собрать preview-архив:
-
-    cargo build --manifest-path rust/Cargo.toml --locked --release --bin sedrava-native
-    python3 scripts/package_native_preview.py --binary rust/target/release/sedrava-native --output build/native-previews
-
-Скрипт НЕ публикует и НЕ подписывает релизы. Архив включает лицензию,
-предупреждение о неполном переносе, контрольные суммы SHA256 и manifest.
-Целевая платформа определяется из фактически установленного компилятора.
-Не переименовывайте Linux-сборку в Windows — это не кросс-компиляция.
-
-Стандартная команда sedrava будет присвоена нативному продукту только
-после прохождения полной матрицы совместимости, испытаний Web/Android,
-публикации версионированных бинарников и описания миграции с pip.
-До этого она принадлежит установленному Python-пакету.
-
-Официальные источники:
-- https://doc.rust-lang.org/cargo/commands/cargo-install.html
-- https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases
-- https://packaging.python.org/en/latest/specifications/entry-points/
-
-Требуемые релизные проверки: воспроизводимые SHA, тесты на реальных ОС,
-подписи/хеши, лицензии, инструкции обновления/удаления, возможность отката,
-прозрачное описание ограничений и неизменные версии тегов.
-
-## Локальная установка preview без Rust, Python и pip
-
-После получения проверенного TAR.GZ для своей ОС и архитектуры
-установите его в отдельный пользовательский каталог:
-
-```sh
-sh scripts/install_native_preview.sh \
-  /path/to/sedrava-native-preview-PLATFORM.tar.gz \
-  EXPECTED_SHA256_FROM_TRUSTED_SOURCE \
-  "$HOME/.local"
-"$HOME/.local/bin/sedrava-native" --version
-```
-
-Требуются только POSIX shell, tar, SHA-256-утилита и стандартные
-системные команды. Пользователю **не нужны Rust, Python или pip**.
-Архив должен уже лежать на локальном диске, а его SHA-256 необходимо
-получить из проверенного источника. Хеш защищает от изменения байтов,
-но не подтверждает личность автора и не заменяет цифровую подпись.
-
-Установщик отказывает при неверном SHA-256 архива/бинарника,
-посторонних файлах в архиве, существующей команде, symlink каталога
-установки и недопустимом пути. Он извлекает только точные байты
-ожидаемого бинарника, не распаковывает произвольные файлы и
-публикует команду через атомарную жёсткую ссылку в каталоге
-назначения (без перезаписи). Root-доступ не нужен.
-
-Автоматического обновления и rollback пока нет. Перед переходом
-на новый тестовый бинарник сохраните прежний вручную. Официальная
-команда `sedrava` из Python-пакета не изменяется. Linux x86_64
-проверяется отдельно; POSIX на macOS и Windows требуют собственных
-испытаний и дистрибутивов. Не используйте preview с production state.
-
-Контрольная проверка сборки и установщика:
-
-```sh
-cargo build --manifest-path rust/Cargo.toml --locked --release --bin sedrava-native
-python3 scripts/verify_native_preview_install.py
-```
-
-Python здесь нужен **только тестовому сборщику/контролёру на стороне
-разработчика**. Сам готовый CLI и офлайн-установщик не используют
-Python, pip или Rust.
-
-## Первый публичный Linux alpha
-
-Версионированные файлы и контрольные суммы: https://sedrava.virtreal.ru/downloads/0.12.0-alpha.1/ . Отдельная команда sedrava-native; PyPI 0.11.0 не изменяется. SHA-256 не является цифровой подписью. Для ручного отката сохраняйте предыдущий бинарник, устанавливайте разные версии в отдельные префиксы; удаляйте только файл sedrava-native из выбранного префикса. GitHub Releases — отдельный канал публикации.
+Старые выпуски и их происхождение: [история](HISTORY.md). Нет PyPI-распространения новой линии, автоматической миграции данных или обещаний промышленной совместимости.

@@ -15,7 +15,7 @@ import subprocess
 import tempfile
 
 ROOT=Path(__file__).resolve().parents[1]
-BIN=ROOT/"rust/target/debug/sedrava-native"
+BIN=ROOT/"rust/target/debug/sedrava"
 EXAMPLE=ROOT/"examples/native_server/transactions_a3.sdr"
 SCHEMA="sedrava.server.transaction.v1"
 

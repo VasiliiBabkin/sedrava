@@ -1,3 +1,5 @@
+> Milestone-specific technical record. For current installation and supported scope, see [Sedrava Rust](README.ru.md). Commands below may use the transitional Rust CLI name.
+
 # A5.6b — связанные ветви if/else
 
 `examples/self_host/parser_a56b.sdr` расширяет A5.6a синтаксисом `else:`. Ветвь должна непосредственно следовать за завершённым if на той же глубине блока; пустые строки и комментарии не разрывают связь. Вложенные if связываются независимо. Повторный, осиротевший или неправильно оформленный else отвергается структурированным диагнозом. `else_branches` содержит if_header_id, else_header_id и depth — стабильные 1-based идентификаторы записей в headers. Условия и присваивания сохраняют AST и исходные диапазоны. Тело else обязательно. Из нового примера удалены три устаревших вспомогательных parse_assignment/parse_binary/parse_program и их коллекции, чтобы уложиться в MAX_COLLECTIONS=16; предыдущие примеры не изменены. Грамматика остаётся ограниченной: else-if, вызовы функций, разрешение имён, типизация и исполнение новым компилятором не реализованы.

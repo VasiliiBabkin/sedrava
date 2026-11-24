@@ -16,7 +16,7 @@ import re
 import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "0.12.0-alpha.1"
+VERSION = "0.12.0-alpha.2"
 
 
 def invoke(binary: Path, *args: object, ok: bool = True, timeout: int = 30) -> subprocess.CompletedProcess[str]:
@@ -49,7 +49,7 @@ def main() -> None:
     assert re.findall(r'(?m)^version = "([^"]+)"$', cargo_text) == [VERSION]
 
     version = invoke(binary, "--version").stdout.strip()
-    assert version == f"sedrava-native {VERSION} (experimental native preview; not stable)", version
+    assert version == f"sedrava {VERSION} (Rust alpha)", version
     checks: list[dict[str, object]] = []
     def pass_gate(name: str, detail: str):
         checks.append({"gate": name, "outcome": "PASS", "detail": detail})

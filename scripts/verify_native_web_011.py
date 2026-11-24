@@ -15,9 +15,10 @@ from playwright.sync_api import expect, sync_playwright
 
 
 ROOT = Path(__file__).resolve().parents[1]
+from legacy_reference import legacy_root
 COMPILERS = {
-    "python": [sys.executable, str(ROOT / "sedrava_cli.py")],
-    "rust": [str(ROOT / "rust/target/debug/sedrava-native")],
+    "python": None,  # resolve only when rebuilding historical sources
+    "rust": [str(ROOT / "rust/target/debug/sedrava")],
 }
 CASES = {
     "platform_site": "site",
@@ -36,8 +37,9 @@ class QuietHandler(SimpleHTTPRequestHandler):
 
 
 def invoke(engine, *args, reject=False):
+    compiler = COMPILERS[engine] or [sys.executable, str(legacy_root() / "sedrava_cli.py")]
     result = subprocess.run(
-        [*COMPILERS[engine], *map(str, args)],
+        [*compiler, *map(str, args)],
         cwd=ROOT, capture_output=True, text=True, timeout=20,
     )
     assert (result.returncode != 0) == reject, (engine, args, result.stdout, result.stderr)

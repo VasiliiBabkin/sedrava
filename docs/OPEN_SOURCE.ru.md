@@ -1,3 +1,5 @@
+> Historical reference; not a current release or installation guide. [Current Rust documentation](README.ru.md).
+
 # Открытая модель Sedrava
 
 Исходный код Sedrava распространяется по **Apache License 2.0** (см. корневой файл [LICENSE](../LICENSE)). Разрешены использование, модификация и распространение, в том числе коммерческие, при соблюдении условий лицензии.

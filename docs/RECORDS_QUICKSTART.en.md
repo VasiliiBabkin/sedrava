@@ -1,3 +1,5 @@
+> Historical reference; not a current release or installation guide. [Current Rust documentation](README.ru.md).
+
 # Build an offline task manager (Sedrava 0.10.0)
 
 Use Python 3.10+ and the published Sedrava 0.10.0 package; clone the repository for example files:

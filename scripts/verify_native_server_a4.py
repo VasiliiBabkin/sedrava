@@ -18,7 +18,7 @@ import tempfile
 from verify_native_server_a3 import assert_reply, req
 
 ROOT=Path(__file__).resolve().parents[1]
-BIN=ROOT/"rust/target/debug/sedrava-native"
+BIN=ROOT/"rust/target/debug/sedrava"
 SOURCE=ROOT/"examples/native_server/redo_journal_a4.sdr"
 LOCK=".sedrava-server.lock"
 MARKER="sedrava-journal-v1.manifest.json"

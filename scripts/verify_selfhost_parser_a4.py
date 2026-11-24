@@ -17,7 +17,7 @@ from verify_selfhost_lexer_a3 import expect_tokens as a3_tokens
 
 ROOT=Path(__file__).resolve().parents[1]
 PROGRAM=ROOT/"examples/self_host/parser_a4.sdr"
-BIN=Path(os.environ.get("SEDRAVA_NATIVE_BIN",ROOT/"rust/target/debug/sedrava-native"))
+BIN=Path(os.environ.get("SEDRAVA_NATIVE_BIN",ROOT/"rust/target/debug/sedrava"))
 SOURCE_PREFIX='state source = "sum==42 # comment"'
 
 

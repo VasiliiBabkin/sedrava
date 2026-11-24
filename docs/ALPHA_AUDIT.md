@@ -1,3 +1,5 @@
+> Historical reference; not a current release or installation guide. [Current Rust documentation](README.ru.md).
+
 # First public Alpha engineering audit / Инженерный аудит
 
 Date: 2026-10-29. Baseline: [`08fd020`](https://github.com/VasiliiBabkin/sedrava/commit/08fd020dfd111238aea619c9e0b6684f2be8b25e), actual `main` at checkout. Work branch: `alpha/0.9.0a1-engineering`. Candidate version remains **0.9.0a1** (unreleased). No PyPI upload, release tag or public release is implied by this document.

@@ -1,3 +1,5 @@
+> Historical reference; not a current release or installation guide. [Current Rust documentation](README.ru.md).
+
 # Android numeric input: device test findings (Sedrava 0.9)
 
 Status: **observed on a physical Android device; UX follow-up required**.

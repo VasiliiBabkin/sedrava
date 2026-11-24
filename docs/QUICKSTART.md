@@ -1,39 +1,18 @@
-# Quick Start / Быстрый старт — Sedrava 0.11.0
+# Быстрый старт / Quickstart
 
-**Published stable release:** [GitHub v0.11.0](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0) · [PyPI](https://pypi.org/project/sedrava/0.11.0/). Previous stable [0.10.0](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.10.0) ([PyPI](https://pypi.org/project/sedrava/0.10.0/)) remains available. The language remains experimental.
+**Описал — получил.**
 
-## Install / Установка
+Sedrava — декларативный язык программирования. Основная и единственная развиваемая реализация — Rust. Текущая линия **0.12.0-alpha.2**: экспериментальная, не для промышленной эксплуатации.
 
-Requires Python **3.10+**. Use a virtual environment:
+[Загрузить Linux x86-64](https://sedrava.virtreal.ru/downloads/0.12.0-alpha.2/) · [Релиз GitHub](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.12.0-alpha.2) · [Официальный сайт](https://sedrava.virtreal.ru/ru/) · [English](README.en.md).
 
-```sh
-# Linux: use python3, since some distributions have no 'python' alias.
-python3 -m venv .venv
-. .venv/bin/activate
-python -m pip install sedrava==0.11.0
-sedrava --version
-```
+## Установка и первая программа
 
-On Windows, create the environment with `py -3 -m venv .venv`, activate with `.venv\Scripts\Activate.ps1`, then run `python -m pip install sedrava==0.11.0`. To work from a repository checkout instead, use `python -m pip install .` after activation. If `python3 -m venv` is unavailable on Ubuntu/Debian, install the distro's `python3-venv` package.
+Готовый бинарник **sedrava** работает без установки Python или Rust. На Linux x86-64 GNU проверен Ubuntu 24.04. Установщик проверяет SHA-256 и не перезаписывает существующий файл. Windows/macOS не проверены.
 
-## Published experimental 0.11 RC / Опубликованный кандидат
+Создайте UTF-8 файл hello.sdr:
 
-Try `site` and `webapp` using a separate Python virtual environment. For Debian/Ubuntu, install `python3-venv` first if needed (PEP 668); do not use `--break-system-packages`:
-
-```sh
-python3 -m venv .venv-011
-. .venv-011/bin/activate
-python -m pip install sedrava==0.11.0rc1
-sedrava --version
-```
-
-[GitHub 0.11.0rc1](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0rc1) · [PyPI 0.11.0rc1](https://pypi.org/project/sedrava/0.11.0rc1/) · [stable 0.11 acceptance](STABLE_RELEASE_GATES_011.md). The [stable 0.11.0](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0) is now available from [PyPI](https://pypi.org/project/sedrava/0.11.0/).
-
-## First app / Первое приложение
-
-Create a UTF-8 file `hello.sdr`:
-
-```text
+~~~text
 app "Hello Sedrava"
 state count = 0
 action add: count = count + 1
@@ -43,54 +22,17 @@ screen main:
     text "Hello Sedrava"
     value count
     button "Add" -> add
-```
+~~~
 
-```sh
+~~~sh
 sedrava check hello.sdr
 sedrava test hello.sdr
 sedrava run hello.sdr add add
-sedrava build web hello.sdr --output build/web/index.html
-python -m http.server 8000 --directory build/web
-```
+sedrava build web hello.sdr --output build/hello.html
+sedrava build android hello.sdr --output build/hello-android --application-id org.example.hello
+~~~
 
-Open http://localhost:8000. The `run` command prints `{"count": 2}`; it is not a GUI. The Web generator produces a standalone HTML application.
-
-## Text, records and navigation / Текст, записи и навигация
-
-Included in **0.10.0**: [text](LANGUAGE_0_10_TEXT.md), [records and bounded lists](RECORDS_COLLECTIONS_010.md), [multi-screen navigation](NAVIGATION_010_CONTRACT.md). Clone the repository to use the checked-in examples:
-
-```sh
-git clone https://github.com/VasiliiBabkin/sedrava.git
-cd sedrava
-sedrava check examples/task_manager_navigation.sdr
-sedrava test examples/task_manager_navigation.sdr
-sedrava build android examples/task_manager_navigation.sdr --output build/tasks-android
-```
-
-`build android` generates Kotlin/Compose source, **not an APK**. Compile with JDK, Android SDK and Gradle per [BUILD.md](BUILD.md). Data migrations and encrypted persistence are not provided. Final 0.10 APK physical-device acceptance is not recorded.
-
-`sedrava build site` is not in stable **0.10.0** but **is available** in the [published 0.11.0rc1](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0rc1). Stable 0.11.0 is [published](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.11.0). [sedrava-site](https://github.com/VasiliiBabkin/sedrava-site) is a separate Astro/Starlight website.
+Android-команда создаёт Kotlin/Compose-проект; для APK нужны JDK, SDK и Gradle. См. [сборку](BUILD.md). Для новых проектов используйте отдельные тестовые данные и новые выходные каталоги.
 
 
-## Post-release Linux smoke test / Ручная проверка Linux
-
-Installation from PyPI, CLI `check`/`test`/`run`, HTML generation and tester-confirmed browser interaction passed on 2026-11-01 in a Linux virtual environment using Python 3.13. See the [evidence and scope](MANUAL_LINUX_WEB_SMOKE_0_10_0_2026-11-01.md). Physical Android acceptance is separate.
-
-## Experimental Web UI 0.11 / Экспериментальный Web UI 0.11
-
-Source-branch feature, separate from published RC2. Режим из этой ветки, отдельно от опубликованного RC2.
-
-```sh
-sedrava check examples/web_ui_011_landing.sdr
-sedrava build site examples/web_ui_011_landing.sdr --output build/site
-python -m http.server 8000 --directory build/site
-```
-
-13 static primitives, responsive layouts and safe assets; no deployment. 13 статических компонентов, адаптивность и безопасные ресурсы; без публикации сайта. [English](WEB_UI_011.en.md) · [Русский](WEB_UI_011.ru.md). Existing application commands are unchanged. Команды приложений не изменены.
-
-
-## Experimental 0.11 integration / Экспериментальная интеграция
-
-The integration preview adds shared composition, pure functions, bounded collection queries, forms/tables/dialogs, hash routes, local styling and typed public HTTP. It is a published 0.11.0 feature, not a trusted backend/auth/database service.
-
-Реализованные возможности, сборка четырёх проектов и ограничения: [English guide](011_WEB_PLATFORM.en.md), [руководство](011_WEB_PLATFORM.ru.md), [actual status](011_IMPLEMENTATION_STATUS.md). Existing published 0.10.0 instructions above remain applicable to their original targets.
+[English guide](README.en.md) · [Distribution](DISTRIBUTION_NATIVE.ru.md) · [Examples](../examples/README.md).

@@ -12,7 +12,7 @@ import sys
 import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-CLI = ROOT / "rust" / "target" / "debug" / "sedrava-native"
+CLI = ROOT / "rust" / "target" / "debug" / "sedrava"
 SOURCE = ROOT / "examples" / "site_native_preview.sdr"
 
 
@@ -32,7 +32,7 @@ def main() -> None:
     if not CLI.is_file():
         raise SystemExit(
             "Build first: cargo build --manifest-path rust/Cargo.toml "
-            "--locked --bin sedrava-native"
+            "--locked --bin sedrava"
         )
     run("check", str(SOURCE))
     with tempfile.TemporaryDirectory(prefix="sedrava-native-site-") as root:

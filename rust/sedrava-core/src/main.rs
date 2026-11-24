@@ -1,5 +1,4 @@
-//! Standalone CLI for the experimental Rust engine; no Python required.
-//! Differences from Python 0.11 are intentionally documented.
+//! Primary Sedrava CLI implemented in Rust.
 
 use sedrava_core::navigation::run_session_from;
 use sedrava_core::runtime::resolve;
@@ -13,25 +12,25 @@ use std::path::{Path, PathBuf};
 
 fn usage() {
     println!(
-        "Sedrava native Rust core (EXPERIMENTAL)\n\
+        "Sedrava — Rust toolchain (ALPHA)\n\
          Usage:\n\
-           sedrava-native lock DIR\n           sedrava-native verify DIR\n           sedrava-native database-api check FILE\n           sedrava-native database-api run FILE --database ABSOLUTE_FILE --trusted [--allow-write] [--auth-file ABSOLUTE_FILE] [--port N] [--max-requests N] [--idle-ms N]\n           sedrava-native database check FILE\n           sedrava-native database run FILE --database ABSOLUTE_FILE --trusted [--arg NAME=JSON ...] [--allow-write --request-key KEY]\n           sedrava-native host check FILE
-           sedrava-native host run FILE --root DIR --trusted [--allow-read] [--allow-write]
-           sedrava-native server check FILE
-           sedrava-native server run FILE [--port PORT] [--max-requests N] [--idle-ms N] [--state-dir ABSOLUTE_PRIVATE_DIR] [--transactional] [--journaled] [--sqlite-state FILE] [--sqlite-v2-state FILE] [--native-index FILE --native-index-sha256 SHA256] [--native-log FILE [--native-max-bytes N --native-max-transactions N]]
-           sedrava-native check FILE\n\
-           sedrava-native effects FILE [--target app|web|android]\n\
-           sedrava-native test FILE\n\
-           sedrava-native run FILE [ACTION ...] [--state-file PATH]\n\
-           sedrava-native inspect FILE
-           sedrava-native ir FILE
-           sedrava-native ir-candidate FILE
-           sedrava-native expand FILE
-           sedrava-native build web FILE [--output PATH]
-           sedrava-native build web-ir FILE [--output PATH]
-           sedrava-native build site FILE --output DIR
-           sedrava-native build webapp FILE --output DIR
-           sedrava-native build android FILE --output DIR --application-id ID\n\
+           sedrava lock DIR\n           sedrava verify DIR\n           sedrava database-api check FILE\n           sedrava database-api run FILE --database ABSOLUTE_FILE --trusted [--allow-write] [--auth-file ABSOLUTE_FILE] [--port N] [--max-requests N] [--idle-ms N]\n           sedrava database check FILE\n           sedrava database run FILE --database ABSOLUTE_FILE --trusted [--arg NAME=JSON ...] [--allow-write --request-key KEY]\n           sedrava host check FILE
+           sedrava host run FILE --root DIR --trusted [--allow-read] [--allow-write]
+           sedrava server check FILE
+           sedrava server run FILE [--port PORT] [--max-requests N] [--idle-ms N] [--state-dir ABSOLUTE_PRIVATE_DIR] [--transactional] [--journaled] [--sqlite-state FILE] [--sqlite-v2-state FILE] [--native-index FILE --native-index-sha256 SHA256] [--native-log FILE [--native-max-bytes N --native-max-transactions N]]
+           sedrava check FILE\n\
+           sedrava effects FILE [--target app|web|android]\n\
+           sedrava test FILE\n\
+           sedrava run FILE [ACTION ...] [--state-file PATH]\n\
+           sedrava inspect FILE
+           sedrava ir FILE
+           sedrava ir-candidate FILE
+           sedrava expand FILE
+           sedrava build web FILE [--output PATH]
+           sedrava build web-ir FILE [--output PATH]
+           sedrava build site FILE --output DIR
+           sedrava build webapp FILE --output DIR
+           sedrava build android FILE --output DIR --application-id ID\n\
          Supports typed records, bounded lists, pure functions, navigation,\n\
          snapshot persistence and experimental typed IR export.\n\
          Full Site/WebApp and Android generators remain incomplete.
@@ -372,7 +371,7 @@ fn run() -> Result<()> {
     }
     if args[1] == "--version" {
         println!(
-            "sedrava-native {} (experimental native preview; not stable)",
+            "sedrava {} (Rust alpha)",
             env!("CARGO_PKG_VERSION")
         );
         return Ok(());
@@ -739,7 +738,7 @@ fn run() -> Result<()> {
     Ok(())
 }
 
-fn main() {
+pub(crate) fn main() {
     if let Err(error) = run() {
         eprintln!("error: {error}");
         std::process::exit(1);

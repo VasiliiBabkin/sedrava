@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+from legacy_reference import legacy_root
 
 CASES = {
     "examples/counter.sdr": ["increment", "decrement", "reset"],
@@ -66,7 +67,7 @@ def main() -> int:
     ap.add_argument(
         "--native",
         type=Path,
-        default=ROOT / "rust" / "target" / "debug" / "sedrava-native",
+        default=ROOT / "rust" / "target" / "debug" / "sedrava",
     )
     ap.add_argument("--seed", type=int, default=90210)
     ap.add_argument("--random-cases", type=int, default=32)
@@ -78,7 +79,7 @@ def main() -> int:
     if not executable.is_file():
         ap.error(f"native binary is missing: {executable}; build with cargo first")
 
-    python = [sys.executable, str(ROOT / "sedrava_cli.py")]
+    python = [sys.executable, str(legacy_root() / "sedrava_cli.py")]
     rust = [str(executable)]
     rng = random.Random(opts.seed)
     mismatches = []

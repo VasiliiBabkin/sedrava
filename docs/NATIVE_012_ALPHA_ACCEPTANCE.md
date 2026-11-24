@@ -1,3 +1,5 @@
+> Historical milestone / Исторический этап. The current primary implementation is Rust. See [current guide](README.ru.md) and [history](HISTORY.md).
+
 # Native 0.12.0-alpha.1 — release gates
 
 Status: LOCAL Linux pre-release candidate, NOT a published stable release.

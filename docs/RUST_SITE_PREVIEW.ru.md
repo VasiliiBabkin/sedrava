@@ -1,3 +1,5 @@
+> Milestone-specific technical record. For current installation and supported scope, see [Sedrava Rust](README.ru.md). Commands below may use the transitional Rust CLI name.
+
 # Экспериментальные Site и WebApp на Rust
 
 Нативный генератор поддерживает многостраничный Site и автономный WebApp из

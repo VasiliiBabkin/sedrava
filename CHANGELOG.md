@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.12.0-alpha.2 — Rust primary
+
+Canonical sedrava executable, retirement of Python implementation and PyPI workflows from main, native-only documentation and distribution. [Release notes](docs/RELEASE_NOTES_0_12_0_ALPHA2.md).
+
+## Historical changes
+
+# Changelog
+
 ## Native Rust 0.12.0-alpha.1 — Linux candidate (2026-11-23)
 
 - Version the experimental native CLI separately from Python 0.11 stable;

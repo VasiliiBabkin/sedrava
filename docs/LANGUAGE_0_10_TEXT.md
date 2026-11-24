@@ -1,3 +1,5 @@
+> Historical reference; not a current release or installation guide. [Current Rust documentation](README.ru.md).
+
 # Sedrava 0.10 text semantics / Строковое ядро Sedrava 0.10
 
 Sedrava **0.10.0** includes immutable text in the shared AST, Python interpreter/CLI, Web and Android generators. It is [published on PyPI](https://pypi.org/project/sedrava/0.10.0/) and [GitHub](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.10.0). The [0.9 reference](LANGUAGE_0_9.md) remains historical; this page specifies exact text semantics.

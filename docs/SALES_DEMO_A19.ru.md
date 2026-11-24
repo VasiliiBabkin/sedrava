@@ -1,3 +1,5 @@
+> Milestone-specific technical record. For current installation and supported scope, see [Sedrava Rust](README.ru.md). Commands below may use the transitional Rust CLI name.
+
 # A19 — демонстрационная система товаров и заказов
 
 `examples/sales_demo/schema.sql`: two typed tables and secondary index definitions. `sales_api.sdr`: 9 static HTTP POST routes: product list, category filter, DISTINCT categories, create product/order, LEFT JOIN orders, mark paid, aggregate paid revenue, grouped HAVING filter. Read/write roles via private digest file A18, explicit idempotency key for writes. All data persistence and SQL execution by native SedravaSQL; no SQLite in actual demo. Separate local-only backend demo, no public deployment or graphical frontend, no FK or stock deduction, no payment processing, no validated business amounts or production security claim. Test uses disposable private journal and random tokens, no port exposed externally.

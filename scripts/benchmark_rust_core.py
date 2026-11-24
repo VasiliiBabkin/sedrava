@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+from legacy_reference import legacy_root
 
 SCENARIOS = [
     ("check-reference", "check", "examples/reference_09.sdr", []),
@@ -69,7 +70,7 @@ def metrics(samples: list[float]) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--native", type=Path, default=ROOT / "rust/target/debug/sedrava-native")
+    parser.add_argument("--native", type=Path, default=ROOT / "rust/target/debug/sedrava")
     parser.add_argument("--repeats", type=int, default=30)
     parser.add_argument("--seed", type=int, default=23042)
     parser.add_argument("--output", type=Path)
@@ -78,9 +79,9 @@ def main() -> int:
         parser.error("repeats must be between 5 and 200")
     native = args.native.resolve()
     if not native.is_file():
-        parser.error("native executable missing; cargo build --manifest-path rust/Cargo.toml --bin sedrava-native")
+        parser.error("native executable missing; cargo build --manifest-path rust/Cargo.toml --bin sedrava")
 
-    python = [sys.executable, str(ROOT / "sedrava_cli.py")]
+    python = [sys.executable, str(legacy_root() / "sedrava_cli.py")]
     rust = [str(native)]
     rng = random.Random(args.seed)
     measurements = []

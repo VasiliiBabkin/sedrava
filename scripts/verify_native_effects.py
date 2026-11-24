@@ -13,7 +13,7 @@ import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
-NATIVE = ROOT / "rust/target/debug/sedrava-native"
+NATIVE = ROOT / "rust/target/debug/sedrava"
 SOURCE = '''app "Effects A1"
 fn increase(x: int) -> int effects pure = x + 1
 fn twice(y: int) -> int = increase(increase(y))

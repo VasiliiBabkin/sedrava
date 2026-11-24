@@ -10,7 +10,7 @@ from verify_native_server_a3 import assert_reply
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "examples/native_server/sqlite_a6_read.sdr"
 CLI = Path(os.environ.get("SEDRAVASQL_CLI", str(ROOT.parent / "sedravasql/target/debug/sedravasql")))
-BIN = Path(os.environ.get("SEDRAVA_A6_BIN", str(ROOT/"rust/target/debug/sedrava-native")))
+BIN = Path(os.environ.get("SEDRAVA_A6_BIN", str(ROOT/"rust/target/debug/sedrava")))
 
 
 def cli(*args):

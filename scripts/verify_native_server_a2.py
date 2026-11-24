@@ -19,7 +19,7 @@ import time
 from verify_native_server import request
 
 ROOT=Path(__file__).resolve().parents[1]
-NATIVE=ROOT/"rust/target/debug/sedrava-native"
+NATIVE=ROOT/"rust/target/debug/sedrava"
 SAMPLE=ROOT/"examples/native_server/counter_a2.sdr"
 
 def run(*args, ok=True, timeout=15):

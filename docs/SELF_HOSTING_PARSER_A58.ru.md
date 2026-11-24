@@ -1,3 +1,5 @@
+> Milestone-specific technical record. For current installation and supported scope, see [Sedrava Rust](README.ru.md). Commands below may use the transitional Rust CLI name.
+
 # A5.8a/b — declarations and typed expression IR
 
 `examples/self_host/parser_a58a.sdr` extends A5.7 by reading state declarations with scalar literal initializers and explicit external function signatures (`extern fn add(int,int) -> int`) from the same source. External signatures are a prototype interface, not ordinary implemented Sedrava functions. String-aware layout scan supports quoted state initializers; action bodies remain the A5.7 subset. No lexical scopes, function bodies, recursive execution or complete language grammar. Source and token limits remain 256 scalars/100 tokens. `lower_expressions` produces a register-based typed expression IR with explicit opcode, destination, operand registers, binding ID, immediate and source span. Does not yet lower control flow, assignments or execute the IR; no backend replacement. See `scripts/verify_selfhost_parser_a58a.py` for independent expectations. 

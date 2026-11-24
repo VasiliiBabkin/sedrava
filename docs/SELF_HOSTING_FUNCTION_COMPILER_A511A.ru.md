@@ -1,3 +1,5 @@
+> Milestone-specific technical record. For current installation and supported scope, see [Sedrava Rust](README.ru.md). Commands below may use the transitional Rust CLI name.
+
 # A5.11a — while loops and mutable locals
 
 Extends the separate self-hosted A5.10d source compiler with four-space function bodies and eight-space single-level `while` bodies. Conditions use one integer comparison `<` or `==`; bodies contain assignments to previously declared locals only. Parameters are read-only, no shadowing, declarations inside loops, nested loops, break/continue or early return inside loops. The compiler emits a conditional forward jump and backward jump, with the same stack VM and global 256-instruction limit. Assignments also work outside loops. A5.10d recursive functions and conditional returns are retained. Scope and source budgets remain experimental; not the main Rust frontend or a full type-system upgrade.

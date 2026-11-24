@@ -14,7 +14,7 @@ import sys
 import tempfile
 
 ROOT=Path(__file__).resolve().parents[1]
-NATIVE=ROOT/"rust/target/debug/sedrava-native"
+NATIVE=ROOT/"rust/target/debug/sedrava"
 SOURCE=ROOT/"examples/native_typed_errors_a1/main.sdr"
 
 

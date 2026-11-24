@@ -1,3 +1,5 @@
+> Milestone-specific technical record. For current installation and supported scope, see [Sedrava Rust](README.ru.md). Commands below may use the transitional Rust CLI name.
+
 # Sedrava Server A5 — хранилище на SedravaSQL / SQLite
 
 Статус: **экспериментальная интеграция**. Прототип работает на

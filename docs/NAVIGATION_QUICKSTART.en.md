@@ -1,3 +1,5 @@
+> Historical reference; not a current release or installation guide. [Current Rust documentation](README.ru.md).
+
 # Multi-screen task manager — Sedrava 0.10.0
 
 Use Python 3.10+ and Sedrava 0.10.0. Run the example from a repository checkout:

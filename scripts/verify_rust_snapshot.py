@@ -14,6 +14,7 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+from legacy_reference import legacy_root
 FIXTURE = ROOT / "tests/rust_cases/persistent_records.sdr"
 
 
@@ -32,13 +33,13 @@ def command(binary: list[str], file: Path, *actions: str, state: Path | None = N
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--native", type=Path,
-                        default=ROOT / "rust/target/debug/sedrava-native")
+                        default=ROOT / "rust/target/debug/sedrava")
     parser.add_argument("--report", type=Path)
     opts = parser.parse_args()
     native = opts.native.resolve()
     if not native.is_file():
         parser.error(f"Missing native binary {native}")
-    python = [sys.executable, str(ROOT / "sedrava_cli.py")]
+    python = [sys.executable, str(legacy_root() / "sedrava_cli.py")]
     rust = [str(native)]
     checks: list[str] = []
 

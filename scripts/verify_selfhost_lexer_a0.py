@@ -14,7 +14,7 @@ import tempfile
 
 ROOT=Path(__file__).resolve().parents[1]
 TEMPLATE=ROOT/"examples/self_host/lexer_a0.sdr"
-BIN=Path(os.environ.get("SEDRAVA_NATIVE_BIN",str(ROOT/"rust/target/debug/sedrava-native")))
+BIN=Path(os.environ.get("SEDRAVA_NATIVE_BIN",str(ROOT/"rust/target/debug/sedrava")))
 PREFIX='state source = "sum=42 (next)"'
 LETTERS="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_"
 DIGITS="0123456789"

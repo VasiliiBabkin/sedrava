@@ -1,3 +1,5 @@
+> Milestone-specific technical record. For current installation and supported scope, see [Sedrava Rust](README.ru.md). Commands below may use the transitional Rust CLI name.
+
 # Нативные типизированные ошибки и Result — Core + Web A1
 
 Экспериментальный перенос **ограниченного подмножества** Core 0.12 из

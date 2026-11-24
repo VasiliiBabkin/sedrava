@@ -8,3 +8,5 @@ dist/
 local.properties
 playwright-report/
 test-results/
+
+rust/target/

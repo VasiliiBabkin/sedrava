@@ -13,7 +13,7 @@ from verify_selfhost_parser_a4 import layout_oracle
 
 ROOT=Path(__file__).resolve().parents[1]
 PROGRAM=ROOT/"examples/self_host/parser_a51.sdr"
-BIN=Path(os.environ.get("SEDRAVA_NATIVE_BIN",ROOT/"rust/target/debug/sedrava-native"))
+BIN=Path(os.environ.get("SEDRAVA_NATIVE_BIN",ROOT/"rust/target/debug/sedrava"))
 PREFIX='state source = "sum==42 # comment"'
 
 def oracle(source:str):

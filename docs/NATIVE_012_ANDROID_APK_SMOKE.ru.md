@@ -1,3 +1,5 @@
+> Milestone-specific technical record. For current installation and supported scope, see [Sedrava Rust](README.ru.md). Commands below may use the transitional Rust CLI name.
+
 # Sedrava Native 0.12.0-alpha.1 — тестовое Android APK
 
 Дата: 23 ноября 2026. Платформа сборки: VDS Ubuntu Linux x86_64.

@@ -1,3 +1,5 @@
+> Historical reference; not a current release or installation guide. [Current Rust documentation](README.ru.md).
+
 # Android application identity (Sedrava 0.10.0)
 
 The display title is the `.sdr` `app "…"` declaration. Android installation identity is a build setting; it does not change language semantics.

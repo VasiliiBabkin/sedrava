@@ -1,3 +1,5 @@
+> Milestone-specific technical record. For current installation and supported scope, see [Sedrava Rust](README.ru.md). Commands below may use the transitional Rust CLI name.
+
 # Sedrava Server A6 — durable SQLite receipts and managed `db_get`
 
 Status: **experimental, local-only (127.0.0.1), not a release or production DB**.

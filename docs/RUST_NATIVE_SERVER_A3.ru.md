@@ -1,3 +1,5 @@
+> Milestone-specific technical record. For current installation and supported scope, see [Sedrava Rust](README.ru.md). Commands below may use the transitional Rust CLI name.
+
 # Sedrava Server A3 — ограниченный транзакционный HTTP
 
 **Экспериментальный loopback-only режим. Это не СУБД, SQL,

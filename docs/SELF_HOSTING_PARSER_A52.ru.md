@@ -1,3 +1,5 @@
+> Milestone-specific technical record. For current installation and supported scope, see [Sedrava Rust](README.ru.md). Commands below may use the transitional Rust CLI name.
+
 # Sedrava A5.2 — разбор программ из объединённых токенов
 
 Дата: 24 ноября 2026. Экспериментальный этап self-hosting.

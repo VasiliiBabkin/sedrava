@@ -1,3 +1,5 @@
+> Historical reference; not a current release or installation guide. [Current Rust documentation](README.ru.md).
+
 # Sedrava 0.10 — String semantics contract (implementation prerequisite)
 
 Status: **implemented on `feature/010-string-core`, unreleased development increment**. See [normative text reference](LANGUAGE_0_10_TEXT.md) and [measured work report](TEXT_010_REPORT.md). This is not acceptance of the whole 0.10 roadmap. Baseline: [0.9 language reference](LANGUAGE_0_9.md). Parent contract: [Describe → Get](DESCRIBE_GET_010.md).

@@ -1,3 +1,5 @@
+> Milestone-specific technical record. For current installation and supported scope, see [Sedrava Rust](README.ru.md). Commands below may use the transitional Rust CLI name.
+
 # Журнал сервисных заявок — практический WebApp на Sedrava
 
 `examples/service_journal.sdr` declares typed tickets (title, site, done), validated creation, editing, selection, search, deletion, completion toggle, derived totals and browser-local persistence. All application source is Sedrava; HTML/CSS/JS are produced by the native webapp generator. Run `sedrava-native check examples/service_journal.sdr` then `sedrava-native build webapp examples/service_journal.sdr --output NEW_DIR`. Serve the output using a local static HTTP server, e.g. `python3 -m http.server 8000 --bind 127.0.0.1 --directory NEW_DIR`.

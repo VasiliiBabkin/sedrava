@@ -14,7 +14,7 @@ import re
 from verify_native_server_a3 import assert_reply,req
 
 ROOT=Path(__file__).resolve().parents[1]
-BIN=ROOT/"rust/target/debug/sedrava-native"
+BIN=ROOT/"rust/target/debug/sedrava"
 SOURCE=ROOT/"examples/native_server/sqlite_a5.sdr"
 DBSQL=ROOT.parent/"sedravasql/target/debug/sedravasql"
 

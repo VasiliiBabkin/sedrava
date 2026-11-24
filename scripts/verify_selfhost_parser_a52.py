@@ -18,7 +18,7 @@ from verify_selfhost_parser_a51 import oracle as unified_oracle
 
 ROOT=Path(__file__).resolve().parents[1]
 PROGRAM=ROOT/"examples/self_host/parser_a52.sdr"
-BIN=Path(os.environ.get("SEDRAVA_NATIVE_BIN",ROOT/"rust/target/debug/sedrava-native"))
+BIN=Path(os.environ.get("SEDRAVA_NATIVE_BIN",ROOT/"rust/target/debug/sedrava"))
 PREFIX='state source = "sum==42 # comment"'
 ACTIONS=("scan","scan_layout","merge_tokens","parse_program")
 EXPR=re.compile(r"^([ ]*)([A-Za-z_][A-Za-z_0-9]*) *=( *)?([0-9]+) *(?:#.*)?$")

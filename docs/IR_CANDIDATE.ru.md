@@ -1,3 +1,5 @@
+> Historical reference; not a current release or installation guide. [Current Rust documentation](README.ru.md).
+
 # IR 1.0 Candidate.1 — проверяемый первый срез
 
 **Статус: экспериментальный, НЕ стабильный публичный ABI.**

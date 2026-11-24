@@ -1,3 +1,5 @@
+> Milestone-specific technical record. For current installation and supported scope, see [Sedrava Rust](README.ru.md). Commands below may use the transitional Rust CLI name.
+
 # Sedrava Server A2 — проверяемое состояние и ограниченное сохранение
 
 **Статус:** экспериментальный loopback-only runtime, не production.

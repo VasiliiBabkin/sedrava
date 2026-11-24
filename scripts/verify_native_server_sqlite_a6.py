@@ -11,7 +11,7 @@ import tempfile
 from verify_native_server_a3 import assert_reply, req
 
 ROOT = Path(__file__).resolve().parents[1]
-BIN = Path(os.environ.get("SEDRAVA_A6_BIN", str(ROOT / "rust/target/debug/sedrava-native")))
+BIN = Path(os.environ.get("SEDRAVA_A6_BIN", str(ROOT / "rust/target/debug/sedrava")))
 SOURCE = ROOT / "examples/native_server/sqlite_a5.sdr"
 NAMESPACE = "sedrava_native_a6"
 

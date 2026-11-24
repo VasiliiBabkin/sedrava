@@ -29,7 +29,7 @@ def run(args,ok=True):
 
 def main():
     ap=argparse.ArgumentParser()
-    ap.add_argument("--native",type=Path,default=ROOT/"rust/target/debug/sedrava-native")
+    ap.add_argument("--native",type=Path,default=ROOT/"rust/target/debug/sedrava")
     args=ap.parse_args()
     native=args.native.resolve()
     assert native.is_file()

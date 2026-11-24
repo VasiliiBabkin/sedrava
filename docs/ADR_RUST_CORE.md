@@ -1,3 +1,5 @@
+> Historical milestone / Исторический этап. The current primary implementation is Rust. See [current guide](README.ru.md) and [history](HISTORY.md).
+
 # ADR: Native Rust core for Sedrava
 
 **Decision:** Introduce an experimental native Rust parser, type checker and

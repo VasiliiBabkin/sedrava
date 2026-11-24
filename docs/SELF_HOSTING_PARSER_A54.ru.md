@@ -1,3 +1,5 @@
+> Milestone-specific technical record. For current installation and supported scope, see [Sedrava Rust](README.ru.md). Commands below may use the transitional Rust CLI name.
+
 # Sedrava A5.4a — стековый арифметический парсер
 
 Экспериментальный шаг A5.4; реализована арифметическая часть, а не полный синтаксический анализатор.

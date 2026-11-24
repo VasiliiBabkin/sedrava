@@ -1,3 +1,5 @@
+> Milestone-specific technical record. For current installation and supported scope, see [Sedrava Rust](README.ru.md). Commands below may use the transitional Rust CLI name.
+
 # Sedrava Server A9 — два ключа и серверное состояние в одной транзакции
 
 Дата: 24 ноября 2026. Экспериментальный локальный серверный режим.

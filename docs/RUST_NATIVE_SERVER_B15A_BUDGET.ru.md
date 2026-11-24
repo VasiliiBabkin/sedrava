@@ -1,3 +1,5 @@
+> Milestone-specific technical record. For current installation and supported scope, see [Sedrava Rust](README.ru.md). Commands below may use the transitional Rust CLI name.
+
 # Native Server — B15a limits
 
 При `--transactional --native-log ABSOLUTE_FILE` нативный движок использует пределы B15a: 64 MiB и 65536 транзакций по умолчанию. Пара `--native-max-bytes N --native-max-transactions N` позволяет установить более строгие пределы, оба параметра обязательны при явной настройке. Лимиты действуют на handle, повторно задаются при запуске, не меняют формат SEDRLOG1. При превышении лимита новая запись получает HTTP 507 NATIVE_LOG_CAPACITY до изменения файла или состояния; сервер остаётся доступен, старые идемпотентные запросы возвращают сохранённый ответ. Конфликт idempotency key по-прежнему 409. Это не квота ОС, не компактификация и не предел памяти при открытии старого журнала.

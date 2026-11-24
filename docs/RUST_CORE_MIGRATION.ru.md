@@ -1,3 +1,5 @@
+> Historical milestone / Исторический этап. The current primary implementation is Rust. See [current guide](README.ru.md) and [history](HISTORY.md).
+
 > **Обновление 22.11.2026:** этот документ описывает первоначальный скалярный этап.
 > Записи, коллекции, чистые функции, stdlib, навигация и экспериментальный snapshot/IR добавлены позднее.
 > Текущий статус и оставшиеся задачи: [полная карта переноса](RUST_FULL_MIGRATION.ru.md).

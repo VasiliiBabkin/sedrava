@@ -1,3 +1,5 @@
+> Milestone-specific technical record. For current installation and supported scope, see [Sedrava Rust](README.ru.md). Commands below may use the transitional Rust CLI name.
+
 # A12/A13 — атомарная запись через нативный журнал SedravaSQL
 
 Экспериментальный loopback-сервер с `--transactional --native-log ABSOLUTE_FILE`. Файл должен быть предварительно создан `sedravasql-native-preview init`, находиться в приватном каталоге и открываться только одним владельцем. Нельзя сочетать режим с SQLite, state-dir, journaled или native-index. Поддерживаются read-only GET и существующие A9 PUT с ровно двумя db_batch_put, четырьмя полями и одним set. Другие изменяющие маршруты отклоняются до открытия сокета. Сборка всё ещё включает SQLite для прежних режимов; в A12 SQLite-файл не открывается.

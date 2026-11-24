@@ -1,3 +1,5 @@
+> Milestone-specific technical record. For current installation and supported scope, see [Sedrava Rust](README.ru.md). Commands below may use the transitional Rust CLI name.
+
 # A5.10b — source-to-stack-IR compiler written in Sedrava
 
 `examples/self_host/function_compiler_a510b.sdr` reuses the A5.10a stack VM. New tokenizer, signature pass and expression lowering run entirely in Sedrava. Accepts one-line `fn name(a: int,b: int) -> int = expression` declarations, zero or more int parameters (max 8), unique names and parameter slots, zero-argument main, positive and negative integer literals within supported i32 range, + - *, grouping, calls, forward references, nested calls, static arity and symbol resolution. Operator precedence and left association checked. Source <=1024 scalars, 100 tokens/instructions, 16 functions, 8 frames, 256 executed instructions (plus runtime budgets). No arbitrary function bodies, let statements, closures, full bool/text types, conditional expressions, or typed diagnostic API. Recursive calls resolve but unconditional recursion rejects at depth budget; A5.10a textual IR supports terminating recursion. Not a complete language compiler.

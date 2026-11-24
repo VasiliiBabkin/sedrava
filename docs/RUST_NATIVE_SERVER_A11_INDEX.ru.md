@@ -1,3 +1,5 @@
+> Milestone-specific technical record. For current installation and supported scope, see [Sedrava Rust](README.ru.md). Commands below may use the transitional Rust CLI name.
+
 # Native Server A11 — read-only индекс SedravaSQL
 
 Экспериментальная интеграция через настоящий Rust API `sedravasql::native_log::index::VerifiedIndexReader`. Sedrava фиксирует зависимость на B12 `e2088d41ece67aac9b7c51f9280f1f37e7f204c0`; lockfile соответствует этому commit. Для запуска необходимы оба флага `--native-index ABSOLUTE_PRIVATE_INDEX --native-index-sha256 LOWERCASE_SHA256`. Файл полностью проверяется и сверяется с явно утверждённым SHA-256 до открытия loopback HTTP-сокета. Режим эксклюзивен: запрещены транзакционный режим, journaled, state-dir, SQLite backends и все маршруты кроме GET без изменяющих шагов. При выборе A11 SQLite-база не создаётся и не открывается, но сборка Sedrava по-прежнему включает зависимость rusqlite для старых режимов.

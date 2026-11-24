@@ -1,3 +1,5 @@
+> Milestone-specific technical record. For current installation and supported scope, see [Sedrava Rust](README.ru.md). Commands below may use the transitional Rust CLI name.
+
 # A5.4b — блоки и структурированная диагностика
 
 Экспериментальный парсер на Sedrava. `examples/self_host/parser_a54b.sdr` добавляет отдельный проход `validate_blocks` по реальному потоку UnifiedToken; действие `parse_expression_program` доступно только после успешной проверки. Предыдущий A5.4a сохранён.

@@ -40,7 +40,7 @@ hash() {
   echo 'Symlink install prefix forbidden' >&2; exit 1;
 }
 mkdir -p "$prefix/bin"
-destination="$prefix/bin/sedrava-native"
+destination="$prefix/bin/sedrava"
 [ ! -e "$destination" ] && [ ! -L "$destination" ] || {
   echo 'Target exists; refusing overwrite' >&2; exit 1;
 }
@@ -50,30 +50,30 @@ trap cleanup 0
 trap 'exit 1' 1 2 3 15
 # Extract only exact expected members as bytes; no traversal/symlink expansion.
 cat > "$temporary/expected" <<'EOF'
-sedrava-native/LICENSE
-sedrava-native/README.txt
-sedrava-native/SHA256SUMS.txt
-sedrava-native/manifest.json
-sedrava-native/sedrava-native
+sedrava/LICENSE
+sedrava/README.txt
+sedrava/SHA256SUMS.txt
+sedrava/manifest.json
+sedrava/sedrava
 EOF
 tar -tzf "$archive" > "$temporary/members"
 cmp -s "$temporary/expected" "$temporary/members" || {
   echo 'Unexpected archive layout: installation refused' >&2; exit 1;
 }
-tar -xOzf "$archive" sedrava-native/SHA256SUMS.txt > "$temporary/sums"
-binary_expected=$(awk '$2=="sedrava-native/sedrava-native" {print $1; n++}
+tar -xOzf "$archive" sedrava/SHA256SUMS.txt > "$temporary/sums"
+binary_expected=$(awk '$2=="sedrava/sedrava" {print $1; n++}
   END {if (n!=1) exit 1}' "$temporary/sums")
 case "$binary_expected" in
   *[!0123456789abcdef]*|'') echo 'Invalid binary checksum' >&2; exit 1;;
 esac
 [ "$(printf '%s' "$binary_expected" | wc -c | tr -d ' ')" = 64 ] || exit 1
-tar -xOzf "$archive" sedrava-native/sedrava-native > "$temporary/sedrava-native"
-[ "$(hash "$temporary/sedrava-native")" = "$binary_expected" ] || {
+tar -xOzf "$archive" sedrava/sedrava > "$temporary/sedrava"
+[ "$(hash "$temporary/sedrava")" = "$binary_expected" ] || {
   echo 'Native executable hash mismatch' >&2; exit 1;
 }
-chmod 755 "$temporary/sedrava-native"
+chmod 755 "$temporary/sedrava"
 # Atomic hardlink publication on same filesystem; no replace even in a race.
-ln "$temporary/sedrava-native" "$destination" || {
+ln "$temporary/sedrava" "$destination" || {
   echo 'Cannot publish native executable without overwrite' >&2; exit 1;
 }
-printf 'Installed experimental binary: %s\n' "$destination"
+printf 'Installed Sedrava: %s\n' "$destination"

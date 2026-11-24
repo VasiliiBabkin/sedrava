@@ -1,3 +1,5 @@
+> Milestone-specific technical record. For current installation and supported scope, see [Sedrava Rust](README.ru.md). Commands below may use the transitional Rust CLI name.
+
 # Sedrava Server A10 — согласованный снимок нескольких ключей SedravaSQL
 
 Дата: 24 ноября 2026. Экспериментальная возможность локального сервера Sedrava, не полноценный SQL и не production.

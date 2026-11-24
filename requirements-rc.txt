@@ -1,8 +1,0 @@
-# Preparation/test tools only; generated apps and installed CLI have no runtime dependencies.
-setuptools==84.0.0
-wheel==0.48.0
-build==1.6.1
-twine==7.0.0
-packaging==26.3
-playwright==1.62.0
-PyYAML==6.0.3

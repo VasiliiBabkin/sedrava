@@ -1,3 +1,5 @@
+> Milestone-specific technical record. For current installation and supported scope, see [Sedrava Rust](README.ru.md). Commands below may use the transitional Rust CLI name.
+
 # Sedrava A0 — первый лексер на самом языке
 
 Статус: **экспериментальный учебный прототип**, 23 ноября 2026.

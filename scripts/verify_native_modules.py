@@ -7,13 +7,14 @@ import sys
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
-sys.path.insert(0,str(ROOT))
+from legacy_reference import legacy_root
+sys.path.insert(0,str(legacy_root()))
 
 
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("--native",type=Path,
-                    default=ROOT/"rust/target/debug/sedrava-native")
+                    default=ROOT/"rust/target/debug/sedrava")
     args=ap.parse_args()
     native=args.native.resolve()
     fixture=ROOT/"tests/rust_cases/native_imports.sdr"

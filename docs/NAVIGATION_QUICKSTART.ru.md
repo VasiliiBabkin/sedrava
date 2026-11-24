@@ -1,3 +1,5 @@
+> Historical reference; not a current release or installation guide. [Current Rust documentation](README.ru.md).
+
 # Двухэкранный менеджер задач — Sedrava 0.10.0
 
 Нужны Python 3.10+ и Sedrava 0.10.0. Файлы примеров запускаются из клона репозитория:

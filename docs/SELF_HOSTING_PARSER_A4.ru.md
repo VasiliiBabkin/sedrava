@@ -1,3 +1,5 @@
+> Milestone-specific technical record. For current installation and supported scope, see [Sedrava Rust](README.ru.md). Commands below may use the transitional Rust CLI name.
+
 # Sedrava self-hosting A4 — layout tokens and arithmetic expression AST
 
 Дата: 23 ноября 2026. Экспериментальное подмножество языка,

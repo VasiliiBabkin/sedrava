@@ -1,3 +1,5 @@
+> Historical reference; not a current release or installation guide. [Current Rust documentation](README.ru.md).
+
 # Офлайн-список задач (Sedrava 0.10.0)
 
 Нужны Python 3.10+ и опубликованная Sedrava 0.10.0; исходники клонируются для файлов примеров:

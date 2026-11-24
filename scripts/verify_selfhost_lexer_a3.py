@@ -17,7 +17,7 @@ from verify_selfhost_lexer_a2 import oracle as a2_oracle
 
 ROOT=Path(__file__).resolve().parents[1]
 SOURCE=ROOT/"examples/self_host/lexer_a3.sdr"
-BIN=Path(os.environ.get("SEDRAVA_NATIVE_BIN",ROOT/"rust/target/debug/sedrava-native"))
+BIN=Path(os.environ.get("SEDRAVA_NATIVE_BIN",ROOT/"rust/target/debug/sedrava"))
 PREFIX='state source = "sum==42 # comment"'
 OPS=set("+-*/=<>!")
 
