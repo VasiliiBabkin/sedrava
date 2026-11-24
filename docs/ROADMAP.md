@@ -313,3 +313,7 @@ VDS: 83 Rust tests and A10/A11/A12/A13 integration regressions PASS with pinned 
 ### A21 — sequential transaction routes
 
 [Read-your-writes and replay](SALES_DEMO_A21.ru.md). GUI remains pending.
+
+### A5.11a
+
+[While loops and mutable locals](SELF_HOSTING_FUNCTION_COMPILER_A511A.ru.md). B24 separate pager/WAL is not yet connected to SQL.

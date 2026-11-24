@@ -1,0 +1,1 @@
+{"stage":"A5.11a","environment":"VDS Linux","valid_programs":6,"invalid_programs":7,"infinite_loop_step_budget":"PASS","local_assignments":"PASS","while_loops":"PASS","nested_loops":false,"production":false}

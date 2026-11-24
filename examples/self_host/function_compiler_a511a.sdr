@@ -1,0 +1,644 @@
+# A5.10a — self-hosted bounded stack machine for function IR.
+# Separate from A5.9b source lowering; input is explicit textual IR.
+app "Sedrava source compiler A5.11a"
+record Function:
+    name: text
+    first: int
+    last: int
+    argc: int
+    locals: int
+record Instruction:
+    opcode: text
+    operand: text
+    number: int
+record Slot:
+    value: int
+    initialized: bool
+record Frame:
+    function_id: int
+    return_pc: int
+    base: int
+record SourceToken:
+    kind: text
+    word: text
+record SourceFunction:
+    name: text
+    begin: int
+    end: int
+    argc: int
+    param_start: int
+    block: bool
+record Parameter:
+    name: text
+record Operator:
+    kind: text
+    word: text
+    rank: int
+    argc: int
+    function_id: int
+fn ascii_digit(c: text) -> bool = contains("0123456789",c)
+fn ascii_letter(c: text) -> bool = contains("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_",c)
+fn digit(c: text) -> int = 0 if c == "0" else 1 if c == "1" else 2 if c == "2" else 3 if c == "3" else 4 if c == "4" else 5 if c == "5" else 6 if c == "6" else 7 if c == "7" else 8 if c == "8" else 9
+fn safe_add(a: int,b: int) -> bool = a <= 2147483647-b if b > 0 else a >= -2147483647-1-b if b < 0 else true
+fn safe_sub(a: int,b: int) -> bool = a >= -2147483647-1+b if b > 0 else a <= 2147483647+b if b < 0 else true
+
+state source = "fn main() -> int = 42"
+state functions: list<Function>(max=16) = []
+state instructions: list<Instruction>(max=100) = []
+state operands: list<Slot>(max=64) = []
+state locals: list<Slot>(max=64) = []
+state frames: list<Frame>(max=8) = []
+state compiled = false
+state finished = false
+state answer = 0
+state pc = 0
+state sp = 0
+state fp = 0
+state steps = 0
+state peak_frames = 0
+state cursor = 0
+state word = ""
+state word_count = 0
+state word1 = ""
+state word2 = ""
+state word3 = ""
+state word4 = ""
+state newline = false
+state function_name = ""
+state first = 0
+state argc = 0
+state local_count = 0
+state number = 0
+state parse_text = ""
+state npos = 0
+state acc = 0
+state nsign = 1
+state search = 0
+state function_id = 0
+state slot = 0
+state index = 0
+state arg = 0
+state lhs = 0
+state rhs = 0
+state value = 0
+state op = ""
+state dest = 0
+state next_pc = 0
+state current_base = 0
+state current_func = 0
+state returned = 0
+
+state tokens: list<SourceToken>(max=100) = []
+state signatures: list<SourceFunction>(max=16) = []
+state parameters: list<Parameter>(max=100) = []
+state operators: list<Operator>(max=64) = []
+state lex_done = false
+state signatures_done = false
+state token_i = 1
+state source_begin = 0
+state source_end = 0
+state param_start = 0
+state top = 0
+state expect_value = true
+state call_id = 0
+state rank = 0
+state token_word = ""
+state token_kind = ""
+state emitted = 0
+state lower_function = 1
+state emitted_first = 0
+state negative = false
+state temp_name = ""
+state actual_args = 0
+state line_start = true
+state indentation = 0
+state block_body = false
+state local_names: list<Parameter>(max=8) = []
+state active_locals = 0
+state expr_end = 0
+state return_seen = false
+state store_name = ""
+state statement_kind = ""
+state stmt_count = 0
+state conditional_if = 0
+state conditional_else = 0
+state conditional_depth = 0
+state conditional_end = 0
+state conditional_begin = 0
+state conditional_phase = 0
+state branch_pc = 0
+state jump_pc = 0
+state comparison_count = 0
+state runtime_error = ""
+state runtime_error_pc = 0
+state runtime_error_function = ""
+state loop_start = 0
+state loop_branch = 0
+state loop_body_seen = false
+state line_indent = ""
+state store_slot = 0
+
+
+action tokenize:
+    require not lex_done and not compiled
+    require text_length(source) <= 1024
+    cursor = 0
+    line_start = true
+    while cursor < text_length(source) limit 256:
+        if line_start:
+            indentation = 0
+            while cursor < text_length(source) and text_at(source,cursor) == " " limit 9:
+                indentation = indentation+1
+                cursor = cursor+1
+            require indentation == 0 or indentation == 4 or indentation == 8
+            require cursor < text_length(source)
+            if indentation > 0:
+                require text_at(source,cursor) != "\n"
+                tokens = append(tokens,SourceToken(kind="indent",word="inner" if indentation == 8 else ""))
+            line_start = false
+        let c = text_at(source,cursor)
+        cursor = cursor+1
+        require c != "\t"
+        if c != " ":
+            token_word = c
+            token_kind = "punct"
+            if c == "\n":
+                token_kind = "newline"
+                line_start = true
+            else:
+                if ascii_letter(c):
+                    token_kind = "name"
+                    while cursor < text_length(source) and (ascii_letter(text_at(source,cursor)) or ascii_digit(text_at(source,cursor))) limit 64:
+                        token_word = concat(token_word,text_at(source,cursor))
+                        cursor = cursor+1
+                else:
+                    if ascii_digit(c):
+                        token_kind = "int"
+                        while cursor < text_length(source) and ascii_digit(text_at(source,cursor)) limit 16:
+                            token_word = concat(token_word,text_at(source,cursor))
+                            cursor = cursor+1
+                    else:
+                        if c == "-" and cursor < text_length(source) and text_at(source,cursor) == ">":
+                            token_word = "->"
+                            cursor = cursor+1
+                        else:
+                            if c == "=" and cursor < text_length(source) and text_at(source,cursor) == "=":
+                                token_word = "=="
+                                cursor = cursor+1
+                            else:
+                                require contains("(),:=+-*<",c)
+            tokens = append(tokens,SourceToken(kind=token_kind,word=token_word))
+    tokens = append(tokens,SourceToken(kind="eof",word=""))
+    lex_done = true
+
+action signatures_pass:
+    require lex_done and not signatures_done
+    token_i = 1
+    while get(tokens,token_i).kind != "eof" limit 100:
+        if get(tokens,token_i).kind == "newline":
+            token_i = token_i+1
+        else:
+            require get(tokens,token_i).word == "fn"
+            token_i = token_i+1
+            let name = get(tokens,token_i)
+            require name.kind == "name" and text_length(name.word) <= 16 and name.word != "fn" and name.word != "int" and name.word != "let" and name.word != "return" and name.word != "if" and name.word != "else" and name.word != "while"
+            function_name = name.word
+            search = 1
+            while search <= count(signatures) limit 16:
+                require get(signatures,search).name != function_name
+                search = search+1
+            token_i = token_i+1
+            require get(tokens,token_i).word == "("
+            token_i = token_i+1
+            argc = 0
+            param_start = count(parameters)+1
+            if get(tokens,token_i).word != ")":
+                newline = false
+                while not newline limit 8:
+                    let param = get(tokens,token_i)
+                    require param.kind == "name" and param.word != "fn" and param.word != "int" and param.word != "let" and param.word != "return" and param.word != "if" and param.word != "else" and param.word != "while"
+                    search = param_start
+                    while search <= count(parameters) limit 8:
+                        require get(parameters,search).name != param.word
+                        search = search+1
+                    require get(tokens,token_i+1).word == ":" and get(tokens,token_i+2).word == "int"
+                    parameters = append(parameters,Parameter(name=param.word))
+                    argc = argc+1
+                    token_i = token_i+3
+                    if get(tokens,token_i).word == ")":
+                        newline = true
+                    else:
+                        require get(tokens,token_i).word == ","
+                        token_i = token_i+1
+            require get(tokens,token_i).word == ")" and get(tokens,token_i+1).word == "->" and get(tokens,token_i+2).word == "int"
+            token_i = token_i+3
+            block_body = get(tokens,token_i).word == ":"
+            require block_body or get(tokens,token_i).word == "="
+            token_i = token_i+1
+            if block_body:
+                require get(tokens,token_i).kind == "newline"
+                token_i = token_i+1
+                source_begin = token_i
+                while get(tokens,token_i).kind == "indent" limit 8:
+                    token_i = token_i+1
+                    require get(tokens,token_i).kind != "newline" and get(tokens,token_i).kind != "eof"
+                    while get(tokens,token_i).kind != "newline" and get(tokens,token_i).kind != "eof" limit 100:
+                        token_i = token_i+1
+                    if get(tokens,token_i).kind == "newline":
+                        token_i = token_i+1
+                require source_begin < token_i
+            else:
+                source_begin = token_i
+                while get(tokens,token_i).kind != "newline" and get(tokens,token_i).kind != "eof" limit 100:
+                    token_i = token_i+1
+                require source_begin < token_i
+            signatures = append(signatures,SourceFunction(name=function_name,begin=source_begin,end=token_i-1,argc=argc,param_start=param_start,block=block_body))
+    require count(signatures) > 0
+    signatures_done = true
+
+# Emit postorder stack instructions using an operator stack. Function-call
+# markers store arity; every comma closes exactly one argument.
+action lower_source:
+    require signatures_done and not compiled and count(functions) == 0
+    function_id = 0
+    lower_function = 1
+    while lower_function <= count(signatures) limit 16:
+        let sig = get(signatures,lower_function)
+        emitted_first = count(instructions)+1
+        if sig.name == "main":
+            require sig.argc == 0
+            function_id = lower_function
+        active_locals = sig.argc
+        search = 0
+        while search < sig.argc limit 8:
+            let param = get(parameters,sig.param_start+search)
+            if search+1 > count(local_names):
+                local_names = append(local_names,Parameter(name=param.name))
+            else:
+                local_names = update(local_names,search+1,Parameter(name=param.name))
+            search = search+1
+        token_i = sig.begin
+        return_seen = false
+        stmt_count = 0
+        loop_start = 0
+        loop_branch = 0
+        loop_body_seen = false
+        while token_i <= sig.end limit 8:
+            require not return_seen
+            stmt_count = stmt_count+1
+            store_name = ""
+            store_slot = 0
+            statement_kind = "return"
+            if sig.block:
+                require get(tokens,token_i).kind == "indent"
+                line_indent = get(tokens,token_i).word
+                if line_indent == "":
+                    if loop_start > 0:
+                        require loop_body_seen
+                        instructions = append(instructions,Instruction(opcode="jump",operand="",number=loop_start-emitted_first+1))
+                        instructions = update(instructions,loop_branch,Instruction(opcode="jz",operand="",number=count(instructions)+1-emitted_first+1))
+                        loop_start = 0
+                        loop_branch = 0
+                else:
+                    require loop_start > 0 and loop_branch > 0
+                    loop_body_seen = true
+                token_i = token_i+1
+                statement_kind = get(tokens,token_i).word
+                token_i = token_i+1
+                if statement_kind == "let":
+                    require line_indent == ""
+                    let name = get(tokens,token_i)
+                    require name.kind == "name" and name.word != "fn" and name.word != "int" and name.word != "let" and name.word != "return" and name.word != "if" and name.word != "else" and name.word != "while"
+                    require active_locals < 8
+                    search = 1
+                    while search <= active_locals limit 8:
+                        require get(local_names,search).name != name.word
+                        search = search+1
+                    store_name = name.word
+                    require get(tokens,token_i+1).word == "="
+                    token_i = token_i+2
+                else:
+                    if statement_kind == "while":
+                        require line_indent == "" and loop_start == 0
+                        loop_start = count(instructions)+1
+                        loop_body_seen = false
+                    else:
+                        if statement_kind == "return":
+                            require line_indent == ""
+                        else:
+                            store_name = statement_kind
+                            statement_kind = "assign"
+                            require get(tokens,token_i).word == "="
+                            token_i = token_i+1
+                            search = 1
+                            while search <= active_locals limit 8:
+                                if get(local_names,search).name == store_name:
+                                    store_slot = search
+                                search = search+1
+                            require store_slot > sig.argc
+                expr_end = token_i
+                while expr_end <= sig.end and get(tokens,expr_end).kind != "newline" limit 100:
+                    expr_end = expr_end+1
+                expr_end = expr_end-1
+                if statement_kind == "while":
+                    require get(tokens,expr_end).word == ":"
+                    expr_end = expr_end-1
+            else:
+                expr_end = sig.end
+            conditional_begin = token_i
+            conditional_end = expr_end
+            conditional_if = 0
+            conditional_else = 0
+            conditional_depth = 0
+            search = token_i
+            while search <= expr_end limit 100:
+                let scan = get(tokens,search)
+                if scan.word == "(":
+                    conditional_depth = conditional_depth+1
+                if scan.word == ")":
+                    conditional_depth = conditional_depth-1
+                    require conditional_depth >= 0
+                if scan.word == "if":
+                    require conditional_depth == 0 and conditional_if == 0 and conditional_else == 0
+                    conditional_if = search
+                if scan.word == "else":
+                    require conditional_depth == 0 and conditional_if > 0 and conditional_else == 0
+                    conditional_else = search
+                search = search+1
+            require conditional_depth == 0
+            require (conditional_if == 0 and conditional_else == 0) or (conditional_if > conditional_begin and conditional_else > conditional_if+1 and conditional_end > conditional_else)
+            conditional_phase = 0
+            if conditional_if > 0:
+                require statement_kind == "return"
+                conditional_phase = 1
+                token_i = conditional_if+1
+                expr_end = conditional_else-1
+            if statement_kind == "while":
+                require conditional_if == 0 and conditional_else == 0
+                conditional_phase = 1
+            comparison_count = 0
+            while conditional_phase < 4 limit 4:
+                require token_i <= expr_end
+                top = 0
+                expect_value = true
+                while token_i <= expr_end limit 100:
+                    let tok = get(tokens,token_i)
+                    token_word = tok.word
+                    if expect_value:
+                        if tok.kind == "int" or tok.word == "-":
+                            negative = tok.word == "-"
+                            if negative:
+                                token_i = token_i+1
+                            let literal = get(tokens,token_i)
+                            require token_i <= expr_end and literal.kind == "int"
+                            acc = 0
+                            npos = 0
+                            while npos < text_length(literal.word) limit 16:
+                                let v = digit(text_at(literal.word,npos))
+                                require acc < 214748364 or (acc == 214748364 and v <= 7)
+                                acc = acc*10+v
+                                npos = npos+1
+                            instructions = append(instructions,Instruction(opcode="const",operand="",number=0-acc if negative else acc))
+                            expect_value = false
+                        else:
+                            if tok.kind == "name":
+                                if token_i < expr_end and get(tokens,token_i+1).word == "(":
+                                    call_id = 0
+                                    search = 1
+                                    while search <= count(signatures) limit 16:
+                                        if get(signatures,search).name == tok.word:
+                                            call_id = search
+                                        search = search+1
+                                    require call_id > 0
+                                    if token_i+2 <= expr_end and get(tokens,token_i+2).word == ")":
+                                        require get(signatures,call_id).argc == 0
+                                        instructions = append(instructions,Instruction(opcode="call",operand=tok.word,number=call_id))
+                                        token_i = token_i+2
+                                        expect_value = false
+                                    else:
+                                        top = top+1
+                                        if top > count(operators):
+                                            operators = append(operators,Operator(kind="call",word=tok.word,rank=0,argc=1,function_id=call_id))
+                                        else:
+                                            operators = update(operators,top,Operator(kind="call",word=tok.word,rank=0,argc=1,function_id=call_id))
+                                        token_i = token_i+1
+                                else:
+                                    slot = 0
+                                    search = 0
+                                    while search < active_locals limit 8:
+                                        if get(local_names,search+1).name == tok.word:
+                                            slot = search+1
+                                        search = search+1
+                                    require slot > 0
+                                    instructions = append(instructions,Instruction(opcode="load",operand="",number=slot-1))
+                                    expect_value = false
+                            else:
+                                require tok.word == "("
+                                top = top+1
+                                if top > count(operators):
+                                    operators = append(operators,Operator(kind="group",word="",rank=0,argc=0,function_id=0))
+                                else:
+                                    operators = update(operators,top,Operator(kind="group",word="",rank=0,argc=0,function_id=0))
+                    else:
+                        if tok.word == "+" or tok.word == "-" or tok.word == "*" or tok.word == "==" or tok.word == "<":
+                            if tok.word == "==" or tok.word == "<":
+                                require conditional_phase == 1 and top >= 0
+                                comparison_count = comparison_count+1
+                                require comparison_count == 1
+                                search = 1
+                                while search <= top limit 64:
+                                    require get(operators,search).kind == "binary"
+                                    search = search+1
+                            rank = 3 if tok.word == "*" else 1 if tok.word == "==" or tok.word == "<" else 2
+                            while top > 0 and get(operators,top).rank >= rank limit 64:
+                                let prior = get(operators,top)
+                                instructions = append(instructions,Instruction(opcode=prior.word,operand="",number=0))
+                                top = top-1
+                            op = "add" if tok.word == "+" else "sub" if tok.word == "-" else "mul" if tok.word == "*" else "eq" if tok.word == "==" else "lt"
+                            top = top+1
+                            if top > count(operators):
+                                operators = append(operators,Operator(kind="binary",word=op,rank=rank,argc=0,function_id=0))
+                            else:
+                                operators = update(operators,top,Operator(kind="binary",word=op,rank=rank,argc=0,function_id=0))
+                            expect_value = true
+                        else:
+                            require tok.word == "," or tok.word == ")"
+                            while top > 0 and get(operators,top).rank > 0 limit 64:
+                                let prior = get(operators,top)
+                                instructions = append(instructions,Instruction(opcode=prior.word,operand="",number=0))
+                                top = top-1
+                            require top > 0
+                            let marker = get(operators,top)
+                            if tok.word == ",":
+                                require marker.kind == "call" and marker.argc < 8
+                                operators = update(operators,top,Operator(kind="call",word=marker.word,rank=0,argc=marker.argc+1,function_id=marker.function_id))
+                                expect_value = true
+                            else:
+                                if marker.kind == "call":
+                                    require marker.argc == get(signatures,marker.function_id).argc
+                                    instructions = append(instructions,Instruction(opcode="call",operand=marker.word,number=marker.function_id))
+                                else:
+                                    require marker.kind == "group"
+                                top = top-1
+                    token_i = token_i+1
+                require not expect_value
+                while top > 0 limit 64:
+                    let prior = get(operators,top)
+                    require prior.rank > 0
+                    instructions = append(instructions,Instruction(opcode=prior.word,operand="",number=0))
+                    top = top-1
+                if conditional_phase == 0:
+                    conditional_phase = 4
+                else:
+                    if conditional_phase == 1:
+                        require comparison_count == 1
+                        branch_pc = count(instructions)+1
+                        instructions = append(instructions,Instruction(opcode="jz",operand="",number=0))
+                        if statement_kind == "while":
+                            loop_branch = branch_pc
+                            conditional_phase = 4
+                        else:
+                            token_i = conditional_begin
+                            expr_end = conditional_if-1
+                            conditional_phase = 2
+                    else:
+                        if conditional_phase == 2:
+                            jump_pc = count(instructions)+1
+                            instructions = append(instructions,Instruction(opcode="jump",operand="",number=0))
+                            instructions = update(instructions,branch_pc,Instruction(opcode="jz",operand="",number=count(instructions)+1-emitted_first+1))
+                            token_i = conditional_else+1
+                            expr_end = conditional_end
+                            conditional_phase = 3
+                        else:
+                            instructions = update(instructions,jump_pc,Instruction(opcode="jump",operand="",number=count(instructions)+1-emitted_first+1))
+                            conditional_phase = 4
+            token_i = conditional_end+1
+            if statement_kind == "while":
+                token_i = token_i+1
+            if statement_kind == "let":
+                instructions = append(instructions,Instruction(opcode="store",operand="",number=active_locals))
+                active_locals = active_locals+1
+                if active_locals > count(local_names):
+                    local_names = append(local_names,Parameter(name=store_name))
+                else:
+                    local_names = update(local_names,active_locals,Parameter(name=store_name))
+            else:
+                if statement_kind == "assign":
+                    instructions = append(instructions,Instruction(opcode="store",operand="",number=store_slot-1))
+                else:
+                    if statement_kind == "return":
+                        instructions = append(instructions,Instruction(opcode="return",operand="",number=0))
+                        return_seen = true
+            if token_i <= sig.end and get(tokens,token_i).kind == "newline":
+                token_i = token_i+1
+        require return_seen and loop_start == 0
+        functions = append(functions,Function(name=sig.name,first=emitted_first,last=count(instructions),argc=sig.argc,locals=active_locals))
+        lower_function = lower_function+1
+    require function_id > 0
+    compiled = true
+
+action run_ir:
+    require compiled and not finished and fp == 0 and count(frames) == 0
+    index = 1
+    while index <= 64 limit 64:
+        operands = append(operands,Slot(value=0,initialized=false))
+        locals = append(locals,Slot(value=0,initialized=false))
+        index = index+1
+    index = 1
+    while index <= 8 limit 8:
+        frames = append(frames,Frame(function_id=0,return_pc=0,base=0))
+        index = index+1
+    fp = 1
+    peak_frames = 1
+    frames = update(frames,1,Frame(function_id=function_id,return_pc=0,base=0))
+    pc = get(functions,function_id).first
+    sp = 0
+    steps = 0
+    while fp > 0 and steps < 256 and runtime_error == "" limit 256:
+        let frame = get(frames,fp)
+        let f = get(functions,frame.function_id)
+        require pc >= f.first and pc <= f.last
+        let inst = get(instructions,pc)
+        op = inst.opcode
+        current_base = frame.base
+        next_pc = pc+1
+        if op == "const" or op == "load":
+            value = inst.number
+            if op == "load":
+                let local = get(locals,(fp-1)*8+inst.number+1)
+                require local.initialized
+                value = local.value
+            require sp < 64
+            sp = sp+1
+            operands = update(operands,sp,Slot(value=value,initialized=true))
+        else:
+            if op == "store":
+                require sp > current_base
+                value = get(operands,sp).value
+                sp = sp-1
+                locals = update(locals,(fp-1)*8+inst.number+1,Slot(value=value,initialized=true))
+            else:
+                if op == "call":
+                    let callee = get(functions,inst.number)
+                    if fp >= 8:
+                        runtime_error = "CALL_DEPTH"
+                        runtime_error_pc = pc
+                        runtime_error_function = f.name
+                    require sp-current_base >= callee.argc
+                    if runtime_error == "":
+                        dest = sp-callee.argc
+                        index = 0
+                        while index < 8 limit 8:
+                            value = 0
+                            if index < callee.argc:
+                                value = get(operands,dest+index+1).value
+                            locals = update(locals,fp*8+index+1,Slot(value=value,initialized=index < callee.argc))
+                            index = index+1
+                        sp = dest
+                        fp = fp+1
+                        if fp > peak_frames:
+                            peak_frames = fp
+                        frames = update(frames,fp,Frame(function_id=inst.number,return_pc=next_pc,base=dest))
+                        next_pc = callee.first
+                else:
+                    if op == "return":
+                        require sp == current_base+1
+                        returned = get(operands,sp).value
+                        fp = fp-1
+                        if fp == 0:
+                            answer = returned
+                        else:
+                            next_pc = frame.return_pc
+                    else:
+                        if op == "jump" or op == "jz":
+                            value = 0
+                            if op == "jz":
+                                require sp > current_base
+                                value = get(operands,sp).value
+                                sp = sp-1
+                            if op == "jump" or value == 0:
+                                next_pc = f.first+inst.number-1
+                        else:
+                            require sp >= current_base+2
+                            lhs = get(operands,sp-1).value
+                            rhs = get(operands,sp).value
+                            if (op == "add" and not safe_add(lhs,rhs)) or (op == "sub" and not safe_sub(lhs,rhs)):
+                                runtime_error = "INTEGER_OVERFLOW"
+                                runtime_error_pc = pc
+                                runtime_error_function = f.name
+                            else:
+                                value = lhs+rhs if op == "add" else lhs-rhs if op == "sub" else lhs*rhs if op == "mul" else 1 if (op == "eq" and lhs == rhs) or (op == "lt" and lhs < rhs) else 0
+                                sp = sp-1
+                                operands = update(operands,sp,Slot(value=value,initialized=true))
+        pc = next_pc
+        steps = steps+1
+    if runtime_error == "" and fp > 0:
+        runtime_error = "STEP_BUDGET"
+        runtime_error_pc = pc
+        runtime_error_function = get(functions,get(frames,fp).function_id).name
+    if runtime_error == "":
+        finished = true
+
+test initial: -> not compiled
+screen main:
+    text "A5.11a bounded while loops and mutable locals"

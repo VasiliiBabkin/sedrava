@@ -268,3 +268,5 @@ Experimental [A5.10b source compiler](docs/SELF_HOSTING_FUNCTION_COMPILER_A510B.
 Experimental [A5.10c function bodies](docs/SELF_HOSTING_FUNCTION_COMPILER_A510C.ru.md).
 
 Experimental [A5.10d recursive source functions](docs/SELF_HOSTING_FUNCTION_COMPILER_A510D.ru.md) and [A21 sequential routes](docs/SALES_DEMO_A21.ru.md).
+
+Experimental [A5.11a loops](docs/SELF_HOSTING_FUNCTION_COMPILER_A511A.ru.md).

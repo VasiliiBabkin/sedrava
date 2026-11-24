@@ -161,3 +161,7 @@ stage 1/2/3 ещё отсутствуют.
 ### A5.10d — conditional return and runtime fault subset
 
 [Source recursion, branches and bounded faults](SELF_HOSTING_FUNCTION_COMPILER_A510D.ru.md). Full type system and diagnostic API pending.
+
+### A5.11a — while loops and local assignments
+
+[Bounded loops](SELF_HOSTING_FUNCTION_COMPILER_A511A.ru.md). Nested control flow and broader types remain pending.
