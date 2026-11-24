@@ -19,6 +19,7 @@ mod journal;
 mod kv_write;
 mod sqlite;
 mod sqlite_v2;
+mod native_index;
 mod state;
 mod storage;
 mod transaction;
@@ -28,6 +29,7 @@ use journal::JournalStore;
 use kv_write::{BatchFailure, BatchPut, DbPut, PutFailure};
 use sqlite::SqliteStore;
 use sqlite_v2::SqliteV2Store;
+use native_index::NativeIndexStore;
 use state::{StateDef, Step, Values};
 use std::path::Path;
 use storage::{SaveFailure, Store};
@@ -448,6 +450,7 @@ pub(crate) struct Session {
     journal: Option<JournalStore>,
     sqlite: Option<SqliteStore>,
     sqlite_v2: Option<SqliteV2Store>,
+    native_index: Option<NativeIndexStore>,
     revision_a6: Option<u32>,
     ledger: Option<Ledger>,
     poisoned: bool,
@@ -460,6 +463,7 @@ impl Session {
         journaled: bool,
         sqlite_state: Option<&Path>,
         sqlite_v2_state: Option<&Path>,
+        native_index: Option<(&Path, &str)>,
     ) -> Result<Self> {
         let uses_db = program.routes.iter().any(|r| {
             !r.batch_puts.is_empty()
@@ -471,7 +475,7 @@ impl Session {
                     )
                 })
         });
-        if uses_db && sqlite_v2_state.is_none() {
+        if uses_db && sqlite_v2_state.is_none() && native_index.is_none() {
             return fail("E_SERVER_DB: db_get requires --sqlite-v2-state (also db_revision)");
         }
         if transactional
@@ -496,6 +500,17 @@ impl Session {
         if journaled && !transactional {
             return fail("E_SERVER_JOURNAL: --journaled requires --transactional");
         }
+        let native_index = if let Some((path, digest)) = native_index {
+            if transactional || journaled || state_dir.is_some() || sqlite_state.is_some()
+                || sqlite_v2_state.is_some() {
+                return fail("E_SERVER_NATIVE_INDEX: read-only backend is exclusive");
+            }
+            if program.routes.iter().any(|r| r.method != "GET" || !r.steps.is_empty()
+                || r.db_put.is_some() || !r.batch_puts.is_empty()) {
+                return fail("E_SERVER_NATIVE_INDEX: only read-only GET routes are supported");
+            }
+            Some(NativeIndexStore::open(path, digest)?)
+        } else { None };
         let mut sqlite_v2 = None;
         let mut revision_a6 = None;
         let (store, journal, sqlite, values, ledger) = if let Some(path) = sqlite_v2_state {
@@ -541,6 +556,7 @@ impl Session {
             journal,
             sqlite,
             sqlite_v2,
+            native_index,
             revision_a6,
             ledger: (transactional && sqlite_v2_state.is_none()).then_some(ledger),
             poisoned: false,
@@ -574,7 +590,7 @@ pub(crate) fn reply(
     content_type: Option<&str>,
 ) -> http::Response {
     let mut session =
-        Session::open(program, None, false, false, None, None).expect("in-memory state");
+        Session::open(program, None, false, false, None, None, None).expect("in-memory state");
     reply_stateful(
         program,
         &mut session,
@@ -805,11 +821,15 @@ pub(crate) fn reply_stateful(
     }
     let mut db_rows = BTreeMap::new();
     if !references.is_empty() {
-        let Some(db) = session.sqlite_v2.as_ref() else {
+        let keys: Vec<_> = references.into_iter().collect();
+        let result = if let Some(db) = session.native_index.as_mut() {
+            db.read_text_snapshot(&keys)
+        } else if let Some(db) = session.sqlite_v2.as_ref() {
+            db.read_text_snapshot(&keys)
+        } else {
             return http::Response::error(503, "DB_BACKEND_REQUIRED");
         };
-        let keys: Vec<_> = references.into_iter().collect();
-        let values = match db.read_text_snapshot(&keys) {
+        let values = match result {
             Ok(rows) => rows,
             Err(_) => {
                 session.poisoned = true;
@@ -1047,6 +1067,20 @@ pub fn serve(
     sqlite_state: Option<&Path>,
     sqlite_v2_state: Option<&Path>,
 ) -> Result<()> {
+    serve_with_native_index(program, options, state_dir, transactional, journaled,
+        sqlite_state, sqlite_v2_state, None)
+}
+
+pub fn serve_with_native_index(
+    program: &Server,
+    options: RuntimeOptions,
+    state_dir: Option<&Path>,
+    transactional: bool,
+    journaled: bool,
+    sqlite_state: Option<&Path>,
+    sqlite_v2_state: Option<&Path>,
+    native_index: Option<(&Path, &str)>,
+) -> Result<()> {
     if options.max_requests == 0
         || options.max_requests > 10_000
         || options.idle_ms < 500
@@ -1061,6 +1095,7 @@ pub fn serve(
         journaled,
         sqlite_state,
         sqlite_v2_state,
+        native_index,
     )?;
     let listener = TcpListener::bind(("127.0.0.1", options.port))
         .map_err(|e| Error(format!("E_SERVER_BIND: unable to bind loopback: {e}")))?;

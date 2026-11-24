@@ -18,7 +18,7 @@ fn usage() {
            sedrava-native lock DIR\n           sedrava-native verify DIR\n           sedrava-native host check FILE
            sedrava-native host run FILE --root DIR --trusted [--allow-read] [--allow-write]
            sedrava-native server check FILE
-           sedrava-native server run FILE [--port PORT] [--max-requests N] [--idle-ms N] [--state-dir ABSOLUTE_PRIVATE_DIR] [--transactional] [--journaled] [--sqlite-state FILE] [--sqlite-v2-state FILE]
+           sedrava-native server run FILE [--port PORT] [--max-requests N] [--idle-ms N] [--state-dir ABSOLUTE_PRIVATE_DIR] [--transactional] [--journaled] [--sqlite-state FILE] [--sqlite-v2-state FILE] [--native-index FILE --native-index-sha256 SHA256]
            sedrava-native check FILE\n\
            sedrava-native effects FILE [--target app|web|android]\n\
            sedrava-native test FILE\n\
@@ -245,6 +245,8 @@ fn server_command(args: &[String]) -> Result<()> {
             let mut journaled=false;
             let mut sqlite_state=None;
             let mut sqlite_v2_state=None;
+            let mut native_index=None;
+            let mut native_index_sha=None;
             let mut seen=std::collections::BTreeSet::new();
             let mut next=options.iter();
             while let Some(flag)=next.next() {
@@ -271,12 +273,19 @@ fn server_command(args: &[String]) -> Result<()> {
                      "--state-dir" => state_dir=Some(PathBuf::from(value)),
                     "--sqlite-state" => sqlite_state=Some(PathBuf::from(value)),
                     "--sqlite-v2-state" => sqlite_v2_state=Some(PathBuf::from(value)),
+                    "--native-index" => native_index=Some(PathBuf::from(value)),
+                    "--native-index-sha256" => native_index_sha=Some(value.as_str()),
                     _ => return Err(Error(format!("E_SERVER_CLI: unsupported option {flag}"))),
                 }
             }
-            server::serve(&program,settings,state_dir.as_deref(),transactional,journaled,sqlite_state.as_deref(),sqlite_v2_state.as_deref())
+            let native = match (native_index.as_deref(), native_index_sha) {
+                (Some(path), Some(sha)) => Some((path, sha)),
+                (None, None) => None,
+                _ => return Err(Error("E_SERVER_NATIVE_INDEX: both native index flags required".into())),
+            };
+            server::serve_with_native_index(&program,settings,state_dir.as_deref(),transactional,journaled,sqlite_state.as_deref(),sqlite_v2_state.as_deref(),native)
         }
-        _ => Err(Error("Expected server check FILE or server run FILE [--port PORT] [--max-requests N] [--idle-ms N] [--state-dir ABSOLUTE_PRIVATE_DIR] [--transactional] [--journaled] [--sqlite-state FILE] [--sqlite-v2-state FILE]".into())),
+        _ => Err(Error("Expected server check FILE or server run FILE [--port PORT] [--max-requests N] [--idle-ms N] [--state-dir ABSOLUTE_PRIVATE_DIR] [--transactional] [--journaled] [--sqlite-state FILE] [--sqlite-v2-state FILE] [--native-index FILE --native-index-sha256 SHA256]".into())),
     }
 }
 

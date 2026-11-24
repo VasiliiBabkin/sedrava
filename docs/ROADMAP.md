@@ -219,3 +219,11 @@ Sedrava-authored two-stack parser supports more than three integer operands and 
 ### Self-hosting A5.4b: restricted block headers and first syntax diagnostic
 
 Sedrava-authored validation of action and literal-boolean if headers, mandatory indentation and arithmetic assignment syntax before AST parsing. [RU protocol](SELF_HOSTING_PARSER_A54B.ru.md). Lexical diagnostics and full grammar remain pending.
+
+### Self-hosting A5.5: compound RHS expressions
+
+Sedrava-written parser adds identifier/boolean/unary/binary AST with precedence, comparisons and logical operators. Restricted block grammar and experimental division remain; no type or semantic analysis. [RU protocol](SELF_HOSTING_PARSER_A55.ru.md).
+
+### Native Server A11: immutable native index backend
+
+Explicit SHA-approved read-only backend using SedravaSQL B12 VerifiedIndexReader. Exclusive loopback GET routes with existing db_get/db_revision; no SQLite database opened in this mode, no native live writes. [RU protocol](RUST_NATIVE_SERVER_A11_INDEX.ru.md).

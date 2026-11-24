@@ -1,0 +1,10 @@
+# A11 offline immutable native index, explicit digest, loopback-only.
+server "A11 Native Offline Index"
+route GET "/pair":
+    respond 200 { left: db_get("public_notes/left"), right: db_get("public_notes/right"), left_revision: db_revision("public_notes/left"), right_revision: db_revision("public_notes/right") }
+route GET "/missing":
+    respond 200 { value: db_get("public_notes/missing") }
+route GET "/deleted":
+    respond 200 { value: db_get("public_notes/deleted") }
+route GET "/oversize":
+    respond 200 { value: db_get("public_notes/oversize") }
