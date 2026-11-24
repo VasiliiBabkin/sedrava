@@ -305,3 +305,11 @@ VDS: 83 Rust tests and A10/A11/A12/A13 integration regressions PASS with pinned 
 ### A5.10c
 
 [Local declarations and block bodies](SELF_HOSTING_FUNCTION_COMPILER_A510C.ru.md). B21/B22 disk read image remains separate from SQL execution.
+
+### A5.10d
+
+[Conditional return and recursive source functions](SELF_HOSTING_FUNCTION_COMPILER_A510D.ru.md).
+
+### A21 — sequential transaction routes
+
+[Read-your-writes and replay](SALES_DEMO_A21.ru.md). GUI remains pending.

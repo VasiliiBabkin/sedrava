@@ -116,7 +116,7 @@ fn reply(api:&Api,db:&mut NativeLog,request:http::Request,auth:Option<&Auth>)->(
     };
     match route.execute_on(db,&params,key.as_deref()){
         Ok(result)=>{
-            let replay=matches!(&result,SqlResult::Write{replayed:true,..});
+            let replay=matches!(&result,SqlResult::Write{replayed:true,..}|SqlResult::Transaction{replayed:true,..});
             let value=serde_json::to_value(result).expect("serializable bounded SQL result");
             let response=http::Response::json(200,value);
             (if replay{response.as_replay()}else{response},false)

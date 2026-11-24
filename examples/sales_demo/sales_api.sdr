@@ -35,3 +35,8 @@ route POST "/new-product-order":
     param order_id: text
     param amount: int
     transaction [{"sql":"INSERT INTO Products (id,title,category,price) VALUES (?,?,?,?)","using":["product_id","title","category","price"]},{"sql":"INSERT INTO Orders (id,product_id,amount,paid) VALUES (?,?,?,false)","using":["order_id","product_id","amount"]}]
+route POST "/correct-order":
+    param id: text
+    param old_amount: int
+    param new_amount: int
+    sequential [{"sql":"SELECT amount,paid FROM Orders WHERE id=?","using":["id"]},{"sql":"UPDATE Orders SET amount=? WHERE id=? AND amount=? AND paid=false","using":["new_amount","id","old_amount"]},{"sql":"SELECT amount,paid FROM Orders WHERE id=?","using":["id"]}]

@@ -25,13 +25,14 @@ pub struct Program{
     params:Vec<(String,Type)>,
     sql:String,
     transaction:Vec<(String,Vec<usize>)>,
+    sequential:bool,
     kind:SqlKind,
 }
 pub fn parse(source:&str)->Result<Program>{
     if source.len()>32768{return fail("E_DATABASE: source budget");}
     let mut lines=source.lines().filter(|l|!l.trim().is_empty()&&!l.trim_start().starts_with('#'));
     let name=lines.next().and_then(|l|l.strip_prefix("database ")).filter(|s|identifier(s)).ok_or_else(||Error("E_DATABASE: expected database NAME".into()))?.to_owned();
-    let mut names=BTreeSet::new();let mut params=Vec::new();let mut statement=None;let mut transaction=Vec::new();
+    let mut names=BTreeSet::new();let mut params=Vec::new();let mut statement=None;let mut transaction=Vec::new();let mut sequential=false;
     for line in lines{
         if statement.is_some(){return fail("E_DATABASE: only one statement allowed");}
         let line=line.strip_prefix("    ").ok_or_else(||Error("E_DATABASE: expected four spaces".into()))?;
@@ -39,12 +40,13 @@ pub fn parse(source:&str)->Result<Program>{
             let (name,kind)=raw.split_once(": ").ok_or_else(||Error("E_DATABASE: expected param NAME: TYPE".into()))?;
             if !identifier(name)||!names.insert(name)||params.len()>=32{return fail("E_DATABASE: invalid/duplicate parameter");}
             params.push((name.to_owned(),Type::parse(kind)?));
-        }else if let Some(raw)=line.strip_prefix("transaction "){
+        }else if let Some(raw)=line.strip_prefix("transaction ").or_else(||line.strip_prefix("sequential ")){
+            sequential=line.starts_with("sequential ");
             let steps:Vec<TransactionStep>=serde_json::from_str(raw).map_err(|_|Error("E_DATABASE: transaction requires JSON steps".into()))?;
             if steps.is_empty()||steps.len()>15{return fail("E_DATABASE: transaction requires 1..15 steps");}
-            let mut used=BTreeSet::new();
+            let mut used=BTreeSet::new();let mut has_write=false;
             for step in steps{
-                if !step.sql.split_ascii_whitespace().next().is_some_and(|s|["INSERT","UPDATE","DELETE"].iter().any(|k|s.eq_ignore_ascii_case(k))){
+                if !step.sql.split_ascii_whitespace().next().is_some_and(|s|["INSERT","UPDATE","DELETE"].iter().any(|k|s.eq_ignore_ascii_case(k))||(sequential&&s.eq_ignore_ascii_case("SELECT"))){
                     return fail("E_DATABASE: transaction only permits DML");
                 }
                 let mut indices=Vec::new();
@@ -53,9 +55,11 @@ pub fn parse(source:&str)->Result<Program>{
                     used.insert(index);indices.push(index);
                 }
                 let sample=indices.iter().map(|i|params[*i].1.sample()).collect::<Vec<_>>();
-                if sql::check(&step.sql,&sample).map_err(|e|Error(format!("E_DATABASE: {e}")))?!=SqlKind::Write{return fail("E_DATABASE: transaction only permits writes");}
+                let kind=sql::check(&step.sql,&sample).map_err(|e|Error(format!("E_DATABASE: {e}")))?;
+                if kind==SqlKind::Write{has_write=true;}else if !sequential{return fail("E_DATABASE: transaction only permits writes");}
                 transaction.push((step.sql,indices));
             }
+            if !has_write{return fail("E_DATABASE: transaction requires a write");}
             if used.len()!=params.len(){return fail("E_DATABASE: unused transaction parameter");}
             statement=Some((SqlKind::Write,String::new()));
         }else{
@@ -68,7 +72,7 @@ pub fn parse(source:&str)->Result<Program>{
         }
     }
     let (kind,sql)=statement.ok_or_else(||Error("E_DATABASE: missing statement".into()))?;
-    Ok(Program{name,params,sql,transaction,kind})
+    Ok(Program{name,params,sql,transaction,sequential,kind})
 }
 impl Program {
     pub(crate) fn kind(&self)->SqlKind { self.kind }
@@ -88,7 +92,7 @@ impl Program {
         let request=request.ok_or(sedravasql::native_log::Error::Invalid("database transaction requires request key"))?;
         if values.len()!=self.params.len(){return Err(sedravasql::native_log::Error::Invalid("database transaction argument count"));}
         let steps=self.bound_steps(values);
-        sql::execute_transaction(db,&steps,request)
+        if self.sequential{sql::execute_sequential(db,&steps,request)}else{sql::execute_transaction(db,&steps,request)}
     }
     fn bound_steps(&self,values:&[Cell])->Vec<BoundStatement>{
         self.transaction.iter().map(|(sql,indices)|BoundStatement{sql:sql.clone(),params:indices.iter().map(|i|values[*i].clone()).collect()}).collect()

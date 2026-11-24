@@ -266,3 +266,5 @@ Experimental [A5.10a function VM](docs/SELF_HOSTING_FUNCTION_VM_A510A.ru.md), [A
 Experimental [A5.10b source compiler](docs/SELF_HOSTING_FUNCTION_COMPILER_A510B.ru.md), [A20 SQL transaction routes](docs/SALES_DEMO_A20.ru.md).
 
 Experimental [A5.10c function bodies](docs/SELF_HOSTING_FUNCTION_COMPILER_A510C.ru.md).
+
+Experimental [A5.10d recursive source functions](docs/SELF_HOSTING_FUNCTION_COMPILER_A510D.ru.md) and [A21 sequential routes](docs/SALES_DEMO_A21.ru.md).

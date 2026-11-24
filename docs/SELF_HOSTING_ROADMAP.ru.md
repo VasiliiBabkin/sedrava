@@ -157,3 +157,7 @@ stage 1/2/3 ещё отсутствуют.
 ### A5.10c — block bodies and locals
 
 [Function-local scopes and explicit return](SELF_HOSTING_FUNCTION_COMPILER_A510C.ru.md). Branches and structured diagnostics pending.
+
+### A5.10d — conditional return and runtime fault subset
+
+[Source recursion, branches and bounded faults](SELF_HOSTING_FUNCTION_COMPILER_A510D.ru.md). Full type system and diagnostic API pending.

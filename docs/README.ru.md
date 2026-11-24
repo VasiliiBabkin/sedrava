@@ -133,3 +133,5 @@ Native Server: [A15 восстановление из архива](RUST_NATIVE_
 [A5.10b компилятор функций](SELF_HOSTING_FUNCTION_COMPILER_A510B.ru.md); [A20 атомарные SQL-маршруты](SALES_DEMO_A20.ru.md).
 
 [A5.10c тела функций и локальные переменные](SELF_HOSTING_FUNCTION_COMPILER_A510C.ru.md).
+
+[A5.10d условные выражения](SELF_HOSTING_FUNCTION_COMPILER_A510D.ru.md); [A21 последовательные транзакции](SALES_DEMO_A21.ru.md).
