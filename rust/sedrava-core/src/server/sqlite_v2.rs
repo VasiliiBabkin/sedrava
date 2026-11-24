@@ -116,31 +116,42 @@ impl SqliteV2Store {
         format!("r{:x}", Sha256::digest(encoded))
     }
 
-    /// Narrow read-only bridge to a managed SedravaSQL UTF-8 KV value.
-    pub fn read_text_and_revision(
+    /// A10: return multiple managed values from ONE SQLite WAL read-only
+    /// transaction. In-memory Sedrava server state is not included.
+    pub fn read_text_snapshot(
         &self,
-        namespace: &str,
-        key: &str,
-    ) -> Result<Option<(String, u64)>> {
-        if namespace.starts_with("sedrava_native") {
-            return fail("E_SERVER_DB: reserved namespace");
+        keys: &[(String, String)],
+    ) -> Result<Vec<Option<(String, u64)>>> {
+        if keys.is_empty()
+            || keys.len() > 16
+            || keys
+                .iter()
+                .any(|(namespace, _)| namespace.starts_with("sedrava_native"))
+        {
+            return fail("E_SERVER_DB: invalid or reserved snapshot key list");
         }
-        let entry = self
+        let references: Vec<(&str, &str)> = keys
+            .iter()
+            .map(|(namespace, key)| (namespace.as_str(), key.as_str()))
+            .collect();
+        let rows = self
             .db
-            .read(namespace, key)
-            .map_err(|_| Error("E_SERVER_DB: KV read failed".into()))?;
-        match entry {
-            None => Ok(None),
-            Some(row) => {
-                let Some(text) = row.value else {
-                    return Ok(None);
-                };
-                if text.chars().count() > 1_024 || text.chars().any(char::is_control) {
-                    return fail("E_SERVER_DB: stored value outside text scalar limits");
+            .read_snapshot(&references)
+            .map_err(|_| Error("E_SERVER_DB: multi-key snapshot read failed".into()))?;
+        rows.into_iter()
+            .map(|row| match row {
+                None => Ok(None),
+                Some(entry) => {
+                    let Some(value) = entry.value else {
+                        return Ok(None);
+                    };
+                    if value.chars().count() > 1_024 || value.chars().any(char::is_control) {
+                        return fail("E_SERVER_DB: stored value outside text scalar limits");
+                    }
+                    Ok(Some((value, entry.revision)))
                 }
-                Ok(Some((text, row.revision)))
-            }
-        }
+            })
+            .collect()
     }
 
     fn put_receipt_key(

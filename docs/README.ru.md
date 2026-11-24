@@ -90,3 +90,6 @@ SedravaSQL на стороне сервера.
 
 A9: [атомарная транзакция двух ключей и состояния Sedrava Server](RUST_NATIVE_SERVER_A9_ATOMIC_BATCH.ru.md).
 Поддержаны CAS, общая квитанция, повтор и проверяемые аварийные сценарии.
+
+A10: [согласованное чтение нескольких ключей SedravaSQL](RUST_NATIVE_SERVER_A10_COHERENT_GET.ru.md)
+в одном HTTP GET без изменения синтаксиса db_get/db_revision.
