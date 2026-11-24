@@ -264,3 +264,5 @@ Experimental [A5.9b branch execution](docs/SELF_HOSTING_EXECUTOR_A59B.ru.md) and
 Experimental [A5.10a function VM](docs/SELF_HOSTING_FUNCTION_VM_A510A.ru.md), [A19 sales demo](docs/SALES_DEMO_A19.ru.md).
 
 Experimental [A5.10b source compiler](docs/SELF_HOSTING_FUNCTION_COMPILER_A510B.ru.md), [A20 SQL transaction routes](docs/SALES_DEMO_A20.ru.md).
+
+Experimental [A5.10c function bodies](docs/SELF_HOSTING_FUNCTION_COMPILER_A510C.ru.md).

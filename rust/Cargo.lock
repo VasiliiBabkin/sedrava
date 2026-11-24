@@ -393,7 +393,7 @@ dependencies = [
 [[package]]
 name = "sedravasql"
 version = "0.1.0-alpha.1"
-source = "git+https://github.com/VasiliiBabkin/sedravasql.git?rev=a0167e14ef4efb2a2c6dc3f7f785ed0e031bbb3e#a0167e14ef4efb2a2c6dc3f7f785ed0e031bbb3e"
+source = "git+https://github.com/VasiliiBabkin/sedravasql.git?rev=e69f3655f556b3916cad0d1996baf707be6bb29c#e69f3655f556b3916cad0d1996baf707be6bb29c"
 dependencies = [
  "rusqlite",
  "sedravasql-native-engine",
@@ -405,7 +405,7 @@ dependencies = [
 [[package]]
 name = "sedravasql-native-engine"
 version = "0.0.1"
-source = "git+https://github.com/VasiliiBabkin/sedravasql.git?rev=a0167e14ef4efb2a2c6dc3f7f785ed0e031bbb3e#a0167e14ef4efb2a2c6dc3f7f785ed0e031bbb3e"
+source = "git+https://github.com/VasiliiBabkin/sedravasql.git?rev=e69f3655f556b3916cad0d1996baf707be6bb29c#e69f3655f556b3916cad0d1996baf707be6bb29c"
 dependencies = [
  "flate2",
  "serde",

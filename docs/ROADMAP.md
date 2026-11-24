@@ -301,3 +301,7 @@ VDS: 83 Rust tests and A10/A11/A12/A13 integration regressions PASS with pinned 
 ### A20
 
 [Atomic SQL transaction routes and foreign keys](SALES_DEMO_A20.ru.md). GUI and public deployment pending.
+
+### A5.10c
+
+[Local declarations and block bodies](SELF_HOSTING_FUNCTION_COMPILER_A510C.ru.md). B21/B22 disk read image remains separate from SQL execution.

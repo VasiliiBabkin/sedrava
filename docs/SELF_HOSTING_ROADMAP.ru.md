@@ -153,3 +153,7 @@ stage 1/2/3 ещё отсутствуют.
 ### A5.10b — source function lowering
 
 [Self-hosted source compiler](SELF_HOSTING_FUNCTION_COMPILER_A510B.ru.md). Statement bodies, full types and structured diagnostics pending.
+
+### A5.10c — block bodies and locals
+
+[Function-local scopes and explicit return](SELF_HOSTING_FUNCTION_COMPILER_A510C.ru.md). Branches and structured diagnostics pending.
