@@ -1,0 +1,7 @@
+# A19 — демонстрационная система товаров и заказов
+
+`examples/sales_demo/schema.sql`: two typed tables and secondary index definitions. `sales_api.sdr`: 9 static HTTP POST routes: product list, category filter, DISTINCT categories, create product/order, LEFT JOIN orders, mark paid, aggregate paid revenue, grouped HAVING filter. Read/write roles via private digest file A18, explicit idempotency key for writes. All data persistence and SQL execution by native SedravaSQL; no SQLite in actual demo. Separate local-only backend demo, no public deployment or graphical frontend, no FK or stock deduction, no payment processing, no validated business amounts or production security claim. Test uses disposable private journal and random tokens, no port exposed externally.
+
+Reproduce with built native binaries: `SEDRAVA_NATIVE_BIN=/absolute/sedrava-native SEDRAVASQL_NATIVE_BIN=/absolute/sedravasql-native-preview python3 -B scripts/verify_sales_demo_a19.py`. The script seeds schema, runs authenticated API on loopback, checks persistence/restart and cleans test files. For manual use follow A18 credentials and server options; execute each schema statement separately with distinct stable keys before launching. Do not expose via reverse proxy.
+
+VDS: 19 authenticated HTTP requests, catalog, cache invalidation, order JOIN, mark paid, revenue, HAVING and restart PASS. 83 Rust tests and A10–A18/B15a regressions PASS. Dependency 4ab3558dbb46034185ca66e2bc00d7c774eeb23a.

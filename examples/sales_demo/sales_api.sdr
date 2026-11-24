@@ -1,0 +1,29 @@
+database-api SalesDemo
+route POST "/products":
+    query "SELECT id,title,category,price FROM Products ORDER BY id"
+route POST "/category":
+    param category: text
+    query "SELECT id,title,price FROM Products WHERE category=? ORDER BY id"
+route POST "/categories":
+    query "SELECT DISTINCT category FROM Products ORDER BY category"
+route POST "/add-product":
+    param id: text
+    param title: text
+    param category: text
+    param price: int
+    execute "INSERT INTO Products (id,title,category,price) VALUES (?,?,?,?)"
+route POST "/add-order":
+    param id: text
+    param product_id: text
+    param amount: int
+    execute "INSERT INTO Orders (id,product_id,amount,paid) VALUES (?,?,?,false)"
+route POST "/orders":
+    query "SELECT Orders.id,Products.title,Orders.amount,Orders.paid FROM Orders LEFT JOIN Products ON Orders.product_id=Products.id ORDER BY Orders.id"
+route POST "/mark-paid":
+    param id: text
+    execute "UPDATE Orders SET paid=true WHERE id=?"
+route POST "/paid-summary":
+    query "SELECT COUNT(*) AS count_paid,SUM(amount) AS revenue FROM Orders WHERE paid=true"
+route POST "/top-products":
+    param minimum: int
+    query "SELECT product_id,SUM(amount) AS total FROM Orders WHERE paid=true GROUP BY product_id HAVING total>=? ORDER BY total DESC"

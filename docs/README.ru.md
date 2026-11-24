@@ -127,3 +127,5 @@ Native Server: [A15 восстановление из архива](RUST_NATIVE_
 [A5.9a исполнение IR](SELF_HOSTING_EXECUTOR_A59A.ru.md); [A17 SQL HTTP API](RUST_NATIVE_SQL_API_A17.ru.md).
 
 [A5.9b ветвления](SELF_HOSTING_EXECUTOR_A59B.ru.md); [A18 права SQL API](RUST_NATIVE_SQL_API_A18.ru.md).
+
+[A5.10a функции и стек](SELF_HOSTING_FUNCTION_VM_A510A.ru.md); [A19 демонстрация продаж](SALES_DEMO_A19.ru.md).

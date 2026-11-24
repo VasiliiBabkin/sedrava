@@ -145,3 +145,7 @@ stage 1/2/3 ещё отсутствуют.
 ### A5.9b — nested branch execution
 
 [Executor and bounds](SELF_HOSTING_EXECUTOR_A59B.ru.md). Functions and lexical locals pending.
+
+### A5.10a — functional IR stack VM
+
+[Frames, local slots and bounded recursion](SELF_HOSTING_FUNCTION_VM_A510A.ru.md). Source-to-function-IR lowering remains pending.

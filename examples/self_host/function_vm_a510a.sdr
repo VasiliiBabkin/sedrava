@@ -1,0 +1,278 @@
+# A5.10a — self-hosted bounded stack machine for function IR.
+# Separate from A5.9b source lowering; input is explicit textual IR.
+app "Sedrava function VM A5.10a"
+record Function:
+    name: text
+    first: int
+    last: int
+    argc: int
+    locals: int
+record Instruction:
+    opcode: text
+    operand: text
+    number: int
+record Slot:
+    value: int
+    initialized: bool
+record Frame:
+    function_id: int
+    return_pc: int
+    base: int
+fn ascii_digit(c: text) -> bool = contains("0123456789",c)
+fn ascii_letter(c: text) -> bool = contains("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_",c)
+fn digit(c: text) -> int = 0 if c == "0" else 1 if c == "1" else 2 if c == "2" else 3 if c == "3" else 4 if c == "4" else 5 if c == "5" else 6 if c == "6" else 7 if c == "7" else 8 if c == "8" else 9
+state source = "fn main 0 0\nconst 42\nreturn\nend"
+state functions: list<Function>(max=16) = []
+state instructions: list<Instruction>(max=100) = []
+state operands: list<Slot>(max=64) = []
+state locals: list<Slot>(max=64) = []
+state frames: list<Frame>(max=8) = []
+state compiled = false
+state finished = false
+state answer = 0
+state pc = 0
+state sp = 0
+state fp = 0
+state steps = 0
+state peak_frames = 0
+state cursor = 0
+state word = ""
+state word_count = 0
+state word1 = ""
+state word2 = ""
+state word3 = ""
+state word4 = ""
+state newline = false
+state function_name = ""
+state first = 0
+state argc = 0
+state local_count = 0
+state number = 0
+state parse_text = ""
+state npos = 0
+state acc = 0
+state nsign = 1
+state search = 0
+state function_id = 0
+state slot = 0
+state index = 0
+state arg = 0
+state lhs = 0
+state rhs = 0
+state value = 0
+state op = ""
+state dest = 0
+state next_pc = 0
+state current_base = 0
+state current_func = 0
+state returned = 0
+
+action compile_ir:
+    require not compiled and not finished and count(functions) == 0
+    require text_length(source) <= 2048
+    cursor = 0
+    while cursor < text_length(source) limit 100:
+        word_count = 0
+        word = ""
+        word1 = ""
+        word2 = ""
+        word3 = ""
+        word4 = ""
+        newline = false
+        while not newline limit 128:
+            let c = text_at(source,cursor) if cursor < text_length(source) else "\n"
+            if c == " " or c == "\n":
+                require word != ""
+                word_count = word_count+1
+                require word_count <= 4
+                if word_count == 1:
+                    word1 = word
+                else:
+                    if word_count == 2:
+                        word2 = word
+                    else:
+                        if word_count == 3:
+                            word3 = word
+                        else:
+                            word4 = word
+                word = ""
+                newline = c == "\n"
+            else:
+                require ascii_letter(c) or ascii_digit(c) or c == "-"
+                word = concat(word,c)
+            cursor = cursor+1
+        if word1 == "fn":
+            require function_name == "" and word_count == 4 and count(functions) < 16
+            require text_length(word2) <= 16 and ascii_letter(text_at(word2,0))
+            npos = 0
+            while npos < text_length(word2) limit 16:
+                let c = text_at(word2,npos)
+                require ascii_letter(c) or ascii_digit(c)
+                npos = npos+1
+            require text_length(word3) == 1 and text_length(word4) == 1
+            require ascii_digit(word3) and ascii_digit(word4)
+            argc = digit(word3)
+            local_count = digit(word4)
+            require argc <= local_count and local_count <= 8
+            search = 1
+            while search <= count(functions) limit 16:
+                require get(functions,search).name != word2
+                search = search+1
+            function_name = word2
+            first = count(instructions)+1
+        else:
+            if word1 == "end":
+                require word_count == 1 and function_name != "" and first <= count(instructions)
+                require get(instructions,count(instructions)).opcode == "return"
+                functions = append(functions,Function(name=function_name,first=first,last=count(instructions),argc=argc,locals=local_count))
+                function_name = ""
+            else:
+                require function_name != "" and count(instructions) < 100
+                number = 0
+                if word1 == "call":
+                    require word_count == 2
+                else:
+                    if word1 == "const" or word1 == "load" or word1 == "store" or word1 == "jz" or word1 == "jump":
+                        require word_count == 2
+                        parse_text = word2
+                        npos = 0
+                        acc = 0
+                        nsign = 1
+                        if text_at(parse_text,0) == "-":
+                            require word1 == "const" and text_length(parse_text) > 1
+                            npos = 1
+                            nsign = -1
+                        while npos < text_length(parse_text) limit 16:
+                            let c = text_at(parse_text,npos)
+                            require ascii_digit(c)
+                            let v = digit(c)
+                            require acc < 214748364 or (acc == 214748364 and v <= 7)
+                            acc = acc*10+v
+                            npos = npos+1
+                        number = acc*nsign
+                        if word1 == "load" or word1 == "store":
+                            require number >= 0 and number < local_count
+                        if word1 == "jz" or word1 == "jump":
+                            require number >= 1
+                    else:
+                        require word_count == 1
+                        require word1 == "add" or word1 == "sub" or word1 == "mul" or word1 == "eq" or word1 == "lt" or word1 == "return"
+                instructions = append(instructions,Instruction(opcode=word1,operand=word2,number=number))
+    require function_name == "" and count(functions) > 0
+    function_id = 0
+    search = 1
+    while search <= count(functions) limit 16:
+        let f = get(functions,search)
+        if f.name == "main":
+            require f.argc == 0
+            function_id = search
+        index = f.first
+        while index <= f.last limit 100:
+            let inst = get(instructions,index)
+            if inst.opcode == "call":
+                dest = 0
+                slot = 1
+                while slot <= count(functions) limit 16:
+                    if get(functions,slot).name == inst.operand:
+                        dest = slot
+                    slot = slot+1
+                require dest > 0
+                instructions = update(instructions,index,Instruction(opcode=inst.opcode,operand=inst.operand,number=dest))
+            if inst.opcode == "jz" or inst.opcode == "jump":
+                require inst.number <= f.last-f.first+1
+            index = index+1
+        search = search+1
+    require function_id > 0
+    compiled = true
+
+action run_ir:
+    require compiled and not finished and fp == 0 and count(frames) == 0
+    index = 1
+    while index <= 64 limit 64:
+        operands = append(operands,Slot(value=0,initialized=false))
+        locals = append(locals,Slot(value=0,initialized=false))
+        index = index+1
+    index = 1
+    while index <= 8 limit 8:
+        frames = append(frames,Frame(function_id=0,return_pc=0,base=0))
+        index = index+1
+    fp = 1
+    peak_frames = 1
+    frames = update(frames,1,Frame(function_id=function_id,return_pc=0,base=0))
+    pc = get(functions,function_id).first
+    sp = 0
+    steps = 0
+    while fp > 0 and steps < 256 limit 256:
+        let frame = get(frames,fp)
+        let f = get(functions,frame.function_id)
+        require pc >= f.first and pc <= f.last
+        let inst = get(instructions,pc)
+        op = inst.opcode
+        current_base = frame.base
+        next_pc = pc+1
+        if op == "const" or op == "load":
+            value = inst.number
+            if op == "load":
+                let local = get(locals,(fp-1)*8+inst.number+1)
+                require local.initialized
+                value = local.value
+            require sp < 64
+            sp = sp+1
+            operands = update(operands,sp,Slot(value=value,initialized=true))
+        else:
+            if op == "store":
+                require sp > current_base
+                value = get(operands,sp).value
+                sp = sp-1
+                locals = update(locals,(fp-1)*8+inst.number+1,Slot(value=value,initialized=true))
+            else:
+                if op == "call":
+                    let callee = get(functions,inst.number)
+                    require fp < 8 and sp-current_base >= callee.argc
+                    dest = sp-callee.argc
+                    index = 0
+                    while index < 8 limit 8:
+                        value = 0
+                        if index < callee.argc:
+                            value = get(operands,dest+index+1).value
+                        locals = update(locals,fp*8+index+1,Slot(value=value,initialized=index < callee.argc))
+                        index = index+1
+                    sp = dest
+                    fp = fp+1
+                    if fp > peak_frames:
+                        peak_frames = fp
+                    frames = update(frames,fp,Frame(function_id=inst.number,return_pc=next_pc,base=dest))
+                    next_pc = callee.first
+                else:
+                    if op == "return":
+                        require sp == current_base+1
+                        returned = get(operands,sp).value
+                        fp = fp-1
+                        if fp == 0:
+                            answer = returned
+                        else:
+                            next_pc = frame.return_pc
+                    else:
+                        if op == "jump" or op == "jz":
+                            value = 0
+                            if op == "jz":
+                                require sp > current_base
+                                value = get(operands,sp).value
+                                sp = sp-1
+                            if op == "jump" or value == 0:
+                                next_pc = f.first+inst.number-1
+                        else:
+                            require sp >= current_base+2
+                            lhs = get(operands,sp-1).value
+                            rhs = get(operands,sp).value
+                            value = lhs+rhs if op == "add" else lhs-rhs if op == "sub" else lhs*rhs if op == "mul" else 1 if (op == "eq" and lhs == rhs) or (op == "lt" and lhs < rhs) else 0
+                            sp = sp-1
+                            operands = update(operands,sp,Slot(value=value,initialized=true))
+        pc = next_pc
+        steps = steps+1
+    require fp == 0
+    finished = true
+
+test initial: -> not compiled
+screen main:
+    text "A5.10a experimental self-hosted function IR VM"

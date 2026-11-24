@@ -285,3 +285,11 @@ VDS: 83 Rust tests and A10/A11/A12/A13 integration regressions PASS with pinned 
 ### A5.9b
 
 [Branch execution](SELF_HOSTING_EXECUTOR_A59B.ru.md).
+
+### A5.10a
+
+[Function IR VM](SELF_HOSTING_FUNCTION_VM_A510A.ru.md).
+
+### A19 practical demo
+
+[Sales backend example](SALES_DEMO_A19.ru.md).
