@@ -244,3 +244,5 @@ Experimental [A5.5 compound expression AST](docs/SELF_HOSTING_PARSER_A55.ru.md) 
 Experimental [A12/A13 native journal transactions and restart verification](docs/RUST_NATIVE_SERVER_A12_LOG.ru.md).
 
 Experimental [A5.6a compound if conditions](docs/SELF_HOSTING_PARSER_A56A.ru.md).
+
+Experimental [A5.6b linked if/else branches](docs/SELF_HOSTING_PARSER_A56B.ru.md).

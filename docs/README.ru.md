@@ -111,3 +111,5 @@ A5.5: [составные выражения в AST](SELF_HOSTING_PARSER_A55.ru.
 A12/A13: [атомарная запись в нативный журнал и проверка перезапуска](RUST_NATIVE_SERVER_A12_LOG.ru.md).
 
 A5.6a: [составные условия if](SELF_HOSTING_PARSER_A56A.ru.md).
+
+A5.6b: [связанные ветви if/else](SELF_HOSTING_PARSER_A56B.ru.md).

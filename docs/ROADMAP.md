@@ -235,3 +235,13 @@ Two business records, state and durable HTTP receipt in one native batch; read-o
 ### Self-hosting A5.6a: compound if conditions
 
 Shared stack expression grammar for condition AST, source spans and block depth. [RU protocol](SELF_HOSTING_PARSER_A56A.ru.md). Else, calls and typing remain pending.
+
+### Self-hosting A5.6b: linked else branches
+
+Explicit header IDs, matching depth, nonempty body and structured orphan/duplicate diagnostics. [RU protocol](SELF_HOSTING_PARSER_A56B.ru.md). Function calls remain pending.
+
+### Native server: B14 dependency update
+
+Pin staged native replay engine; preserve existing A10–A13 backend contracts.
+
+VDS: 83 Rust tests and A10/A11/A12/A13 integration regressions PASS with pinned B14 (70236fa8db2e2761a5f1a9672056b201d42fdb98).
