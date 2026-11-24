@@ -6,6 +6,52 @@ use sedravasql::native_log::{NativeLog,NativeLimits,Error as DbError,sql::{SqlKi
 use serde::Deserialize;
 use sha2::{Sha256,Digest};
 use std::{collections::BTreeMap,io::Write,net::TcpListener,path::Path,thread,time::{Duration,Instant}};
+#[derive(Clone,Copy,Deserialize,PartialEq,Eq)]
+#[serde(rename_all="snake_case")]
+enum Role { Read, Write }
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Credential { id:String, sha256:String, role:Role }
+pub struct Auth { credentials:Vec<Credential> }
+impl Auth {
+    #[cfg(unix)]
+    pub fn load(path:&Path)->Result<Self>{
+        use std::{fs::OpenOptions,io::Read,os::unix::fs::{OpenOptionsExt,MetadataExt}};
+        use rustix::fs::OFlags;
+        if !path.is_absolute(){return fail("E_SQL_API_AUTH: absolute credentials file required");}
+        let file=OpenOptions::new().read(true).custom_flags((OFlags::NOFOLLOW|OFlags::NONBLOCK).bits() as i32)
+            .open(path).map_err(|_|Error("E_SQL_API_AUTH: cannot open credentials".into()))?;
+        let m=file.metadata().map_err(|_|Error("E_SQL_API_AUTH: metadata".into()))?;
+        if !m.is_file()||m.nlink()!=1||m.uid()!=rustix::process::geteuid().as_raw()||m.mode()&0o077!=0||m.len()>16384{
+            return fail("E_SQL_API_AUTH: credentials must be private owner-owned regular single-link file");
+        }
+        let mut raw=Vec::new();file.take(16385).read_to_end(&mut raw).map_err(|_|Error("E_SQL_API_AUTH: read failed".into()))?;
+        if raw.len()>16384{return fail("E_SQL_API_AUTH: credential budget");}
+        let credentials:Vec<Credential>=serde_json::from_slice(&raw).map_err(|_|Error("E_SQL_API_AUTH: invalid credential JSON".into()))?;
+        let mut ids=std::collections::BTreeSet::new();let mut hashes=std::collections::BTreeSet::new();
+        if credentials.is_empty()||credentials.len()>32{return fail("E_SQL_API_AUTH: credential count");}
+        for c in &credentials {
+            if !identifier(&c.id)||c.id.len()>48||!ids.insert(&c.id)||!hashes.insert(&c.sha256)||c.sha256.len()!=64||!c.sha256.bytes().all(|b|b.is_ascii_digit()||(b'a'..=b'f').contains(&b)){
+                return fail("E_SQL_API_AUTH: invalid or duplicate credential");
+            }
+        }
+        Ok(Self{credentials})
+    }
+    #[cfg(not(unix))]
+    pub fn load(_path:&Path)->Result<Self>{fail("E_SQL_API_AUTH: private credentials require Unix")}
+    fn authenticate(&self,header:Option<&str>)->Option<&Credential>{
+        let token=header?.strip_prefix("Bearer ")?;
+        // Operator-generated 32-byte random lowercase hex token. Store only its SHA-256.
+        if token.len()!=64||!token.bytes().all(|b|b.is_ascii_digit()||(b'a'..=b'f').contains(&b)){return None;}
+        let digest=format!("{:x}",Sha256::digest(token.as_bytes()));
+        let mut found=None;
+        for c in &self.credentials {
+            let mismatch=c.sha256.bytes().zip(digest.bytes()).fold(0u8,|v,(a,b)|v|(a^b));
+            if std::hint::black_box(mismatch)==0{found=Some(c);}
+        }
+        found
+    }
+}
 pub struct Api {name:String,routes:BTreeMap<String,database::Program>}
 pub fn parse(source:&str)->Result<Api>{
     if source.len()>32768||source.contains('\r')||source.contains('\0'){return fail("E_SQL_API: invalid source");}
@@ -34,9 +80,19 @@ pub fn parse(source:&str)->Result<Api>{
     if routes.is_empty(){return fail("E_SQL_API: no routes");}
     Ok(Api{name,routes})
 }
-fn reply(api:&Api,db:&mut NativeLog,request:http::Request)->(http::Response,bool){
+fn reply(api:&Api,db:&mut NativeLog,request:http::Request,auth:Option<&Auth>)->(http::Response,bool){
     let error=|status,code| (http::Response::error(status,code),false);
+    let principal=if let Some(auth)=auth{
+        match auth.authenticate(request.authorization.as_deref()){
+            Some(c)=>Some(c),
+            None=>return error(401,"AUTH_REQUIRED"),
+        }
+    }else{
+        if request.authorization.is_some(){return error(400,"AUTH_NOT_CONFIGURED");}
+        None
+    };
     let Some(route)=api.routes.get(&request.path) else{return error(404,"NOT_FOUND")};
+    if route.kind()==SqlKind::Write&&principal.is_some_and(|c|c.role!=Role::Write){return error(403,"WRITE_FORBIDDEN");}
     if request.method!="POST"{return (http::Response::error(405,"METHOD_NOT_ALLOWED").with_allow("POST".into()),false);}
     if request.expected_revision.is_some(){return error(400,"REVISION_HEADER_UNSUPPORTED");}
     if request.content_type.as_deref()!=Some("application/json"){return error(415,"JSON_CONTENT_TYPE_REQUIRED");}
@@ -51,7 +107,10 @@ fn reply(api:&Api,db:&mut NativeLog,request:http::Request)->(http::Response,bool
         SqlKind::Write=>{
             let Some(key)=request.idempotency_key.as_deref() else{return error(428,"IDEMPOTENCY_KEY_REQUIRED")};
             if !valid_key(key){return error(400,"INVALID_IDEMPOTENCY_KEY");}
-            let bytes=serde_json::to_vec(&(&api.name,&request.path,key)).expect("scalar strings");
+            let bytes=match principal{
+                Some(c)=>serde_json::to_vec(&("auth-v1",&api.name,&request.path,&c.id,key)),
+                None=>serde_json::to_vec(&(&api.name,&request.path,key)),
+            }.expect("scalar strings");
             Some(format!("api{:x}",Sha256::digest(bytes)))
         }
     };
@@ -69,6 +128,9 @@ fn reply(api:&Api,db:&mut NativeLog,request:http::Request)->(http::Response,bool
     }
 }
 pub fn serve(api:&Api,path:&Path,trusted:bool,allow_write:bool,limits:NativeLimits,options:RuntimeOptions)->Result<()>{
+    serve_with_auth(api,path,trusted,allow_write,limits,options,None)
+}
+pub fn serve_with_auth(api:&Api,path:&Path,trusted:bool,allow_write:bool,limits:NativeLimits,options:RuntimeOptions,auth:Option<&Auth>)->Result<()>{
     if !trusted||!path.is_absolute(){return fail("E_SQL_API_POLICY: trusted and absolute DB path required");}
     if api.routes.values().any(|p|p.kind()==SqlKind::Write)&&!allow_write{return fail("E_SQL_API_POLICY: write routes require --allow-write");}
     if !(1..=10000).contains(&options.max_requests)||!(500..=120000).contains(&options.idle_ms){return fail("E_SQL_API: invalid runtime limits");}
@@ -85,7 +147,7 @@ pub fn serve(api:&Api,path:&Path,trusted:bool,allow_write:bool,limits:NativeLimi
             Ok((mut stream,_))=>{
                 let _=stream.set_read_timeout(Some(Duration::from_millis(1200)));
                 let _=stream.set_write_timeout(Some(Duration::from_millis(1200)));
-                let (response,stop)=match http::parse_request(&mut stream){Ok(r)=>reply(api,&mut db,r),Err(e)=>(e,false)};
+                let (response,stop)=match http::parse_request(&mut stream){Ok(r)=>reply(api,&mut db,r,auth),Err(e)=>(e,false)};
                 http::finish(&mut stream,response);
                 if stop{return fail("E_SQL_API: storage uncertain; stopped");}
                 served+=1;last=Instant::now();

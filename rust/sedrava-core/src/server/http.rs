@@ -64,6 +64,7 @@ pub(super) struct Request {
     pub(super) method: String,
     pub(super) path: String,
     pub(super) content_type: Option<String>,
+    pub(super) authorization: Option<String>,
     pub(super) idempotency_key: Option<String>,
     pub(super) expected_revision: Option<u32>,
     pub(super) body: Vec<u8>,
@@ -208,6 +209,7 @@ pub(super) fn parse_request(stream: &mut TcpStream) -> std::result::Result<Reque
         method: method.into(),
         path: path.into(),
         content_type: headers.get("content-type").map(|s| (*s).to_string()),
+        authorization: headers.get("authorization").map(|s| (*s).to_string()),
         idempotency_key: headers.get("idempotency-key").map(|s| (*s).to_string()),
         expected_revision,
         body,
@@ -220,6 +222,8 @@ fn reason(status: u16) -> &'static str {
         201 => "Created",
         202 => "Accepted",
         400 => "Bad Request",
+        401 => "Unauthorized",
+        403 => "Forbidden",
         404 => "Not Found",
         409 => "Conflict",
         412 => "Precondition Failed",
@@ -243,6 +247,7 @@ fn write_response(stream: &mut TcpStream, response: Response) -> std::io::Result
     write!(stream,
         "HTTP/1.1 {} {}\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\n",
         status,reason(status),bytes.len())?;
+    if status == 401 { stream.write_all(b"WWW-Authenticate: Bearer\r\n")?; }
     if let Some(allowed) = response.allow.as_deref() {
         write!(stream, "Allow: {allowed}\r\n")?;
     }

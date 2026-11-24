@@ -277,3 +277,11 @@ VDS: 83 Rust tests and A10/A11/A12/A13 integration regressions PASS with pinned 
 ### A5.9a
 
 [Execute scalar IR instructions](SELF_HOSTING_EXECUTOR_A59A.ru.md).
+
+### A18: optional SQL API auth
+
+[Private digest file and reader/writer roles](RUST_NATIVE_SQL_API_A18.ru.md).
+
+### A5.9b
+
+[Branch execution](SELF_HOSTING_EXECUTOR_A59B.ru.md).

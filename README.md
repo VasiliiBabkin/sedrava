@@ -258,3 +258,5 @@ Native Server: [A15 offline archive restore](docs/RUST_NATIVE_SERVER_A15_ARCHIVE
 Experimental [A5.8a/b declarations and expression IR](docs/SELF_HOSTING_PARSER_A58.ru.md), [A16 database host](docs/RUST_NATIVE_DATABASE_A16.ru.md).
 
 Experimental [A5.9a IR execution](docs/SELF_HOSTING_EXECUTOR_A59A.ru.md) and [A17 SQL HTTP API](docs/RUST_NATIVE_SQL_API_A17.ru.md).
+
+Experimental [A5.9b branch execution](docs/SELF_HOSTING_EXECUTOR_A59B.ru.md) and [A18 SQL API authentication](docs/RUST_NATIVE_SQL_API_A18.ru.md).

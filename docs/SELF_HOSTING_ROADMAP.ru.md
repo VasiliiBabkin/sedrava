@@ -141,3 +141,7 @@ stage 1/2/3 ещё отсутствуют.
 ### A5.9a: execution of scalar expression IR
 
 [Flat action interpreter written in Sedrava](SELF_HOSTING_EXECUTOR_A59A.ru.md). Control flow, function bodies and lexical scopes pending.
+
+### A5.9b — nested branch execution
+
+[Executor and bounds](SELF_HOSTING_EXECUTOR_A59B.ru.md). Functions and lexical locals pending.

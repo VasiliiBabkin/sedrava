@@ -1,0 +1,5 @@
+# A5.9b — исполнение вложенных if/else
+
+`examples/self_host/executor_a59b.sdr` extends A5.9a, preserves previous examples. One action; events in source order merge headers and assignments. Conditions and assignments use previously emitted typed expression instructions; header activation is tracked using ancestor depth and validated else pairing. Inactive conditions/assignments advance the instruction cursor without executing arithmetic or modifying state. Full static validation precedes execution, even for inactive branches. Checked scalar arithmetic and comparison, nested if/else, sequential state assignments. No function execution, local variables, general control-flow bytecode, multiple actions, short-circuit and/or or text execution. Experimental; source/token/record budgets inherited from A5.8.
+
+VDS: 7 execution programs, 4 invalid/overflow rejections, repeated execution guard PASS. Inactive overflowing expressions and nested conditions do not execute. `scripts/verify_selfhost_executor_a59b.py`.

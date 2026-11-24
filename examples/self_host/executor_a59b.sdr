@@ -1,0 +1,1466 @@
+# A5.4 Sedrava-authored bounded stack-based arithmetic parser.
+# Arithmetic integer expressions with grouping and binary precedence.
+# Precedence: * / before + -, left associative for equal precedence.
+# One ASCII identifier assignment per active line, arbitrary consistent
+# 4-space indent/dedent levels. This is NOT full Sedrava grammar.
+# One action scans up to 256 Unicode scalars. Strings preserve raw spelling.
+# Supports ASCII identifiers/integers, quoted strings and basic escapes,
+# whitespace, # comments, punctuation and two-character operators.
+app "Self-host IR executor A5.9b"
+record Token:
+    kind: text
+    lexeme: text
+    offset: int
+    end: int
+    line: int
+    column: int
+record LayoutToken:
+    kind: text
+    offset: int
+    line: int
+    column: int
+    level: int
+record ExprNode:
+    kind: text
+    lexeme: text
+    operator: text
+    left_id: int
+    right_id: int
+    start: int
+    end: int
+
+record UnifiedToken:
+    kind: text
+    lexeme: text
+    offset: int
+    end: int
+    line: int
+    column: int
+    level: int
+record ProgramExpression:
+    name: text
+    expression_id: int
+    depth: int
+    line: int
+    start: int
+    end: int
+
+record StackValue:
+    node_id: int
+    previous: int
+record StackOperator:
+    symbol: text
+    priority: int
+    offset: int
+    previous: int
+
+record BlockHeader:
+    kind: text
+    subject: text
+    depth: int
+    line: int
+    start: int
+    end: int
+record ConditionExpression:
+    expression_id: int
+    depth: int
+    line: int
+    start: int
+    end: int
+record ElseBranch:
+    if_header_id: int
+    else_header_id: int
+    depth: int
+record StatementMark:
+    depth: int
+    header_id: int
+record Symbol:
+    name: text
+    kind: text
+    parameters: text
+    result: text
+    initializer: text
+    current_int: int
+    current_bool: bool
+record NodeType:
+    kind: text
+    symbol_id: int
+record Instruction:
+    opcode: text
+    kind: text
+    dst: int
+    arg1: int
+    arg2: int
+    symbol_id: int
+    immediate: text
+    start: int
+    end: int
+    int_value: int
+    bool_value: bool
+record SyntaxDiagnostic:
+    code: text
+    line: int
+    column: int
+    start: int
+    end: int
+
+fn comparison(op: text) -> bool = op == "==" or op == "!=" or op == "<" or op == "<=" or op == ">" or op == ">="
+fn binary_op(op: text) -> bool = op == "or" or op == "and" or comparison(op) or op == "+" or op == "-" or op == "*" or op == "/"
+fn atom_name(op: text) -> bool = op != "and" and op != "or" and op != "not" and op != "if" and op != "else" and op != "action" and op != "while" and op != "let" and op != "require"
+fn op_rank(op: text) -> int = 1 if op == "," else 2 if op == "or" else 3 if op == "and" else 4 if op == "not" else 5 if comparison(op) else 6 if op == "+" or op == "-" else 7 if op == "*" or op == "/" else 8
+fn callable_name(op: text) -> bool = atom_name(op) and op != "true" and op != "false" and op != "True" and op != "False"
+
+fn ascii_letter(ch: text) -> bool = contains("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_", ch)
+fn ascii_digit(ch: text) -> bool = contains("0123456789", ch)
+
+fn scalar_code(t: text) -> bool = t == "i" or t == "b" or t == "t"
+fn scalar_type_name(t: text) -> text = "i" if t == "int" else "b" if t == "bool" else "t" if t == "text" else ""
+fn declared_name(t: text) -> bool = callable_name(t) and t != "fn" and t != "state" and t != "extern" and t != "int" and t != "bool" and t != "text"
+
+# Context format: one declaration per line, "name v i" or "name f ib i".
+# "-" denotes zero parameters. All names share one namespace.
+fn decimal_digit(c: text) -> int = 0 if c == "0" else 1 if c == "1" else 2 if c == "2" else 3 if c == "3" else 4 if c == "4" else 5 if c == "5" else 6 if c == "6" else 7 if c == "7" else 8 if c == "8" else 9
+state symbols: list<Symbol>(max=32) = []
+state node_types: list<NodeType>(max=100) = []
+state instructions: list<Instruction>(max=100) = []
+state lowering_done = false
+state lower_i = 1
+state init_literal = ""
+state execution_done = false
+state execute_i = 1
+state execute_stmt = 1
+state execute_header = 1
+state execute_condition = 1
+state execute_event_depth = 0
+state execute_event_line = 0
+state execute_root = 0
+state execute_parent = 0
+state execute_search = 0
+state execute_active = true
+state execute_is_header = false
+state execute_target = ""
+state execute_kind = ""
+state execute_header_id = 0
+state execute_else_if = 0
+state execute_branch_value = false
+state digit_i = 0
+state digit_acc = 0
+state digit_value = 0
+state read_int = 0
+state read_bool = false
+state lhs_int = 0
+state rhs_int = 0
+state lhs_bool = false
+state rhs_bool = false
+state result_int = 0
+state result_bool = false
+
+state opcode = ""
+state immediate = ""
+
+state context_done = false
+state semantic_done = false
+state semantic_error = ""
+state semantic_node = 0
+state semantic_start = 0
+state semantic_end = 0
+state decl_i = 1
+state body_start = 1
+state signature_count = 0
+state name_valid = false
+state decl_name = ""
+state decl_kind = ""
+state decl_params = ""
+state decl_result = ""
+state decl_field = 0
+state decl_part = ""
+state decl_end = false
+state sym_i = 0
+state sym_id = 0
+state type_i = 1
+state root_i = 1
+state inferred = ""
+state left_type = ""
+state right_type = ""
+state arg_types = ""
+state source = "sum==42 # comment"
+state cursor = 0
+state start = 0
+state line = 1
+state column = 1
+state start_line = 1
+state start_column = 1
+state fragment = ""
+state fragment_kind = ""
+state operator = ""
+state in_string = false
+state escaped = false
+state in_comment = false
+state tokens: list<Token>(max=100) = []
+
+state layout_cursor = 0
+state layout_line = 1
+state layout_column = 1
+state layout_spaces = 0
+state layout_level = 0
+state layout_desired = 0
+state layout_at_start = true
+state layout_active = false
+state layout_comment = false
+state layout_string = false
+state layout_escape = false
+state layout_tokens: list<LayoutToken>(max=100) = []
+
+
+state merge_i = 1
+state merge_j = 1
+state unified_tokens: list<UnifiedToken>(max=100) = []
+
+state program_expr_cursor = 1
+state program_expr_depth = 0
+state program_expr_nodes: list<ExprNode>(max=100) = []
+state program_expr_statements: list<ProgramExpression>(max=16) = []
+
+
+state value_stack: list<StackValue>(max=100) = []
+state operator_stack: list<StackOperator>(max=100) = []
+state value_top = 0
+state operator_top = 0
+state value_count = 0
+state expecting_value = true
+state reducing = false
+state finished = false
+state last_end = 0
+state precedence = 0
+
+
+state condition_exprs: list<ConditionExpression>(max=16) = []
+state condition_mode = false
+state statement_marks: list<StatementMark>(max=32) = []
+state else_branches: list<ElseBranch>(max=16) = []
+state mark_cursor = 0
+state eligible_if = 0
+state headers: list<BlockHeader>(max=16) = []
+state diagnostics: list<SyntaxDiagnostic>(max=1) = []
+state validation_done = false
+state validate_i = 1
+state validate_depth = 0
+state pending_body = false
+state validate_error = ""
+state expr_parens = 0
+state validate_operand = true
+state allow_not = true
+state compare_depth: list<StackOperator>(max=100) = []
+state compare_top = 0
+state comparison_seen = false
+state line_end = false
+state validated_assignments = 0
+
+action scan:
+    require text_length(source) <= 256
+    while cursor < text_length(source) limit 256:
+        let ch = text_at(source, cursor)
+        if in_comment:
+            if ch == "\n":
+                in_comment = false
+        else:
+            if in_string:
+                fragment = concat(fragment, ch)
+                if escaped:
+                    require contains("ntr\"\\", ch)
+                    escaped = false
+                else:
+                    if ch == "\\":
+                        escaped = true
+                    else:
+                        if ch == "\"":
+                            tokens = append(tokens, Token(kind="string", lexeme=fragment, offset=start, end=cursor + 1, line=start_line, column=start_column))
+                            fragment = ""
+                            fragment_kind = ""
+                            in_string = false
+            else:
+                if ch == "#":
+                    if fragment != "":
+                        tokens = append(tokens, Token(kind=fragment_kind, lexeme=fragment, offset=start, end=cursor, line=start_line, column=start_column))
+                        fragment = ""
+                        fragment_kind = ""
+                    in_comment = true
+                else:
+                    if ch == "\"":
+                        if fragment != "":
+                            tokens = append(tokens, Token(kind=fragment_kind, lexeme=fragment, offset=start, end=cursor, line=start_line, column=start_column))
+                            fragment = ""
+                            fragment_kind = ""
+                        start = cursor
+                        start_line = line
+                        start_column = column
+                        fragment = ch
+                        fragment_kind = "string"
+                        in_string = true
+                    else:
+                        if contains(" \t\r\n", ch):
+                            if fragment != "":
+                                tokens = append(tokens, Token(kind=fragment_kind, lexeme=fragment, offset=start, end=cursor, line=start_line, column=start_column))
+                                fragment = ""
+                                fragment_kind = ""
+                        else:
+                            if contains("(){}[],:.+-*/=<>!", ch):
+                                if fragment != "":
+                                    tokens = append(tokens, Token(kind=fragment_kind, lexeme=fragment, offset=start, end=cursor, line=start_line, column=start_column))
+                                    fragment = ""
+                                    fragment_kind = ""
+                                operator = ch
+                                if cursor + 1 < text_length(source):
+                                    let next_ch = text_at(source, cursor + 1)
+                                    if next_ch == "=" and contains("=!<>", ch):
+                                        operator = concat(ch, next_ch)
+                                        cursor = cursor + 1
+                                    else:
+                                        if ch == "-" and next_ch == ">":
+                                            operator = "->"
+                                            cursor = cursor + 1
+                                if contains("+-*/=<>!", ch):
+                                    tokens = append(tokens, Token(kind="operator", lexeme=operator, offset=cursor + 1 - text_length(operator), end=cursor + 1, line=line, column=column))
+                                else:
+                                    tokens = append(tokens, Token(kind="punct", lexeme=operator, offset=cursor + 1 - text_length(operator), end=cursor + 1, line=line, column=column))
+                                if text_length(operator) == 2:
+                                    column = column + 1
+                            else:
+                                require ascii_letter(ch) or ascii_digit(ch)
+                                if fragment == "":
+                                    start = cursor
+                                    start_line = line
+                                    start_column = column
+                                    if ascii_digit(ch):
+                                        fragment_kind = "integer"
+                                    else:
+                                        fragment_kind = "identifier"
+                                else:
+                                    if fragment_kind == "integer":
+                                        require ascii_digit(ch)
+                                fragment = concat(fragment, ch)
+        if ch == "\n":
+            line = line + 1
+            column = 1
+        else:
+            column = column + 1
+        cursor = cursor + 1
+    require not in_string
+    require not escaped
+    if fragment != "":
+        tokens = append(tokens, Token(kind=fragment_kind, lexeme=fragment, offset=start, end=cursor, line=start_line, column=start_column))
+        fragment = ""
+        fragment_kind = ""
+action scan_layout:
+    require text_length(source) <= 256
+    while layout_cursor < text_length(source) limit 256:
+        let ch = text_at(source, layout_cursor)
+        if ch == "\n":
+            require not layout_string
+            if layout_active:
+                layout_tokens = append(layout_tokens, LayoutToken(kind="NEWLINE", offset=layout_cursor, line=layout_line, column=layout_column, level=layout_level))
+            layout_active = false
+            layout_comment = false
+            layout_at_start = true
+            layout_spaces = 0
+            layout_line = layout_line + 1
+            layout_column = 1
+        else:
+            if layout_comment:
+                require ch != "\r"
+            else:
+                if layout_at_start:
+                    if ch == " ":
+                        layout_spaces = layout_spaces + 1
+                    else:
+                        if ch == "#":
+                            layout_comment = true
+                        else:
+                            require ch != "\t" and ch != "\r" and ch != "\""
+                            require layout_spaces <= 32
+                            layout_desired = 0
+                            while layout_spaces > 0 limit 8:
+                                require layout_spaces >= 4
+                                layout_spaces = layout_spaces - 4
+                                layout_desired = layout_desired + 1
+                            while layout_level < layout_desired limit 8:
+                                layout_level = layout_level + 1
+                                layout_tokens = append(layout_tokens, LayoutToken(kind="INDENT", offset=layout_cursor, line=layout_line, column=layout_column, level=layout_level))
+                            while layout_level > layout_desired limit 8:
+                                layout_level = layout_level - 1
+                                layout_tokens = append(layout_tokens, LayoutToken(kind="DEDENT", offset=layout_cursor, line=layout_line, column=layout_column, level=layout_level))
+                            layout_at_start = false
+                            layout_active = true
+                else:
+                    if layout_string:
+                        require ch != "\r" and ch != "\t"
+                        if layout_escape:
+                            layout_escape = false
+                        else:
+                            if ch == "\\":
+                                layout_escape = true
+                            else:
+                                if ch == "\"":
+                                    layout_string = false
+                    else:
+                        if ch == "#":
+                            layout_comment = true
+                        else:
+                            if ch == "\"":
+                                layout_string = true
+                            else:
+                                require ch != "\t" and ch != "\r"
+            layout_column = layout_column + 1
+        layout_cursor = layout_cursor + 1
+    require not layout_string
+    if layout_active:
+        layout_tokens = append(layout_tokens, LayoutToken(kind="NEWLINE", offset=layout_cursor, line=layout_line, column=layout_column, level=layout_level))
+    while layout_level > 0 limit 8:
+        layout_level = layout_level - 1
+        layout_tokens = append(layout_tokens, LayoutToken(kind="DEDENT", offset=layout_cursor, line=layout_line, column=layout_column, level=layout_level))
+
+action merge_tokens:
+    require cursor == text_length(source) and layout_cursor == text_length(source)
+    require count(unified_tokens) == 0
+    require count(tokens) + count(layout_tokens) <= 100
+    merge_i = 1
+    merge_j = 1
+    while merge_i <= count(tokens) or merge_j <= count(layout_tokens) limit 100:
+        if merge_i > count(tokens):
+            let layout = get(layout_tokens, merge_j)
+            unified_tokens = append(unified_tokens, UnifiedToken(kind=layout.kind, lexeme="", offset=layout.offset, end=layout.offset, line=layout.line, column=layout.column, level=layout.level))
+            merge_j = merge_j + 1
+        else:
+            if merge_j > count(layout_tokens):
+                let normal = get(tokens, merge_i)
+                unified_tokens = append(unified_tokens, UnifiedToken(kind=normal.kind, lexeme=normal.lexeme, offset=normal.offset, end=normal.end, line=normal.line, column=normal.column, level=0))
+                merge_i = merge_i + 1
+            else:
+                let next_normal = get(tokens, merge_i)
+                let next_layout = get(layout_tokens, merge_j)
+                if next_layout.offset <= next_normal.offset:
+                    unified_tokens = append(unified_tokens, UnifiedToken(kind=next_layout.kind, lexeme="", offset=next_layout.offset, end=next_layout.offset, line=next_layout.line, column=next_layout.column, level=next_layout.level))
+                    merge_j = merge_j + 1
+                else:
+                    unified_tokens = append(unified_tokens, UnifiedToken(kind=next_normal.kind, lexeme=next_normal.lexeme, offset=next_normal.offset, end=next_normal.end, line=next_normal.line, column=next_normal.column, level=0))
+                    merge_i = merge_i + 1
+
+
+# Consume real A5.1 unified tokens, not the original parallel lexical
+# token array. Stable record IDs of unified_tokens are 1..N for one scan.
+# A separate syntax pass over the real unified stream. First error wins.
+# Restricted action, compound if/else and assignment grammar.
+action validate_blocks:
+    require cursor == text_length(source) and layout_cursor == text_length(source)
+    require merge_i == count(tokens) + 1 and merge_j == count(layout_tokens) + 1
+    require context_done and semantic_error == "" and not validation_done
+    validate_i = body_start
+    while validate_i <= count(unified_tokens) and validate_error == "" limit 100:
+        let token = get(unified_tokens, validate_i)
+        if token.kind == "INDENT":
+            if not pending_body:
+                validate_error = "unexpected_indent"
+            else:
+                if token.level != validate_depth + 1:
+                    validate_error = "invalid_indent_depth"
+                else:
+                    validate_depth = token.level
+                    pending_body = false
+                    validate_i = validate_i + 1
+        else:
+            if pending_body:
+                validate_error = "expected_indented_body"
+            else:
+                if token.kind == "DEDENT":
+                    if validate_depth == 0 or token.level != validate_depth - 1:
+                        validate_error = "invalid_dedent"
+                    else:
+                        validate_depth = token.level
+                        validate_i = validate_i + 1
+                else:
+                    if token.kind != "identifier":
+                        validate_error = "expected_statement"
+                    else:
+                        if token.lexeme == "else":
+                            eligible_if = 0
+                            mark_cursor = count(statement_marks)
+                            while mark_cursor > 0 limit 100:
+                                let mark = get(statement_marks, mark_cursor)
+                                if mark.depth < validate_depth:
+                                    mark_cursor = 0
+                                else:
+                                    if mark.depth == validate_depth:
+                                        eligible_if = mark.header_id
+                                        mark_cursor = 0
+                                    else:
+                                        mark_cursor = mark_cursor - 1
+                            if validate_depth == 0 or eligible_if == 0:
+                                validate_error = "orphan_else"
+                            else:
+                                let matched = get(headers, eligible_if)
+                                if matched.kind != "if":
+                                    validate_error = "orphan_else"
+                                else:
+                                    if count(headers) == 16:
+                                        validate_error = "header_budget"
+                                    else:
+                                        if validate_i + 2 > count(unified_tokens):
+                                            validate_error = "invalid_else_header"
+                                        else:
+                                            let colon = get(unified_tokens, validate_i + 1)
+                                            let nl = get(unified_tokens, validate_i + 2)
+                                            if colon.kind != "punct" or colon.lexeme != ":" or nl.kind != "NEWLINE" or colon.line != token.line or nl.line != token.line:
+                                                validate_error = "invalid_else_header"
+                                            else:
+                                                headers = append(headers, BlockHeader(kind="else", subject="", depth=validate_depth, line=token.line, start=token.offset, end=colon.end))
+                                                else_branches = append(else_branches, ElseBranch(if_header_id=eligible_if, else_header_id=count(headers), depth=validate_depth))
+                                                statement_marks = append(statement_marks, StatementMark(depth=validate_depth, header_id=count(headers)))
+                                                pending_body = true
+                                                validate_i = validate_i + 3
+                        else:
+                            if token.lexeme == "action" or token.lexeme == "if":
+                                if (token.lexeme == "action" and validate_depth != 0) or (token.lexeme == "if" and validate_depth == 0):
+                                    validate_error = "invalid_header_context"
+                                else:
+                                    if count(headers) == 16:
+                                        validate_error = "header_budget"
+                                    else:
+                                        if token.lexeme == "if":
+                                            validate_i = validate_i + 1
+                                            expr_parens = 0
+                                            validate_operand = true
+                                            allow_not = true
+                                            comparison_seen = false
+                                            compare_top = 0
+                                            line_end = false
+                                            while not line_end and validate_error == "" and validate_i <= count(unified_tokens) limit 100:
+                                                let part = get(unified_tokens, validate_i)
+                                                if part.kind == "punct" and part.lexeme == ":":
+                                                    if validate_operand:
+                                                        validate_error = "expected_operand"
+                                                    else:
+                                                        if expr_parens != 0:
+                                                            validate_error = "unclosed_group"
+                                                        else:
+                                                            line_end = true
+                                                else:
+                                                    if validate_operand:
+                                                        if part.kind == "integer" or (part.kind == "identifier" and atom_name(part.lexeme)):
+                                                            validate_operand = false
+                                                        else:
+                                                            if part.kind == "operator" and part.lexeme == "-":
+                                                                allow_not = false
+                                                            else:
+                                                                if part.kind == "identifier" and part.lexeme == "not" and allow_not:
+                                                                    allow_not = true
+                                                                else:
+                                                                    if part.kind == "punct" and part.lexeme == "(":
+                                                                        let flag = 1 if comparison_seen else 0
+                                                                        compare_depth = append(compare_depth, StackOperator(symbol="(", priority=flag, offset=0, previous=compare_top))
+                                                                        compare_top = count(compare_depth)
+                                                                        comparison_seen = false
+                                                                        allow_not = true
+                                                                        expr_parens = expr_parens + 1
+                                                                    else:
+                                                                        validate_error = "expected_operand"
+                                                    else:
+                                                        if part.kind == "punct" and part.lexeme == "(":
+                                                            let callee = get(unified_tokens, validate_i - 1)
+                                                            if callee.kind != "identifier" or not callable_name(callee.lexeme):
+                                                                validate_error = "invalid_callee"
+                                                            else:
+                                                                if validate_i + 1 > count(unified_tokens):
+                                                                    validate_error = "unclosed_call"
+                                                                else:
+                                                                    let following = get(unified_tokens, validate_i + 1)
+                                                                    if following.kind == "punct" and following.lexeme == ")":
+                                                                        validate_i = validate_i + 1
+                                                                    else:
+                                                                        let flag = 1 if comparison_seen else 0
+                                                                        compare_depth = append(compare_depth, StackOperator(symbol="call", priority=flag, offset=0, previous=compare_top))
+                                                                        compare_top = count(compare_depth)
+                                                                        comparison_seen = false
+                                                                        allow_not = true
+                                                                        validate_operand = true
+                                                                        expr_parens = expr_parens + 1
+                                                        else:
+                                                            if part.kind == "punct" and part.lexeme == ",":
+                                                                if compare_top == 0:
+                                                                    validate_error = "unexpected_comma"
+                                                                else:
+                                                                    let level = get(compare_depth, compare_top)
+                                                                    if level.symbol != "call":
+                                                                        validate_error = "unexpected_comma"
+                                                                    else:
+                                                                        comparison_seen = false
+                                                                        allow_not = true
+                                                                        validate_operand = true
+                                                            else:
+                                                                if part.kind == "punct" and part.lexeme == ")":
+                                                                    if expr_parens == 0:
+                                                                        validate_error = "unexpected_close"
+                                                                    else:
+                                                                        expr_parens = expr_parens - 1
+                                                                        let level = get(compare_depth, compare_top)
+                                                                        comparison_seen = level.priority == 1
+                                                                        compare_top = level.previous
+                                                                else:
+                                                                    if (part.kind == "operator" or part.kind == "identifier") and binary_op(part.lexeme):
+                                                                        if comparison(part.lexeme):
+                                                                            if comparison_seen:
+                                                                                validate_error = "chained_comparison"
+                                                                            else:
+                                                                                comparison_seen = true
+                                                                        if part.lexeme == "and" or part.lexeme == "or":
+                                                                            comparison_seen = false
+                                                                            allow_not = true
+                                                                        else:
+                                                                            allow_not = false
+                                                                        validate_operand = true
+                                                                    else:
+                                                                        validate_error = "expected_operator"
+                                                if validate_error == "":
+                                                    validate_i = validate_i + 1
+                                            if not line_end and validate_error == "":
+                                                validate_error = "expected_colon"
+                                            if validate_error == "":
+                                                if validate_i > count(unified_tokens):
+                                                    validate_error = "expected_newline"
+                                                else:
+                                                    let nl = get(unified_tokens, validate_i)
+                                                    let colon = get(unified_tokens, validate_i - 1)
+                                                    if nl.kind != "NEWLINE" or nl.line != token.line or colon.line != token.line:
+                                                        validate_error = "expected_newline"
+                                                    else:
+                                                        headers = append(headers, BlockHeader(kind="if", subject="", depth=validate_depth, line=token.line, start=token.offset, end=colon.end))
+                                                        statement_marks = append(statement_marks, StatementMark(depth=validate_depth, header_id=count(headers)))
+                                                        pending_body = true
+                                                        validate_i = validate_i + 1
+                                        else:
+                                            if validate_i + 3 > count(unified_tokens):
+                                                validate_error = "invalid_header"
+                                            else:
+                                                let subject = get(unified_tokens, validate_i + 1)
+                                                let colon = get(unified_tokens, validate_i + 2)
+                                                let nl = get(unified_tokens, validate_i + 3)
+                                                if subject.kind != "identifier" or not atom_name(subject.lexeme) or colon.kind != "punct" or colon.lexeme != ":" or nl.kind != "NEWLINE" or subject.line != token.line or colon.line != token.line or nl.line != token.line:
+                                                    validate_error = "invalid_header"
+                                                else:
+                                                    headers = append(headers, BlockHeader(kind=token.lexeme, subject=subject.lexeme, depth=validate_depth, line=token.line, start=token.offset, end=colon.end))
+                                                    statement_marks = append(statement_marks, StatementMark(depth=validate_depth, header_id=count(headers)))
+                                                    pending_body = true
+                                                    validate_i = validate_i + 4
+                            else:
+                                if validate_depth == 0:
+                                    validate_error = "expected_action"
+                                else:
+                                    if token.lexeme == "else" or token.lexeme == "while" or token.lexeme == "let" or token.lexeme == "require":
+                                        validate_error = "unsupported_statement"
+                                    else:
+                                        if validate_i + 1 > count(unified_tokens):
+                                            validate_error = "expected_assignment"
+                                        else:
+                                            let eq = get(unified_tokens, validate_i + 1)
+                                            if eq.kind != "operator" or eq.lexeme != "=" or eq.line != token.line:
+                                                validate_error = "expected_assignment"
+                                            else:
+                                                if validated_assignments == 16:
+                                                    validate_error = "assignment_budget"
+                                                else:
+                                                    validated_assignments = validated_assignments + 1
+                                                    statement_marks = append(statement_marks, StatementMark(depth=validate_depth, header_id=0))
+                                                    validate_i = validate_i + 2
+                                                    expr_parens = 0
+                                                    validate_operand = true
+                                                    allow_not = true
+                                                    comparison_seen = false
+                                                    compare_top = 0
+                                                    line_end = false
+                                                    while not line_end and validate_error == "" and validate_i <= count(unified_tokens) limit 100:
+                                                        let part = get(unified_tokens, validate_i)
+                                                        if part.kind == "NEWLINE":
+                                                            if validate_operand:
+                                                                validate_error = "expected_operand"
+                                                            else:
+                                                                if expr_parens != 0:
+                                                                    validate_error = "unclosed_group"
+                                                                else:
+                                                                    line_end = true
+                                                        else:
+                                                            if validate_operand:
+                                                                if part.kind == "integer" or (part.kind == "identifier" and atom_name(part.lexeme)):
+                                                                    validate_operand = false
+                                                                else:
+                                                                    if part.kind == "operator" and part.lexeme == "-":
+                                                                        allow_not = false
+                                                                    else:
+                                                                        if part.kind == "identifier" and part.lexeme == "not" and allow_not:
+                                                                            allow_not = true
+                                                                        else:
+                                                                            if part.kind == "punct" and part.lexeme == "(":
+                                                                                let flag = 1 if comparison_seen else 0
+                                                                                compare_depth = append(compare_depth, StackOperator(symbol="(", priority=flag, offset=0, previous=compare_top))
+                                                                                compare_top = count(compare_depth)
+                                                                                comparison_seen = false
+                                                                                allow_not = true
+                                                                                expr_parens = expr_parens + 1
+                                                                            else:
+                                                                                validate_error = "expected_operand"
+                                                            else:
+                                                                if part.kind == "punct" and part.lexeme == "(":
+                                                                    let callee = get(unified_tokens, validate_i - 1)
+                                                                    if callee.kind != "identifier" or not callable_name(callee.lexeme):
+                                                                        validate_error = "invalid_callee"
+                                                                    else:
+                                                                        if validate_i + 1 > count(unified_tokens):
+                                                                            validate_error = "unclosed_call"
+                                                                        else:
+                                                                            let following = get(unified_tokens, validate_i + 1)
+                                                                            if following.kind == "punct" and following.lexeme == ")":
+                                                                                validate_i = validate_i + 1
+                                                                            else:
+                                                                                let flag = 1 if comparison_seen else 0
+                                                                                compare_depth = append(compare_depth, StackOperator(symbol="call", priority=flag, offset=0, previous=compare_top))
+                                                                                compare_top = count(compare_depth)
+                                                                                comparison_seen = false
+                                                                                allow_not = true
+                                                                                validate_operand = true
+                                                                                expr_parens = expr_parens + 1
+                                                                else:
+                                                                    if part.kind == "punct" and part.lexeme == ",":
+                                                                        if compare_top == 0:
+                                                                            validate_error = "unexpected_comma"
+                                                                        else:
+                                                                            let level = get(compare_depth, compare_top)
+                                                                            if level.symbol != "call":
+                                                                                validate_error = "unexpected_comma"
+                                                                            else:
+                                                                                comparison_seen = false
+                                                                                allow_not = true
+                                                                                validate_operand = true
+                                                                    else:
+                                                                        if part.kind == "punct" and part.lexeme == ")":
+                                                                            if expr_parens == 0:
+                                                                                validate_error = "unexpected_close"
+                                                                            else:
+                                                                                expr_parens = expr_parens - 1
+                                                                                let level = get(compare_depth, compare_top)
+                                                                                comparison_seen = level.priority == 1
+                                                                                compare_top = level.previous
+                                                                        else:
+                                                                            if (part.kind == "operator" or part.kind == "identifier") and binary_op(part.lexeme):
+                                                                                if comparison(part.lexeme):
+                                                                                    if comparison_seen:
+                                                                                        validate_error = "chained_comparison"
+                                                                                    else:
+                                                                                        comparison_seen = true
+                                                                                if part.lexeme == "and" or part.lexeme == "or":
+                                                                                    comparison_seen = false
+                                                                                    allow_not = true
+                                                                                else:
+                                                                                    allow_not = false
+                                                                                validate_operand = true
+                                                                            else:
+                                                                                validate_error = "expected_operator"
+                                                        if validate_error == "":
+                                                            validate_i = validate_i + 1
+                                                    if not line_end and validate_error == "":
+                                                        validate_error = "expected_newline"
+    if validate_error == "":
+        if pending_body:
+            validate_error = "expected_indented_body"
+        else:
+            if count(headers) == 0:
+                validate_error = "expected_action"
+    if validate_error != "":
+        if validate_i <= count(unified_tokens):
+            let bad = get(unified_tokens, validate_i)
+            diagnostics = append(diagnostics, SyntaxDiagnostic(code=validate_error, line=bad.line, column=bad.column, start=bad.offset, end=bad.end))
+        else:
+            diagnostics = append(diagnostics, SyntaxDiagnostic(code=validate_error, line=layout_line, column=layout_column, start=text_length(source), end=text_length(source)))
+    validation_done = true
+
+# Shunting-yard with immutable linked stack cells, bounded by the token budget.
+action parse_expression_program:
+    require cursor == text_length(source) and layout_cursor == text_length(source)
+    require merge_i == count(tokens) + 1 and merge_j == count(layout_tokens) + 1
+    require validation_done and count(diagnostics) == 0
+    require count(unified_tokens) > 0
+    require count(program_expr_statements) == 0 and count(program_expr_nodes) == 0
+    program_expr_cursor = body_start
+    program_expr_depth = 0
+    while program_expr_cursor <= count(unified_tokens) limit 100:
+        let token = get(unified_tokens, program_expr_cursor)
+        if token.kind == "INDENT":
+            require token.level == program_expr_depth + 1 and program_expr_depth < 8
+            program_expr_depth = program_expr_depth + 1
+            program_expr_cursor = program_expr_cursor + 1
+        else:
+            if token.kind == "DEDENT":
+                require program_expr_depth > 0 and token.level == program_expr_depth - 1
+                program_expr_depth = program_expr_depth - 1
+                program_expr_cursor = program_expr_cursor + 1
+            else:
+                if token.lexeme == "action":
+                    program_expr_cursor = program_expr_cursor + 4
+                else:
+                    if token.lexeme == "else":
+                        program_expr_cursor = program_expr_cursor + 3
+                    else:
+                        condition_mode = token.lexeme == "if"
+                        if condition_mode:
+                            program_expr_cursor = program_expr_cursor + 1
+                            last_end = token.end
+                        else:
+                            require token.kind == "identifier"
+                            require program_expr_cursor + 3 <= count(unified_tokens)
+                            let eq = get(unified_tokens, program_expr_cursor + 1)
+                            require eq.kind == "operator" and eq.lexeme == "=" and eq.line == token.line
+                            program_expr_cursor = program_expr_cursor + 2
+                            last_end = eq.end
+                        value_top = 0
+                        operator_top = 0
+                        value_count = 0
+                        expecting_value = true
+                        finished = false
+                        while not finished limit 100:
+                            require program_expr_cursor <= count(unified_tokens)
+                            let part = get(unified_tokens, program_expr_cursor)
+                            require part.line == token.line and part.offset >= last_end
+                            if (not condition_mode and part.kind == "NEWLINE") or (condition_mode and part.kind == "punct" and part.lexeme == ":"):
+                                require not expecting_value
+                                while operator_top > 0 limit 100:
+                                    require value_count >= 1 and operator_top > 0
+                                    let top_op = get(operator_stack, operator_top)
+                                    require top_op.priority > 0
+                                    let right = get(value_stack, value_top)
+                                    let rnode = get(program_expr_nodes, right.node_id)
+                                    if top_op.symbol == "neg" or top_op.symbol == "not":
+                                        let unary_op = "-" if top_op.symbol == "neg" else "not"
+                                        program_expr_nodes = append(program_expr_nodes, ExprNode(kind="unary", lexeme="", operator=unary_op, left_id=right.node_id, right_id=0, start=top_op.offset, end=rnode.end))
+                                        value_stack = append(value_stack, StackValue(node_id=count(program_expr_nodes), previous=right.previous))
+                                    else:
+                                        require value_count >= 2
+                                        let left = get(value_stack, right.previous)
+                                        let lnode = get(program_expr_nodes, left.node_id)
+                                        program_expr_nodes = append(program_expr_nodes, ExprNode(kind="arguments" if top_op.symbol == "," else "binary", lexeme="", operator=top_op.symbol, left_id=left.node_id, right_id=right.node_id, start=lnode.start, end=rnode.end))
+                                        value_stack = append(value_stack, StackValue(node_id=count(program_expr_nodes), previous=left.previous))
+                                        value_count = value_count - 1
+                                    value_top = count(value_stack)
+                                    operator_top = top_op.previous
+                                require value_count == 1
+                                let root = get(value_stack, value_top)
+                                if condition_mode:
+                                    condition_exprs = append(condition_exprs, ConditionExpression(expression_id=root.node_id, depth=program_expr_depth, line=token.line, start=token.offset, end=part.end))
+                                    program_expr_cursor = program_expr_cursor + 1
+                                else:
+                                    program_expr_statements = append(program_expr_statements, ProgramExpression(name=token.lexeme, expression_id=root.node_id, depth=program_expr_depth, line=token.line, start=token.offset, end=last_end))
+                                finished = true
+                            else:
+                                if expecting_value:
+                                    if part.kind == "integer" or (part.kind == "identifier" and atom_name(part.lexeme)):
+                                        let next_token = get(unified_tokens, program_expr_cursor + 1)
+                                        if part.kind == "identifier" and callable_name(part.lexeme) and next_token.kind == "punct" and next_token.lexeme == "(":
+                                            let following = get(unified_tokens, program_expr_cursor + 2)
+                                            if following.kind == "punct" and following.lexeme == ")":
+                                                program_expr_nodes = append(program_expr_nodes, ExprNode(kind="call", lexeme=part.lexeme, operator="", left_id=0, right_id=0, start=part.offset, end=following.end))
+                                                value_stack = append(value_stack, StackValue(node_id=count(program_expr_nodes), previous=value_top))
+                                                value_top = count(value_stack)
+                                                value_count = value_count + 1
+                                                expecting_value = false
+                                                program_expr_cursor = program_expr_cursor + 2
+                                            else:
+                                                operator_stack = append(operator_stack, StackOperator(symbol=part.lexeme, priority=0, offset=part.offset, previous=operator_top))
+                                                operator_top = count(operator_stack)
+                                                program_expr_cursor = program_expr_cursor + 1
+                                        else:
+                                            let leaf_kind = "integer" if part.kind == "integer" else "boolean" if part.lexeme == "true" or part.lexeme == "false" or part.lexeme == "True" or part.lexeme == "False" else "identifier"
+                                            program_expr_nodes = append(program_expr_nodes, ExprNode(kind=leaf_kind, lexeme=part.lexeme, operator="", left_id=0, right_id=0, start=part.offset, end=part.end))
+                                            value_stack = append(value_stack, StackValue(node_id=count(program_expr_nodes), previous=value_top))
+                                            value_top = count(value_stack)
+                                            value_count = value_count + 1
+                                            expecting_value = false
+                                    else:
+                                        if part.lexeme == "-" or part.lexeme == "not":
+                                            let unary_symbol = "neg" if part.lexeme == "-" else "not"
+                                            operator_stack = append(operator_stack, StackOperator(symbol=unary_symbol, priority=op_rank(unary_symbol), offset=part.offset, previous=operator_top))
+                                            operator_top = count(operator_stack)
+                                        else:
+                                            require part.kind == "punct" and part.lexeme == "("
+                                            operator_stack = append(operator_stack, StackOperator(symbol="(", priority=0, offset=part.offset, previous=operator_top))
+                                            operator_top = count(operator_stack)
+                                else:
+                                    if part.kind == "punct" and part.lexeme == ")":
+                                        reducing = true
+                                        while reducing limit 100:
+                                            require operator_top > 0
+                                            let candidate = get(operator_stack, operator_top)
+                                            if candidate.priority == 0:
+                                                let inner = get(value_stack, value_top)
+                                                program_expr_nodes = append(program_expr_nodes, ExprNode(kind="group" if candidate.symbol == "(" else "call", lexeme="" if candidate.symbol == "(" else candidate.symbol, operator="", left_id=inner.node_id, right_id=0, start=candidate.offset, end=part.end))
+                                                value_stack = append(value_stack, StackValue(node_id=count(program_expr_nodes), previous=inner.previous))
+                                                value_top = count(value_stack)
+                                                operator_top = candidate.previous
+                                                reducing = false
+                                            else:
+                                                require value_count >= 1 and operator_top > 0
+                                                let top_op = get(operator_stack, operator_top)
+                                                require top_op.priority > 0
+                                                let right = get(value_stack, value_top)
+                                                let rnode = get(program_expr_nodes, right.node_id)
+                                                if top_op.symbol == "neg" or top_op.symbol == "not":
+                                                    let unary_op = "-" if top_op.symbol == "neg" else "not"
+                                                    program_expr_nodes = append(program_expr_nodes, ExprNode(kind="unary", lexeme="", operator=unary_op, left_id=right.node_id, right_id=0, start=top_op.offset, end=rnode.end))
+                                                    value_stack = append(value_stack, StackValue(node_id=count(program_expr_nodes), previous=right.previous))
+                                                else:
+                                                    require value_count >= 2
+                                                    let left = get(value_stack, right.previous)
+                                                    let lnode = get(program_expr_nodes, left.node_id)
+                                                    program_expr_nodes = append(program_expr_nodes, ExprNode(kind="arguments" if top_op.symbol == "," else "binary", lexeme="", operator=top_op.symbol, left_id=left.node_id, right_id=right.node_id, start=lnode.start, end=rnode.end))
+                                                    value_stack = append(value_stack, StackValue(node_id=count(program_expr_nodes), previous=left.previous))
+                                                    value_count = value_count - 1
+                                                value_top = count(value_stack)
+                                                operator_top = top_op.previous
+                                    else:
+                                        require binary_op(part.lexeme) or part.lexeme == ","
+                                        precedence = op_rank(part.lexeme)
+                                        reducing = operator_top > 0
+                                        while reducing limit 100:
+                                            let candidate = get(operator_stack, operator_top)
+                                            if candidate.priority < precedence:
+                                                reducing = false
+                                            else:
+                                                require value_count >= 1 and operator_top > 0
+                                                let top_op = get(operator_stack, operator_top)
+                                                require top_op.priority > 0
+                                                let right = get(value_stack, value_top)
+                                                let rnode = get(program_expr_nodes, right.node_id)
+                                                if top_op.symbol == "neg" or top_op.symbol == "not":
+                                                    let unary_op = "-" if top_op.symbol == "neg" else "not"
+                                                    program_expr_nodes = append(program_expr_nodes, ExprNode(kind="unary", lexeme="", operator=unary_op, left_id=right.node_id, right_id=0, start=top_op.offset, end=rnode.end))
+                                                    value_stack = append(value_stack, StackValue(node_id=count(program_expr_nodes), previous=right.previous))
+                                                else:
+                                                    require value_count >= 2
+                                                    let left = get(value_stack, right.previous)
+                                                    let lnode = get(program_expr_nodes, left.node_id)
+                                                    program_expr_nodes = append(program_expr_nodes, ExprNode(kind="arguments" if top_op.symbol == "," else "binary", lexeme="", operator=top_op.symbol, left_id=left.node_id, right_id=right.node_id, start=lnode.start, end=rnode.end))
+                                                    value_stack = append(value_stack, StackValue(node_id=count(program_expr_nodes), previous=left.previous))
+                                                    value_count = value_count - 1
+                                                value_top = count(value_stack)
+                                                operator_top = top_op.previous
+                                                reducing = operator_top > 0
+                                        operator_stack = append(operator_stack, StackOperator(symbol=part.lexeme, priority=precedence, offset=part.offset, previous=operator_top))
+                                        operator_top = count(operator_stack)
+                                        expecting_value = true
+                                last_end = get(unified_tokens, program_expr_cursor).end
+                            program_expr_cursor = program_expr_cursor + 1
+    require program_expr_depth == 0
+
+# State literal declarations and explicit external function signatures.
+# This stage does not parse a function implementation or claim full app grammar.
+action load_declarations:
+    require not context_done and not validation_done
+    require cursor == text_length(source) and layout_cursor == text_length(source)
+    require merge_i == count(tokens) + 1 and merge_j == count(layout_tokens) + 1
+    decl_i = 1
+    decl_end = false
+    while decl_i <= count(unified_tokens) and not decl_end and semantic_error == "" limit 100:
+        let tok = get(unified_tokens,decl_i)
+        semantic_start = tok.offset
+        semantic_end = tok.end
+        if tok.lexeme == "state" or tok.lexeme == "extern":
+            decl_kind = "v" if tok.lexeme == "state" else "f"
+            decl_params = ""
+            decl_result = ""
+            init_literal = ""
+            if decl_i + 3 > count(unified_tokens):
+                semantic_error = "invalid_declaration"
+            else:
+                if decl_kind == "f":
+                    let fn_token = get(unified_tokens,decl_i+1)
+                    if fn_token.lexeme != "fn":
+                        semantic_error = "invalid_declaration"
+                    decl_i = decl_i + 1
+                let name = get(unified_tokens,decl_i+1)
+                if name.kind != "identifier" or not declared_name(name.lexeme):
+                    semantic_error = "invalid_symbol_name"
+                decl_name = name.lexeme
+                decl_i = decl_i + 2
+                if semantic_error == "":
+                    if decl_kind == "v":
+                        if decl_i+2 > count(unified_tokens):
+                            semantic_error = "invalid_declaration"
+                        else:
+                            let eq = get(unified_tokens,decl_i)
+                            let literal = get(unified_tokens,decl_i+1)
+                            let nl = get(unified_tokens,decl_i+2)
+                            if eq.lexeme != "=" or nl.kind != "NEWLINE" or literal.line != tok.line or eq.line != tok.line:
+                                semantic_error = "invalid_declaration"
+                            else:
+                                decl_result = "i" if literal.kind == "integer" else "t" if literal.kind == "string" else "b" if literal.lexeme == "true" or literal.lexeme == "false" else ""
+                                if decl_result == "":
+                                    semantic_error = "invalid_initializer"
+                                else:
+                                    init_literal = literal.lexeme
+                                    decl_i = decl_i+3
+                    else:
+                        let opening = get(unified_tokens,decl_i)
+                        if opening.lexeme != "(":
+                            semantic_error = "invalid_signature"
+                        else:
+                            decl_i = decl_i+1
+                            signature_count = 0
+                            decl_field = 0
+                            while decl_i <= count(unified_tokens) and semantic_error == "" and decl_field == 0 limit 24:
+                                let part = get(unified_tokens,decl_i)
+                                if part.line != tok.line:
+                                    semantic_error = "invalid_signature"
+                                else:
+                                    if part.lexeme == ")":
+                                        decl_i = decl_i+1
+                                        decl_field = 1
+                                    else:
+                                        let code = scalar_type_name(part.lexeme)
+                                        if code == "" or signature_count == 8:
+                                            semantic_error = "invalid_signature"
+                                        else:
+                                            decl_params = concat(decl_params,code)
+                                            signature_count = signature_count+1
+                                            if decl_i+1 > count(unified_tokens):
+                                                semantic_error = "invalid_signature"
+                                            else:
+                                                let delim = get(unified_tokens,decl_i+1)
+                                                if delim.lexeme == ")":
+                                                    decl_i = decl_i+2
+                                                    decl_field = 1
+                                                else:
+                                                    if delim.lexeme != "," or decl_i+2 > count(unified_tokens):
+                                                        semantic_error = "invalid_signature"
+                                                    else:
+                                                        let nxt = get(unified_tokens,decl_i+2)
+                                                        if scalar_type_name(nxt.lexeme) == "":
+                                                            semantic_error = "invalid_signature"
+                                                        else:
+                                                            decl_i = decl_i+2
+                            if semantic_error == "":
+                                if decl_field != 1 or decl_i+2 > count(unified_tokens):
+                                    semantic_error = "invalid_signature"
+                                else:
+                                    let arrow = get(unified_tokens,decl_i)
+                                    let result_type = get(unified_tokens,decl_i+1)
+                                    let nl = get(unified_tokens,decl_i+2)
+                                    decl_result = scalar_type_name(result_type.lexeme)
+                                    if arrow.lexeme != "->" or decl_result == "" or nl.kind != "NEWLINE" or result_type.line != tok.line or arrow.line != tok.line:
+                                        semantic_error = "invalid_signature"
+                                    else:
+                                        decl_i = decl_i+3
+                if semantic_error == "":
+                    sym_i = 1
+                    while sym_i <= count(symbols) and semantic_error == "" limit 32:
+                        let sym = get(symbols,sym_i)
+                        if sym.name == decl_name:
+                            semantic_error = "duplicate_symbol"
+                        sym_i = sym_i+1
+                    if semantic_error == "":
+                        if count(symbols) == 32:
+                            semantic_error = "symbol_budget"
+                        else:
+                            symbols = append(symbols,Symbol(name=decl_name,kind=decl_kind,parameters=decl_params,result=decl_result,initializer=init_literal,current_int=0,current_bool=false))
+        else:
+            decl_end = true
+    body_start = decl_i
+    context_done = true
+
+# AST nodes are postorder; infer children before the parent. Argument lists
+# carry a type string of length >= 2, distinct from scalar types.
+action analyze:
+    require context_done and not semantic_done
+    require validation_done and count(diagnostics) == 0
+    require program_expr_cursor == count(unified_tokens) + 1
+    require count(program_expr_nodes) > 0 and count(node_types) == 0
+    type_i = 1
+    while type_i <= count(program_expr_nodes) and semantic_error == "" limit 100:
+        let n = get(program_expr_nodes,type_i)
+        semantic_node = type_i
+        semantic_start = n.start
+        semantic_end = n.end
+        inferred = ""
+        sym_id = 0
+        left_type = ""
+        right_type = ""
+        if n.left_id > 0:
+            require n.left_id < type_i
+            let lt = get(node_types,n.left_id)
+            left_type = lt.kind
+        if n.right_id > 0:
+            require n.right_id < type_i
+            let rt = get(node_types,n.right_id)
+            right_type = rt.kind
+        if n.kind == "integer":
+            inferred = "i"
+        else:
+            if n.kind == "boolean":
+                inferred = "b"
+            else:
+                if n.kind == "identifier" or n.kind == "call":
+                    sym_i = 1
+                    while sym_i <= count(symbols) and sym_id == 0 limit 32:
+                        let sym = get(symbols,sym_i)
+                        if sym.name == n.lexeme:
+                            sym_id = sym_i
+                        sym_i = sym_i + 1
+                    if sym_id == 0:
+                        semantic_error = "unknown_symbol"
+                    else:
+                        let sym = get(symbols,sym_id)
+                        if n.kind == "identifier":
+                            if sym.kind != "v":
+                                semantic_error = "function_used_as_value"
+                            else:
+                                inferred = sym.result
+                        else:
+                            if sym.kind != "f":
+                                semantic_error = "not_callable"
+                            else:
+                                arg_types = ""
+                                if n.left_id > 0:
+                                    if scalar_code(left_type):
+                                        arg_types = left_type
+                                    else:
+                                        arg_types = left_type
+                                if arg_types != sym.parameters:
+                                    semantic_error = "argument_signature"
+                                else:
+                                    inferred = sym.result
+                else:
+                    if n.kind == "arguments":
+                        if not scalar_code(right_type) or left_type == "":
+                            semantic_error = "invalid_arguments"
+                        else:
+                            inferred = concat(left_type,right_type)
+                    else:
+                        if n.kind == "group":
+                            inferred = left_type
+                        else:
+                            if n.kind == "unary":
+                                if n.operator == "-" and left_type == "i":
+                                    inferred = "i"
+                                else:
+                                    if n.operator == "not" and left_type == "b":
+                                        inferred = "b"
+                                    else:
+                                        semantic_error = "operand_type"
+                            else:
+                                if n.kind == "binary":
+                                    if n.operator == "and" or n.operator == "or":
+                                        if left_type == "b" and right_type == "b":
+                                            inferred = "b"
+                                        else:
+                                            semantic_error = "operand_type"
+                                    else:
+                                        if n.operator == "==" or n.operator == "!=":
+                                            if scalar_code(left_type) and left_type == right_type:
+                                                inferred = "b"
+                                            else:
+                                                semantic_error = "operand_type"
+                                        else:
+                                            if comparison(n.operator):
+                                                if left_type == "i" and right_type == "i":
+                                                    inferred = "b"
+                                                else:
+                                                    semantic_error = "operand_type"
+                                            else:
+                                                if n.operator == "/":
+                                                    semantic_error = "unsupported_operator"
+                                                else:
+                                                    if left_type == "i" and right_type == "i":
+                                                        inferred = "i"
+                                                    else:
+                                                        semantic_error = "operand_type"
+                                else:
+                                    semantic_error = "unknown_node"
+        if semantic_error == "":
+            node_types = append(node_types, NodeType(kind=inferred,symbol_id=sym_id))
+        type_i = type_i + 1
+    root_i = 1
+    while root_i <= count(condition_exprs) and semantic_error == "" limit 16:
+        let cond = get(condition_exprs,root_i)
+        let t = get(node_types,cond.expression_id)
+        if t.kind != "b":
+            semantic_error = "condition_type"
+            semantic_node = cond.expression_id
+            semantic_start = cond.start
+            semantic_end = cond.end
+        root_i = root_i + 1
+    root_i = 1
+    while root_i <= count(program_expr_statements) and semantic_error == "" limit 16:
+        let stmt = get(program_expr_statements,root_i)
+        sym_id = 0
+        sym_i = 1
+        while sym_i <= count(symbols) and sym_id == 0 limit 32:
+            let sym = get(symbols,sym_i)
+            if sym.name == stmt.name:
+                sym_id = sym_i
+            sym_i = sym_i + 1
+        if sym_id == 0:
+            semantic_error = "unknown_assignment"
+        else:
+            let sym = get(symbols,sym_id)
+            let t = get(node_types,stmt.expression_id)
+            if sym.kind != "v":
+                semantic_error = "not_assignable"
+            else:
+                if sym.result != t.kind:
+                    semantic_error = "assignment_type"
+        if semantic_error != "":
+            semantic_node = stmt.expression_id
+            semantic_start = stmt.start
+            semantic_end = stmt.end
+        root_i = root_i + 1
+    if semantic_error == "":
+        semantic_node = 0
+        semantic_start = 0
+        semantic_end = 0
+    semantic_done = true
+
+# Typed expression IR with explicit register dependencies and bound symbols.
+# Branch/control-flow lowering is deliberately not part of this stage.
+action lower_expressions:
+    require semantic_done and semantic_error == "" and not lowering_done
+    require count(node_types) == count(program_expr_nodes) and count(node_types) > 0
+    require count(instructions) == 0
+    lower_i = 1
+    while lower_i <= count(program_expr_nodes) limit 100:
+        let n = get(program_expr_nodes,lower_i)
+        let t = get(node_types,lower_i)
+        opcode = ""
+        immediate = ""
+        if n.kind == "integer":
+            opcode = "const_int"
+            immediate = n.lexeme
+        else:
+            if n.kind == "boolean":
+                opcode = "const_bool"
+                immediate = n.lexeme
+            else:
+                if n.kind == "identifier":
+                    opcode = "load"
+                    require t.symbol_id > 0
+                else:
+                    if n.kind == "call":
+                        opcode = "call"
+                        require t.symbol_id > 0
+                    else:
+                        if n.kind == "arguments":
+                            opcode = "pack_args"
+                        else:
+                            if n.kind == "group":
+                                opcode = "alias"
+                            else:
+                                if n.kind == "unary":
+                                    opcode = "unary"
+                                    immediate = n.operator
+                                else:
+                                    require n.kind == "binary"
+                                    opcode = "binary"
+                                    immediate = n.operator
+        require n.left_id < lower_i and n.right_id < lower_i
+        instructions = append(instructions,Instruction(opcode=opcode,kind=t.kind,dst=lower_i,arg1=n.left_id,arg2=n.right_id,symbol_id=t.symbol_id,immediate=immediate,start=n.start,end=n.end,int_value=0,bool_value=false))
+        lower_i = lower_i+1
+    lowering_done = true
+
+# A5.9a: execute the emitted register instructions for one flat action.
+# Explicitly reject unsupported control flow, calls and text values before
+# interpreting anything. Each action uses the current values of declared state.
+
+action execute_branches:
+    require lowering_done and not execution_done and semantic_error == ""
+    require count(headers) >= 1
+    execute_header = 1
+    while execute_header <= count(headers) limit 16:
+        let h = get(headers,execute_header)
+        require h.kind == "if" or h.kind == "else" or (execute_header == 1 and h.kind == "action" and h.depth == 0)
+        execute_header = execute_header+1
+    require count(program_expr_statements) > 0
+    execute_i = 1
+    while execute_i <= count(instructions) limit 100:
+        let inst = get(instructions,execute_i)
+        require inst.kind == "i" or inst.kind == "b"
+        require inst.opcode != "call" and inst.opcode != "pack_args"
+        require inst.immediate != "and" and inst.immediate != "or"
+        execute_i = execute_i+1
+    sym_i = 1
+    while sym_i <= count(symbols) limit 32:
+        let sym = get(symbols,sym_i)
+        if sym.kind == "v":
+            require sym.result == "i" or sym.result == "b"
+            read_int = 0
+            read_bool = false
+            if sym.result == "i":
+                digit_i = 0
+                digit_acc = 0
+                while digit_i < text_length(sym.initializer) limit 128:
+                    let c = text_at(sym.initializer,digit_i)
+                    require ascii_digit(c)
+                    digit_value = decimal_digit(c)
+                    require digit_acc < 214748364 or (digit_acc == 214748364 and digit_value <= 7)
+                    digit_acc = digit_acc*10+digit_value
+                    digit_i = digit_i+1
+                read_int = digit_acc
+            else:
+                read_bool = sym.initializer == "true"
+            symbols = update(symbols,sym_i,Symbol(name=sym.name,kind=sym.kind,parameters=sym.parameters,result=sym.result,initializer=sym.initializer,current_int=read_int,current_bool=read_bool))
+        sym_i = sym_i+1
+    execute_i = 1
+    execute_stmt = 1
+    execute_header = 1
+    execute_condition = 1
+    while execute_stmt <= count(program_expr_statements) or execute_header <= count(headers) limit 32:
+        execute_is_header = execute_header <= count(headers)
+        if execute_is_header and execute_stmt <= count(program_expr_statements):
+            let h = get(headers,execute_header)
+            let stmt = get(program_expr_statements,execute_stmt)
+            execute_is_header = h.line < stmt.line
+        execute_root = 0
+        execute_target = ""
+        execute_kind = ""
+        execute_header_id = 0
+        if execute_is_header:
+            let h = get(headers,execute_header)
+            execute_event_depth = h.depth
+            execute_event_line = h.line
+            execute_kind = h.kind
+            execute_header_id = execute_header
+            if h.kind == "if":
+                require execute_condition <= count(condition_exprs)
+                let cond = get(condition_exprs,execute_condition)
+                require cond.line == h.line and cond.depth == h.depth
+                execute_root = cond.expression_id
+                execute_condition = execute_condition+1
+            execute_header = execute_header+1
+        else:
+            let stmt = get(program_expr_statements,execute_stmt)
+            execute_event_depth = stmt.depth
+            execute_event_line = stmt.line
+            execute_root = stmt.expression_id
+            execute_target = stmt.name
+            execute_stmt = execute_stmt+1
+        execute_active = true
+        execute_parent = 0
+        execute_search = execute_header-1
+        while execute_search > 0 and execute_parent == 0 limit 16:
+            let h = get(headers,execute_search)
+            if h.line < execute_event_line and h.depth < execute_event_depth:
+                execute_parent = execute_search
+                require h.depth == execute_event_depth-1
+                execute_active = h.subject == "active"
+            execute_search = execute_search-1
+        require execute_event_depth == 0 or execute_parent > 0
+        if execute_kind == "else":
+            execute_else_if = 0
+            execute_search = 1
+            while execute_search <= count(else_branches) and execute_else_if == 0 limit 16:
+                let branch = get(else_branches,execute_search)
+                if branch.else_header_id == execute_header_id:
+                    execute_else_if = branch.if_header_id
+                execute_search = execute_search+1
+            require execute_else_if > 0
+            let prior = get(headers,execute_else_if)
+            execute_active = execute_active and prior.subject == "inactive"
+        if execute_root > 0 and not execute_active:
+            execute_i = execute_root+1
+        while execute_root > 0 and execute_active and execute_i <= execute_root limit 100:
+            let inst = get(instructions,execute_i)
+            require inst.dst == execute_i
+            lhs_int = 0
+            rhs_int = 0
+            lhs_bool = false
+            rhs_bool = false
+            result_int = 0
+            result_bool = false
+            if inst.arg1 > 0:
+                let lhs = get(instructions,inst.arg1)
+                lhs_int = lhs.int_value
+                lhs_bool = lhs.bool_value
+            if inst.arg2 > 0:
+                let rhs = get(instructions,inst.arg2)
+                rhs_int = rhs.int_value
+                rhs_bool = rhs.bool_value
+            if inst.opcode == "const_int":
+                digit_i = 0
+                digit_acc = 0
+                while digit_i < text_length(inst.immediate) limit 128:
+                    let c = text_at(inst.immediate,digit_i)
+                    require ascii_digit(c)
+                    digit_value = decimal_digit(c)
+                    require digit_acc < 214748364 or (digit_acc == 214748364 and digit_value <= 7)
+                    digit_acc = digit_acc*10+digit_value
+                    digit_i = digit_i+1
+                result_int = digit_acc
+            else:
+                if inst.opcode == "const_bool":
+                    result_bool = inst.immediate == "true" or inst.immediate == "True"
+                else:
+                    if inst.opcode == "load":
+                        let sym = get(symbols,inst.symbol_id)
+                        result_int = sym.current_int
+                        result_bool = sym.current_bool
+                    else:
+                        if inst.opcode == "alias":
+                            result_int = lhs_int
+                            result_bool = lhs_bool
+                        else:
+                            if inst.opcode == "unary":
+                                if inst.immediate == "-":
+                                    result_int = 0-lhs_int
+                                else:
+                                    require inst.immediate == "not"
+                                    result_bool = not lhs_bool
+                            else:
+                                require inst.opcode == "binary"
+                                if inst.immediate == "+":
+                                    result_int = lhs_int+rhs_int
+                                else:
+                                    if inst.immediate == "-":
+                                        result_int = lhs_int-rhs_int
+                                    else:
+                                        if inst.immediate == "*":
+                                            result_int = lhs_int*rhs_int
+                                        else:
+                                            let lt = get(instructions,inst.arg1)
+                                            if inst.immediate == "==" or inst.immediate == "!=":
+                                                let same = lhs_int == rhs_int if lt.kind == "i" else lhs_bool == rhs_bool
+                                                result_bool = same if inst.immediate == "==" else not same
+                                            else:
+                                                require comparison(inst.immediate)
+                                                result_bool = lhs_int < rhs_int if inst.immediate == "<" else lhs_int <= rhs_int if inst.immediate == "<=" else lhs_int > rhs_int if inst.immediate == ">" else lhs_int >= rhs_int
+            instructions = update(instructions,execute_i,Instruction(opcode=inst.opcode,kind=inst.kind,dst=inst.dst,arg1=inst.arg1,arg2=inst.arg2,symbol_id=inst.symbol_id,immediate=inst.immediate,start=inst.start,end=inst.end,int_value=result_int,bool_value=result_bool))
+            execute_i = execute_i+1
+        if execute_is_header:
+            execute_branch_value = execute_active
+            if execute_kind == "if" and execute_active:
+                let result = get(instructions,execute_root)
+                require result.kind == "b"
+                execute_branch_value = result.bool_value
+            let h = get(headers,execute_header_id)
+            headers = update(headers,execute_header_id,BlockHeader(kind=h.kind,subject="active" if execute_branch_value else "inactive",depth=h.depth,line=h.line,start=h.start,end=h.end))
+        else:
+            if execute_active:
+                let result = get(instructions,execute_root)
+                sym_i = 1
+                sym_id = 0
+                while sym_i <= count(symbols) and sym_id == 0 limit 32:
+                    let sym = get(symbols,sym_i)
+                    if sym.name == execute_target:
+                        sym_id = sym_i
+                    sym_i = sym_i+1
+                require sym_id > 0
+                let target = get(symbols,sym_id)
+                require target.kind == "v" and target.result == result.kind
+                symbols = update(symbols,sym_id,Symbol(name=target.name,kind=target.kind,parameters=target.parameters,result=target.result,initializer=target.initializer,current_int=result.int_value,current_bool=result.bool_value))
+    require execute_i == count(instructions)+1 and execute_condition == count(condition_exprs)+1
+    execution_done = true
+
+test initially_empty: -> count(tokens) == 0
+screen main:
+    text "Experimental Sedrava A5.9b: scalar IR with nested branches."
