@@ -15,7 +15,7 @@ tempfile = "3.16"
 regex = "1"
 roxmltree = "0.21"
 sha2 = "0.10"
-sedravasql = { git = "https://github.com/VasiliiBabkin/sedravasql.git", rev = "db2054efaeda0fd5cb4724f86c11586bdae45266" }
+sedravasql = { git = "https://github.com/VasiliiBabkin/sedravasql.git", rev = "69eb7b739fac49f5aa0a44fa53b8b9e4e644dc50" }
 toml = "0.8"
 url = "=2.5.2"
 

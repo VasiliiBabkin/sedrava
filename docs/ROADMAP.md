@@ -253,3 +253,11 @@ VDS: 83 Rust tests and A10/A11/A12/A13 integration regressions PASS with pinned 
 ### Native server B15a: write admission limits
 
 [HTTP 507 capacity with continued reads and replay](RUST_NATIVE_SERVER_B15A_BUDGET.ru.md). VDS 83 Rust tests and A10–A13 regressions PASS.
+
+### Self-hosting A5.7: explicit symbol context and scalar type checking
+
+[Name resolution, signatures and scalar types](SELF_HOSTING_PARSER_A57.ru.md). Declaration parsing and full language semantics pending.
+
+### Native server A15: verified offline archive restore
+
+[Operator procedure and HTTP regression](RUST_NATIVE_SERVER_A15_ARCHIVE.ru.md). VDS: 83 Rust tests, A10–A13, B15a and A15 PASS. A14 wider DSL transactions remain pending.
