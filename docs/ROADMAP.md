@@ -200,3 +200,14 @@ AST/layout/token oracles, plus pre-merge/double-parse rejection;
 83 Rust tests PASS. No full language grammar, IR, type checking,
 self-hosted stage 1/2/3 or new Android APK.
 See SELF_HOSTING_PARSER_A52.ru.md.
+
+### Self-hosting A5.3: bounded arithmetic AST over unified tokens
+
+A Sedrava-written parse_expression_program action builds typed
+integer/binary expression nodes with Unicode source spans, stable
+node IDs and 4-space layout nesting from real A5.1 unified tokens.
+Supports 1..3 integer literals with + - * /, multiplicative precedence
+and left-associativity for equal ranks. Independent Python oracle
+acceptance: 37 valid and 23 invalid source cases PASS. Rust 83 tests
+PASS. No parentheses, identifiers RHS, general expression grammar,
+type checker, IR or stage 1/2/3. [RU report](SELF_HOSTING_PARSER_A53.ru.md).

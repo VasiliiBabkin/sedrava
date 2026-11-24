@@ -1,0 +1,31 @@
+{
+  "schema": "sedrava.selfhost.a53.arithmetic-ast.v1",
+  "date": "2026-11-24",
+  "program": "examples/self_host/parser_a53.sdr",
+  "test": "scripts/verify_selfhost_parser_a53.py",
+  "positive_cases": 37,
+  "negative_cases": 23,
+  "expressions_per_statement_integer_terms_max": 3,
+  "operators": [
+    "+",
+    "-",
+    "*",
+    "/"
+  ],
+  "precedence_verified": true,
+  "left_associativity_verified": true,
+  "ast_fields": [
+    "name",
+    "expression_id",
+    "depth",
+    "line",
+    "start",
+    "end"
+  ],
+  "ast_executed_in_sedrava": true,
+  "oracle_executed_in_python": true,
+  "rust_unit_tests": 83,
+  "full_language_parser": false,
+  "self_hosted_compiler": false,
+  "android_apk_this_milestone": false
+}

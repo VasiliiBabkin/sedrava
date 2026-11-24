@@ -1,0 +1,453 @@
+# A5.3 Sedrava-authored, layout-aware arithmetic expression program parser.
+# Narrow bounded grammar: name = int ((+|-|*|/) int){0,2}, no parentheses.
+# Precedence: * / before + -, left associative for equal precedence.
+# Narrow grammar: one ASCII identifier = integer per active line, arbitrary
+# consistent 4-space indent/dedent levels. This is NOT full Sedrava grammar.
+# One action scans up to 256 Unicode scalars. Strings preserve raw spelling.
+# Supports ASCII identifiers/integers, quoted strings and basic escapes,
+# whitespace, # comments, punctuation and two-character operators.
+app "Self-host Parser A5.1"
+record Token:
+    kind: text
+    lexeme: text
+    offset: int
+    end: int
+    line: int
+    column: int
+record Assignment:
+    name: text
+    literal: text
+    start: int
+    end: int
+record LayoutToken:
+    kind: text
+    offset: int
+    line: int
+    column: int
+    level: int
+record ExprNode:
+    kind: text
+    lexeme: text
+    operator: text
+    left_id: int
+    right_id: int
+    start: int
+    end: int
+record ExpressionAssignment:
+    name: text
+    expression_id: int
+    start: int
+    end: int
+
+record UnifiedToken:
+    kind: text
+    lexeme: text
+    offset: int
+    end: int
+    line: int
+    column: int
+    level: int
+record ProgramAssignment:
+    name: text
+    literal: text
+    depth: int
+    line: int
+    start: int
+    end: int
+record ProgramExpression:
+    name: text
+    expression_id: int
+    depth: int
+    line: int
+    start: int
+    end: int
+
+fn ascii_letter(ch: text) -> bool = contains("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_", ch)
+fn ascii_digit(ch: text) -> bool = contains("0123456789", ch)
+
+state source = "sum==42 # comment"
+state cursor = 0
+state start = 0
+state line = 1
+state column = 1
+state start_line = 1
+state start_column = 1
+state fragment = ""
+state fragment_kind = ""
+state operator = ""
+state in_string = false
+state escaped = false
+state in_comment = false
+state tokens: list<Token>(max=100) = []
+state assignments: list<Assignment>(max=1) = []
+
+state layout_cursor = 0
+state layout_line = 1
+state layout_column = 1
+state layout_spaces = 0
+state layout_level = 0
+state layout_desired = 0
+state layout_at_start = true
+state layout_active = false
+state layout_comment = false
+state layout_tokens: list<LayoutToken>(max=100) = []
+state expressions: list<ExprNode>(max=16) = []
+state expression_assignments: list<ExpressionAssignment>(max=1) = []
+
+
+state merge_i = 1
+state merge_j = 1
+state unified_tokens: list<UnifiedToken>(max=100) = []
+
+state parse_cursor = 1
+state parse_depth = 0
+state program_assignments: list<ProgramAssignment>(max=32) = []
+state program_expr_cursor = 1
+state program_expr_depth = 0
+state program_expr_nodes: list<ExprNode>(max=100) = []
+state program_expr_statements: list<ProgramExpression>(max=16) = []
+
+
+action scan:
+    require text_length(source) <= 256
+    while cursor < text_length(source) limit 256:
+        let ch = text_at(source, cursor)
+        if in_comment:
+            if ch == "\n":
+                in_comment = false
+        else:
+            if in_string:
+                fragment = concat(fragment, ch)
+                if escaped:
+                    require contains("ntr\"\\", ch)
+                    escaped = false
+                else:
+                    if ch == "\\":
+                        escaped = true
+                    else:
+                        if ch == "\"":
+                            tokens = append(tokens, Token(kind="string", lexeme=fragment, offset=start, end=cursor + 1, line=start_line, column=start_column))
+                            fragment = ""
+                            fragment_kind = ""
+                            in_string = false
+            else:
+                if ch == "#":
+                    if fragment != "":
+                        tokens = append(tokens, Token(kind=fragment_kind, lexeme=fragment, offset=start, end=cursor, line=start_line, column=start_column))
+                        fragment = ""
+                        fragment_kind = ""
+                    in_comment = true
+                else:
+                    if ch == "\"":
+                        if fragment != "":
+                            tokens = append(tokens, Token(kind=fragment_kind, lexeme=fragment, offset=start, end=cursor, line=start_line, column=start_column))
+                            fragment = ""
+                            fragment_kind = ""
+                        start = cursor
+                        start_line = line
+                        start_column = column
+                        fragment = ch
+                        fragment_kind = "string"
+                        in_string = true
+                    else:
+                        if contains(" \t\r\n", ch):
+                            if fragment != "":
+                                tokens = append(tokens, Token(kind=fragment_kind, lexeme=fragment, offset=start, end=cursor, line=start_line, column=start_column))
+                                fragment = ""
+                                fragment_kind = ""
+                        else:
+                            if contains("(){}[],:.+-*/=<>!", ch):
+                                if fragment != "":
+                                    tokens = append(tokens, Token(kind=fragment_kind, lexeme=fragment, offset=start, end=cursor, line=start_line, column=start_column))
+                                    fragment = ""
+                                    fragment_kind = ""
+                                operator = ch
+                                if cursor + 1 < text_length(source):
+                                    let next_ch = text_at(source, cursor + 1)
+                                    if next_ch == "=" and contains("=!<>", ch):
+                                        operator = concat(ch, next_ch)
+                                        cursor = cursor + 1
+                                    else:
+                                        if ch == "-" and next_ch == ">":
+                                            operator = "->"
+                                            cursor = cursor + 1
+                                if contains("+-*/=<>!", ch):
+                                    tokens = append(tokens, Token(kind="operator", lexeme=operator, offset=cursor + 1 - text_length(operator), end=cursor + 1, line=line, column=column))
+                                else:
+                                    tokens = append(tokens, Token(kind="punct", lexeme=operator, offset=cursor + 1 - text_length(operator), end=cursor + 1, line=line, column=column))
+                                if text_length(operator) == 2:
+                                    column = column + 1
+                            else:
+                                require ascii_letter(ch) or ascii_digit(ch)
+                                if fragment == "":
+                                    start = cursor
+                                    start_line = line
+                                    start_column = column
+                                    if ascii_digit(ch):
+                                        fragment_kind = "integer"
+                                    else:
+                                        fragment_kind = "identifier"
+                                else:
+                                    if fragment_kind == "integer":
+                                        require ascii_digit(ch)
+                                fragment = concat(fragment, ch)
+        if ch == "\n":
+            line = line + 1
+            column = 1
+        else:
+            column = column + 1
+        cursor = cursor + 1
+    require not in_string
+    require not escaped
+    if fragment != "":
+        tokens = append(tokens, Token(kind=fragment_kind, lexeme=fragment, offset=start, end=cursor, line=start_line, column=start_column))
+        fragment = ""
+        fragment_kind = ""
+action parse_assignment:
+    require count(tokens) == 3
+    let left = get(tokens, 1)
+    let equal_sign = get(tokens, 2)
+    let right = get(tokens, 3)
+    require left.kind == "identifier"
+    require equal_sign.kind == "operator" and equal_sign.lexeme == "="
+    require right.kind == "integer"
+    assignments = append(assignments, Assignment(name=left.lexeme, literal=right.lexeme, start=left.offset, end=right.end))
+
+action scan_layout:
+    require text_length(source) <= 256
+    while layout_cursor < text_length(source) limit 256:
+        let ch = text_at(source, layout_cursor)
+        if ch == "\n":
+            if layout_active:
+                layout_tokens = append(layout_tokens, LayoutToken(kind="NEWLINE", offset=layout_cursor, line=layout_line, column=layout_column, level=layout_level))
+            layout_active = false
+            layout_comment = false
+            layout_at_start = true
+            layout_spaces = 0
+            layout_line = layout_line + 1
+            layout_column = 1
+        else:
+            if layout_comment:
+                require ch != "\r"
+            else:
+                if layout_at_start:
+                    if ch == " ":
+                        layout_spaces = layout_spaces + 1
+                    else:
+                        if ch == "#":
+                            layout_comment = true
+                        else:
+                            require ch != "\t" and ch != "\r" and ch != "\""
+                            require layout_spaces <= 32
+                            layout_desired = 0
+                            while layout_spaces > 0 limit 8:
+                                require layout_spaces >= 4
+                                layout_spaces = layout_spaces - 4
+                                layout_desired = layout_desired + 1
+                            while layout_level < layout_desired limit 8:
+                                layout_level = layout_level + 1
+                                layout_tokens = append(layout_tokens, LayoutToken(kind="INDENT", offset=layout_cursor, line=layout_line, column=layout_column, level=layout_level))
+                            while layout_level > layout_desired limit 8:
+                                layout_level = layout_level - 1
+                                layout_tokens = append(layout_tokens, LayoutToken(kind="DEDENT", offset=layout_cursor, line=layout_line, column=layout_column, level=layout_level))
+                            layout_at_start = false
+                            layout_active = true
+                else:
+                    if ch == "#":
+                        layout_comment = true
+                    else:
+                        require ch != "\t" and ch != "\r" and ch != "\""
+            layout_column = layout_column + 1
+        layout_cursor = layout_cursor + 1
+    if layout_active:
+        layout_tokens = append(layout_tokens, LayoutToken(kind="NEWLINE", offset=layout_cursor, line=layout_line, column=layout_column, level=layout_level))
+    while layout_level > 0 limit 8:
+        layout_level = layout_level - 1
+        layout_tokens = append(layout_tokens, LayoutToken(kind="DEDENT", offset=layout_cursor, line=layout_line, column=layout_column, level=layout_level))
+
+action parse_binary:
+    require count(tokens) == 5 or count(tokens) == 7
+    let variable = get(tokens, 1)
+    let equal_sign = get(tokens, 2)
+    let first = get(tokens, 3)
+    let first_operator = get(tokens, 4)
+    let second = get(tokens, 5)
+    require variable.kind == "identifier"
+    require equal_sign.kind == "operator" and equal_sign.lexeme == "="
+    require first.kind == "integer" and second.kind == "integer"
+    require first_operator.kind == "operator"
+    expressions = append(expressions, ExprNode(kind="integer", lexeme=first.lexeme, operator="", left_id=0, right_id=0, start=first.offset, end=first.end))
+    expressions = append(expressions, ExprNode(kind="integer", lexeme=second.lexeme, operator="", left_id=0, right_id=0, start=second.offset, end=second.end))
+    if count(tokens) == 5:
+        require contains("+-*/", first_operator.lexeme) and text_length(first_operator.lexeme) == 1
+        expressions = append(expressions, ExprNode(kind="binary", lexeme="", operator=first_operator.lexeme, left_id=1, right_id=2, start=first.offset, end=second.end))
+        expression_assignments = append(expression_assignments, ExpressionAssignment(name=variable.lexeme, expression_id=3, start=variable.offset, end=second.end))
+    else:
+        let second_operator = get(tokens, 6)
+        let third = get(tokens, 7)
+        require first_operator.lexeme == "+" or first_operator.lexeme == "-"
+        require second_operator.kind == "operator" and (second_operator.lexeme == "*" or second_operator.lexeme == "/")
+        require third.kind == "integer"
+        expressions = append(expressions, ExprNode(kind="integer", lexeme=third.lexeme, operator="", left_id=0, right_id=0, start=third.offset, end=third.end))
+        expressions = append(expressions, ExprNode(kind="binary", lexeme="", operator=second_operator.lexeme, left_id=2, right_id=3, start=second.offset, end=third.end))
+        expressions = append(expressions, ExprNode(kind="binary", lexeme="", operator=first_operator.lexeme, left_id=1, right_id=4, start=first.offset, end=third.end))
+        expression_assignments = append(expression_assignments, ExpressionAssignment(name=variable.lexeme, expression_id=5, start=variable.offset, end=third.end))
+
+
+action merge_tokens:
+    require cursor == text_length(source) and layout_cursor == text_length(source)
+    require count(unified_tokens) == 0
+    require count(tokens) + count(layout_tokens) <= 100
+    merge_i = 1
+    merge_j = 1
+    while merge_i <= count(tokens) or merge_j <= count(layout_tokens) limit 100:
+        if merge_i > count(tokens):
+            let layout = get(layout_tokens, merge_j)
+            unified_tokens = append(unified_tokens, UnifiedToken(kind=layout.kind, lexeme="", offset=layout.offset, end=layout.offset, line=layout.line, column=layout.column, level=layout.level))
+            merge_j = merge_j + 1
+        else:
+            if merge_j > count(layout_tokens):
+                let normal = get(tokens, merge_i)
+                unified_tokens = append(unified_tokens, UnifiedToken(kind=normal.kind, lexeme=normal.lexeme, offset=normal.offset, end=normal.end, line=normal.line, column=normal.column, level=0))
+                merge_i = merge_i + 1
+            else:
+                let next_normal = get(tokens, merge_i)
+                let next_layout = get(layout_tokens, merge_j)
+                if next_layout.offset <= next_normal.offset:
+                    unified_tokens = append(unified_tokens, UnifiedToken(kind=next_layout.kind, lexeme="", offset=next_layout.offset, end=next_layout.offset, line=next_layout.line, column=next_layout.column, level=next_layout.level))
+                    merge_j = merge_j + 1
+                else:
+                    unified_tokens = append(unified_tokens, UnifiedToken(kind=next_normal.kind, lexeme=next_normal.lexeme, offset=next_normal.offset, end=next_normal.end, line=next_normal.line, column=next_normal.column, level=0))
+                    merge_i = merge_i + 1
+
+
+# Consume real A5.1 unified tokens, not the original parallel lexical
+# token array. Stable record IDs of unified_tokens are 1..N for one scan.
+action parse_program:
+    require cursor == text_length(source) and layout_cursor == text_length(source)
+    require merge_i == count(tokens) + 1 and merge_j == count(layout_tokens) + 1
+    require count(program_assignments) == 0
+    require count(unified_tokens) > 0
+    parse_cursor = 1
+    parse_depth = 0
+    while parse_cursor <= count(unified_tokens) limit 100:
+        let current = get(unified_tokens, parse_cursor)
+        if current.kind == "INDENT":
+            require count(program_assignments) > 0
+            require current.level == parse_depth + 1
+            require parse_depth < 8
+            parse_depth = parse_depth + 1
+            parse_cursor = parse_cursor + 1
+        else:
+            if current.kind == "DEDENT":
+                require parse_depth > 0
+                require current.level == parse_depth - 1
+                parse_depth = parse_depth - 1
+                parse_cursor = parse_cursor + 1
+            else:
+                require current.kind == "identifier"
+                require parse_cursor + 3 <= count(unified_tokens)
+                let eq = get(unified_tokens, parse_cursor + 1)
+                let number = get(unified_tokens, parse_cursor + 2)
+                let nl = get(unified_tokens, parse_cursor + 3)
+                require eq.kind == "operator" and eq.lexeme == "="
+                require number.kind == "integer"
+                require nl.kind == "NEWLINE"
+                require eq.line == current.line
+                require number.line == current.line
+                require nl.line == current.line
+                require current.offset < eq.offset and eq.offset < number.offset
+                require number.end <= nl.offset
+                program_assignments = append(program_assignments, ProgramAssignment(name=current.lexeme, literal=number.lexeme, depth=parse_depth, line=current.line, start=current.offset, end=number.end))
+                parse_cursor = parse_cursor + 4
+    require parse_depth == 0
+
+# All tokens come from Sedrava-generated UnifiedToken, including layout.
+# The tiny grammar supports one to three non-negative integer terms per line.
+# Nodes are emitted in post-order except leaves which retain lexical order;
+# expression IDs refer to stable auto-generated list record IDs.
+action parse_expression_program:
+    require cursor == text_length(source) and layout_cursor == text_length(source)
+    require merge_i == count(tokens) + 1 and merge_j == count(layout_tokens) + 1
+    require count(unified_tokens) > 0
+    require count(program_expr_statements) == 0 and count(program_expr_nodes) == 0
+    program_expr_cursor = 1
+    program_expr_depth = 0
+    while program_expr_cursor <= count(unified_tokens) limit 100:
+        let token = get(unified_tokens, program_expr_cursor)
+        if token.kind == "INDENT":
+            require count(program_expr_statements) > 0
+            require token.level == program_expr_depth + 1
+            require program_expr_depth < 8
+            program_expr_depth = program_expr_depth + 1
+            program_expr_cursor = program_expr_cursor + 1
+        else:
+            if token.kind == "DEDENT":
+                require program_expr_depth > 0
+                require token.level == program_expr_depth - 1
+                program_expr_depth = program_expr_depth - 1
+                program_expr_cursor = program_expr_cursor + 1
+            else:
+                require token.kind == "identifier"
+                require program_expr_cursor + 3 <= count(unified_tokens)
+                let eq = get(unified_tokens, program_expr_cursor + 1)
+                let first = get(unified_tokens, program_expr_cursor + 2)
+                let next_token = get(unified_tokens, program_expr_cursor + 3)
+                require eq.kind == "operator" and eq.lexeme == "="
+                require first.kind == "integer"
+                require eq.line == token.line and first.line == token.line
+                require token.offset < eq.offset and eq.offset < first.offset
+                let first_id = count(program_expr_nodes) + 1
+                program_expr_nodes = append(program_expr_nodes, ExprNode(kind="integer", lexeme=first.lexeme, operator="", left_id=0, right_id=0, start=first.offset, end=first.end))
+                if next_token.kind == "NEWLINE":
+                    require next_token.line == token.line and first.end <= next_token.offset
+                    program_expr_statements = append(program_expr_statements, ProgramExpression(name=token.lexeme, expression_id=first_id, depth=program_expr_depth, line=token.line, start=token.offset, end=first.end))
+                    program_expr_cursor = program_expr_cursor + 4
+                else:
+                    require next_token.kind == "operator" and text_length(next_token.lexeme) == 1
+                    require contains("+-*/", next_token.lexeme)
+                    require next_token.line == token.line
+                    require program_expr_cursor + 5 <= count(unified_tokens)
+                    let second = get(unified_tokens, program_expr_cursor + 4)
+                    let after_second = get(unified_tokens, program_expr_cursor + 5)
+                    require second.kind == "integer" and second.line == token.line
+                    require first.end <= next_token.offset and next_token.end <= second.offset
+                    let second_id = count(program_expr_nodes) + 1
+                    program_expr_nodes = append(program_expr_nodes, ExprNode(kind="integer", lexeme=second.lexeme, operator="", left_id=0, right_id=0, start=second.offset, end=second.end))
+                    if after_second.kind == "NEWLINE":
+                        require after_second.line == token.line and second.end <= after_second.offset
+                        let binary_id = count(program_expr_nodes) + 1
+                        program_expr_nodes = append(program_expr_nodes, ExprNode(kind="binary", lexeme="", operator=next_token.lexeme, left_id=first_id, right_id=second_id, start=first.offset, end=second.end))
+                        program_expr_statements = append(program_expr_statements, ProgramExpression(name=token.lexeme, expression_id=binary_id, depth=program_expr_depth, line=token.line, start=token.offset, end=second.end))
+                        program_expr_cursor = program_expr_cursor + 6
+                    else:
+                        require after_second.kind == "operator" and text_length(after_second.lexeme) == 1
+                        require contains("+-*/", after_second.lexeme)
+                        require after_second.line == token.line
+                        require program_expr_cursor + 7 <= count(unified_tokens)
+                        let third = get(unified_tokens, program_expr_cursor + 6)
+                        let newline = get(unified_tokens, program_expr_cursor + 7)
+                        require third.kind == "integer" and third.line == token.line
+                        require newline.kind == "NEWLINE" and newline.line == token.line
+                        require second.end <= after_second.offset and after_second.end <= third.offset
+                        require third.end <= newline.offset
+                        let third_id = count(program_expr_nodes) + 1
+                        program_expr_nodes = append(program_expr_nodes, ExprNode(kind="integer", lexeme=third.lexeme, operator="", left_id=0, right_id=0, start=third.offset, end=third.end))
+                        if contains("+-", next_token.lexeme) and contains("*/", after_second.lexeme):
+                            let inner_id = count(program_expr_nodes) + 1
+                            program_expr_nodes = append(program_expr_nodes, ExprNode(kind="binary", lexeme="", operator=after_second.lexeme, left_id=second_id, right_id=third_id, start=second.offset, end=third.end))
+                            let outer_id = count(program_expr_nodes) + 1
+                            program_expr_nodes = append(program_expr_nodes, ExprNode(kind="binary", lexeme="", operator=next_token.lexeme, left_id=first_id, right_id=inner_id, start=first.offset, end=third.end))
+                            program_expr_statements = append(program_expr_statements, ProgramExpression(name=token.lexeme, expression_id=outer_id, depth=program_expr_depth, line=token.line, start=token.offset, end=third.end))
+                        else:
+                            let inner_id = count(program_expr_nodes) + 1
+                            program_expr_nodes = append(program_expr_nodes, ExprNode(kind="binary", lexeme="", operator=next_token.lexeme, left_id=first_id, right_id=second_id, start=first.offset, end=second.end))
+                            let outer_id = count(program_expr_nodes) + 1
+                            program_expr_nodes = append(program_expr_nodes, ExprNode(kind="binary", lexeme="", operator=after_second.lexeme, left_id=inner_id, right_id=third_id, start=first.offset, end=third.end))
+                            program_expr_statements = append(program_expr_statements, ProgramExpression(name=token.lexeme, expression_id=outer_id, depth=program_expr_depth, line=token.line, start=token.offset, end=third.end))
+                        program_expr_cursor = program_expr_cursor + 8
+    require program_expr_depth == 0
+
+test initially_empty: -> count(tokens) == 0
+screen main:
+    text "Experimental Sedrava A5.3: arithmetic expression program AST."
