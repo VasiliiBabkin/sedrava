@@ -27,3 +27,11 @@ route POST "/paid-summary":
 route POST "/top-products":
     param minimum: int
     query "SELECT product_id,SUM(amount) AS total FROM Orders WHERE paid=true GROUP BY product_id HAVING total>=? ORDER BY total DESC"
+route POST "/new-product-order":
+    param product_id: text
+    param title: text
+    param category: text
+    param price: int
+    param order_id: text
+    param amount: int
+    transaction [{"sql":"INSERT INTO Products (id,title,category,price) VALUES (?,?,?,?)","using":["product_id","title","category","price"]},{"sql":"INSERT INTO Orders (id,product_id,amount,paid) VALUES (?,?,?,false)","using":["order_id","product_id","amount"]}]

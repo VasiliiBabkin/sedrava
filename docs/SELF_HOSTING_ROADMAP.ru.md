@@ -149,3 +149,7 @@ stage 1/2/3 ещё отсутствуют.
 ### A5.10a — functional IR stack VM
 
 [Frames, local slots and bounded recursion](SELF_HOSTING_FUNCTION_VM_A510A.ru.md). Source-to-function-IR lowering remains pending.
+
+### A5.10b — source function lowering
+
+[Self-hosted source compiler](SELF_HOSTING_FUNCTION_COMPILER_A510B.ru.md). Statement bodies, full types and structured diagnostics pending.

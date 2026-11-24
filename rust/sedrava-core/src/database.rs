@@ -1,7 +1,7 @@
 //! A16 standalone, explicit-capability SQL host domain.
 //! One checked statement, positional typed parameters, no implicit IO or interpolation.
 use crate::model::{fail, Error, Result};
-use sedravasql::native_log::{sql::{self,SqlKind,SqlResult},table::Cell,NativeLog};
+use sedravasql::native_log::{sql::{self,SqlKind,SqlResult,BoundStatement},table::Cell,NativeLog};
 use std::{collections::BTreeSet,path::Path};
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 enum Type{Int,Bool,Text}
@@ -13,17 +13,25 @@ impl Type{
 fn identifier(s:&str)->bool{
     !s.is_empty()&&s.len()<=48&&s.as_bytes()[0].is_ascii_alphabetic()&&s.bytes().all(|b|b.is_ascii_alphanumeric()||b==b'_')
 }
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TransactionStep {
+    sql:String,
+    #[serde(rename="using")]
+    arguments:Vec<String>,
+}
 pub struct Program{
     pub name:String,
     params:Vec<(String,Type)>,
     sql:String,
+    transaction:Vec<(String,Vec<usize>)>,
     kind:SqlKind,
 }
 pub fn parse(source:&str)->Result<Program>{
     if source.len()>32768{return fail("E_DATABASE: source budget");}
     let mut lines=source.lines().filter(|l|!l.trim().is_empty()&&!l.trim_start().starts_with('#'));
     let name=lines.next().and_then(|l|l.strip_prefix("database ")).filter(|s|identifier(s)).ok_or_else(||Error("E_DATABASE: expected database NAME".into()))?.to_owned();
-    let mut names=BTreeSet::new();let mut params=Vec::new();let mut statement=None;
+    let mut names=BTreeSet::new();let mut params=Vec::new();let mut statement=None;let mut transaction=Vec::new();
     for line in lines{
         if statement.is_some(){return fail("E_DATABASE: only one statement allowed");}
         let line=line.strip_prefix("    ").ok_or_else(||Error("E_DATABASE: expected four spaces".into()))?;
@@ -31,6 +39,25 @@ pub fn parse(source:&str)->Result<Program>{
             let (name,kind)=raw.split_once(": ").ok_or_else(||Error("E_DATABASE: expected param NAME: TYPE".into()))?;
             if !identifier(name)||!names.insert(name)||params.len()>=32{return fail("E_DATABASE: invalid/duplicate parameter");}
             params.push((name.to_owned(),Type::parse(kind)?));
+        }else if let Some(raw)=line.strip_prefix("transaction "){
+            let steps:Vec<TransactionStep>=serde_json::from_str(raw).map_err(|_|Error("E_DATABASE: transaction requires JSON steps".into()))?;
+            if steps.is_empty()||steps.len()>15{return fail("E_DATABASE: transaction requires 1..15 steps");}
+            let mut used=BTreeSet::new();
+            for step in steps{
+                if !step.sql.split_ascii_whitespace().next().is_some_and(|s|["INSERT","UPDATE","DELETE"].iter().any(|k|s.eq_ignore_ascii_case(k))){
+                    return fail("E_DATABASE: transaction only permits DML");
+                }
+                let mut indices=Vec::new();
+                for name in &step.arguments{
+                    let index=params.iter().position(|(p,_)|p==name).ok_or_else(||Error("E_DATABASE: unknown transaction argument".into()))?;
+                    used.insert(index);indices.push(index);
+                }
+                let sample=indices.iter().map(|i|params[*i].1.sample()).collect::<Vec<_>>();
+                if sql::check(&step.sql,&sample).map_err(|e|Error(format!("E_DATABASE: {e}")))?!=SqlKind::Write{return fail("E_DATABASE: transaction only permits writes");}
+                transaction.push((step.sql,indices));
+            }
+            if used.len()!=params.len(){return fail("E_DATABASE: unused transaction parameter");}
+            statement=Some((SqlKind::Write,String::new()));
         }else{
             let (kind,raw)=if let Some(s)=line.strip_prefix("query "){(SqlKind::Query,s)}else if let Some(s)=line.strip_prefix("execute "){(SqlKind::Write,s)}else{return fail("E_DATABASE: expected param, query or execute");};
             let text:String=serde_json::from_str(raw).map_err(|_|Error("E_DATABASE: expected quoted SQL string".into()))?;
@@ -41,7 +68,7 @@ pub fn parse(source:&str)->Result<Program>{
         }
     }
     let (kind,sql)=statement.ok_or_else(||Error("E_DATABASE: missing statement".into()))?;
-    Ok(Program{name,params,sql,kind})
+    Ok(Program{name,params,sql,transaction,kind})
 }
 impl Program {
     pub(crate) fn kind(&self)->SqlKind { self.kind }
@@ -57,7 +84,24 @@ impl Program {
         Ok(out)
     }
     pub(crate) fn execute_on(&self,db:&mut NativeLog,values:&[Cell],request:Option<&str>)->sedravasql::native_log::Result<SqlResult>{
-        sql::execute_bound(db,&self.sql,values,request)
+        if self.transaction.is_empty(){return sql::execute_bound(db,&self.sql,values,request);}
+        let request=request.ok_or(sedravasql::native_log::Error::Invalid("database transaction requires request key"))?;
+        if values.len()!=self.params.len(){return Err(sedravasql::native_log::Error::Invalid("database transaction argument count"));}
+        let steps=self.bound_steps(values);
+        sql::execute_transaction(db,&steps,request)
+    }
+    fn bound_steps(&self,values:&[Cell])->Vec<BoundStatement>{
+        self.transaction.iter().map(|(sql,indices)|BoundStatement{sql:sql.clone(),params:indices.iter().map(|i|values[*i].clone()).collect()}).collect()
+    }
+    fn check_bound(&self,values:&[Cell])->Result<()> {
+        if self.transaction.is_empty(){
+            sql::check(&self.sql,values).map_err(|e|Error(format!("E_DATABASE: {e}")))?;
+        }else{
+            for step in self.bound_steps(values){
+                sql::check(&step.sql,&step.params).map_err(|e|Error(format!("E_DATABASE: {e}")))?;
+            }
+        }
+        Ok(())
     }
 }
 pub fn run(program:&Program,path:&Path,trusted:bool,allow_write:bool,request:Option<&str>,supplied:&[String])->Result<SqlResult>{
@@ -81,7 +125,7 @@ pub fn run(program:&Program,path:&Path,trusted:bool,allow_write:bool,request:Opt
         bound.push(value);
     }
     // Recheck bound SQL before acquiring an exclusive DB handle.
-    sql::check(&program.sql,&bound).map_err(|e|Error(format!("E_DATABASE: {e}")))?;
+    program.check_bound(&bound)?;
     let mut db=NativeLog::open(path).map_err(|e|Error(format!("E_DATABASE: {e}")))?;
-    sql::execute_bound(&mut db,&program.sql,&bound,request).map_err(|e|Error(format!("E_DATABASE: {e}")))
+    program.execute_on(&mut db,&bound,request).map_err(|e|Error(format!("E_DATABASE: {e}")))
 }

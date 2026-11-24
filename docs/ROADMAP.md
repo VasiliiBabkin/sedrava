@@ -293,3 +293,11 @@ VDS: 83 Rust tests and A10/A11/A12/A13 integration regressions PASS with pinned 
 ### A19 practical demo
 
 [Sales backend example](SALES_DEMO_A19.ru.md).
+
+### A5.10b
+
+[Function source-to-IR compiler](SELF_HOSTING_FUNCTION_COMPILER_A510B.ru.md).
+
+### A20
+
+[Atomic SQL transaction routes and foreign keys](SALES_DEMO_A20.ru.md). GUI and public deployment pending.

@@ -1,0 +1,7 @@
+# A20 — SQL transactions in the Sedrava database host and API
+
+An alternative to single query/execute: one `transaction` line with JSON array of 1..15 static step objects {"sql":"INSERT ... ?","using":["param_name"]}. Named parameter mapping is positional per step; each declared parameter must be used. Only INSERT/UPDATE/DELETE, no arbitrary user SQL. Source check validates statement syntax and bound arity; schema-dependent single-row, PK and FK requirements checked at execution. CLI and database-api both use the same transaction dispatch; existing single statements unchanged. Explicit write capability and stable request key remain required. B20 disjoint-row starting-generation semantics apply. Do not replay old keys across changed statement kind.
+
+Sales schema now declares Orders.product_id -> Products.id. `/new-product-order` atomically inserts a product and its order in one authenticated request. If either conflicts or constraint fails, neither is written. Demo remains local-only, no payment provider, GUI, public deployment, general SQL transaction sessions or production claim. No downgrade to pre-B20 runtime for constrained journals.
+
+VDS: 9 authenticated HTTP requests, atomic product/order, FK rejection, byte-identical journal on rejected requests, typed binding, restart replay PASS. 83 Rust tests and A10–A19/B15a regressions PASS. Dependency a0167e14ef4efb2a2c6dc3f7f785ed0e031bbb3e.
