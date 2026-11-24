@@ -227,3 +227,11 @@ Sedrava-written parser adds identifier/boolean/unary/binary AST with precedence,
 ### Native Server A11: immutable native index backend
 
 Explicit SHA-approved read-only backend using SedravaSQL B12 VerifiedIndexReader. Exclusive loopback GET routes with existing db_get/db_revision; no SQLite database opened in this mode, no native live writes. [RU protocol](RUST_NATIVE_SERVER_A11_INDEX.ru.md).
+
+### Native Server A12/A13: exclusive native log writes and restart verification
+
+Two business records, state and durable HTTP receipt in one native batch; read-only GET uses B13. Real loopback HTTP, replay after normal restart and simulated process exit after sync, torn frame rejected. [RU protocol](RUST_NATIVE_SERVER_A12_LOG.ru.md). No public deployment, automatic repair or physical power-loss claim.
+
+### Self-hosting A5.6a: compound if conditions
+
+Shared stack expression grammar for condition AST, source spans and block depth. [RU protocol](SELF_HOSTING_PARSER_A56A.ru.md). Else, calls and typing remain pending.

@@ -20,6 +20,7 @@ mod kv_write;
 mod sqlite;
 mod sqlite_v2;
 mod native_index;
+mod native_log;
 mod state;
 mod storage;
 mod transaction;
@@ -30,6 +31,7 @@ use kv_write::{BatchFailure, BatchPut, DbPut, PutFailure};
 use sqlite::SqliteStore;
 use sqlite_v2::SqliteV2Store;
 use native_index::NativeIndexStore;
+use native_log::NativeLogStore;
 use state::{StateDef, Step, Values};
 use std::path::Path;
 use storage::{SaveFailure, Store};
@@ -451,6 +453,7 @@ pub(crate) struct Session {
     sqlite: Option<SqliteStore>,
     sqlite_v2: Option<SqliteV2Store>,
     native_index: Option<NativeIndexStore>,
+    native_log: Option<NativeLogStore>,
     revision_a6: Option<u32>,
     ledger: Option<Ledger>,
     poisoned: bool,
@@ -464,6 +467,7 @@ impl Session {
         sqlite_state: Option<&Path>,
         sqlite_v2_state: Option<&Path>,
         native_index: Option<(&Path, &str)>,
+        native_log_path: Option<&Path>,
     ) -> Result<Self> {
         let uses_db = program.routes.iter().any(|r| {
             !r.batch_puts.is_empty()
@@ -475,13 +479,14 @@ impl Session {
                     )
                 })
         });
-        if uses_db && sqlite_v2_state.is_none() && native_index.is_none() {
+        if uses_db && sqlite_v2_state.is_none() && native_index.is_none() && native_log_path.is_none() {
             return fail("E_SERVER_DB: db_get requires --sqlite-v2-state (also db_revision)");
         }
         if transactional
             && state_dir.is_none()
             && sqlite_state.is_none()
             && sqlite_v2_state.is_none()
+            && native_log_path.is_none()
         {
             return fail(
                 "E_SERVER_TRANSACTION: --transactional requires --state-dir, --sqlite-state or --sqlite-v2-state",
@@ -511,9 +516,27 @@ impl Session {
             }
             Some(NativeIndexStore::open(path, digest)?)
         } else { None };
+        if native_log_path.is_some() {
+            if !transactional || state_dir.is_some() || journaled || sqlite_state.is_some()
+                || sqlite_v2_state.is_some() || native_index.is_some() {
+                return fail("E_SERVER_NATIVE_LOG: requires --transactional and is exclusive");
+            }
+            if !program.routes.iter().any(|r| !r.batch_puts.is_empty())
+                || program.routes.iter().any(|r| r.db_put.is_some() ||
+                    (r.method == "GET" && !r.steps.is_empty()) ||
+                    (r.method != "GET" && r.batch_puts.is_empty())) {
+                return fail("E_SERVER_NATIVE_LOG: only read-only GET and A9 two-key batch PUT routes");
+            }
+        }
+        let mut native_log = None;
         let mut sqlite_v2 = None;
         let mut revision_a6 = None;
-        let (store, journal, sqlite, values, ledger) = if let Some(path) = sqlite_v2_state {
+        let (store, journal, sqlite, values, ledger) = if let Some(path) = native_log_path {
+            let (backend, values, revision) = NativeLogStore::open(path, &program.name, &program.states, &program.source_sha)?;
+            native_log = Some(backend);
+            revision_a6 = Some(revision);
+            (None, None, None, values, Ledger::default())
+        } else if let Some(path) = sqlite_v2_state {
             let (backend, values, revision) = SqliteV2Store::open(
                 path,
                 &program.name,
@@ -557,8 +580,9 @@ impl Session {
             sqlite,
             sqlite_v2,
             native_index,
+            native_log,
             revision_a6,
-            ledger: (transactional && sqlite_v2_state.is_none()).then_some(ledger),
+            ledger: (transactional && sqlite_v2_state.is_none() && native_log_path.is_none()).then_some(ledger),
             poisoned: false,
         })
     }
@@ -590,7 +614,7 @@ pub(crate) fn reply(
     content_type: Option<&str>,
 ) -> http::Response {
     let mut session =
-        Session::open(program, None, false, false, None, None, None).expect("in-memory state");
+        Session::open(program, None, false, false, None, None, None, None).expect("in-memory state");
     reply_stateful(
         program,
         &mut session,
@@ -645,9 +669,6 @@ pub(crate) fn reply_stateful(
         let Some(expected) = expected_revision else {
             return http::Response::error(428, "STATE_REVISION_REQUIRED");
         };
-        let Some(db) = session.sqlite_v2.as_ref() else {
-            return http::Response::error(503, "DB_BACKEND_REQUIRED");
-        };
         let digest = fingerprint(
             method,
             path,
@@ -655,7 +676,14 @@ pub(crate) fn reply_stateful(
             body,
             Some(&expected.to_string()),
         );
-        match db.lookup_route_batch(method, path, key) {
+        let prior = if let Some(db) = session.native_log.as_ref() {
+            db.lookup_route_batch(&route.batch_puts, method, path, key)
+        } else if let Some(db) = session.sqlite_v2.as_ref() {
+            db.lookup_route_batch(method, path, key)
+        } else {
+            return http::Response::error(503, "DB_BACKEND_REQUIRED");
+        };
+        match prior {
             Ok(Some(saved)) => {
                 if saved.fingerprint != digest {
                     return http::Response::error(409, "IDEMPOTENCY_CONFLICT");
@@ -824,6 +852,8 @@ pub(crate) fn reply_stateful(
         let keys: Vec<_> = references.into_iter().collect();
         let result = if let Some(db) = session.native_index.as_mut() {
             db.read_text_snapshot(&keys)
+        } else if let Some(db) = session.native_log.as_ref() {
+            db.read_text_snapshot(&keys)
         } else if let Some(db) = session.sqlite_v2.as_ref() {
             db.read_text_snapshot(&keys)
         } else {
@@ -882,9 +912,6 @@ pub(crate) fn reply_stateful(
         }
     }
     if !route.batch_puts.is_empty() {
-        let Some(sql) = session.sqlite_v2.as_mut() else {
-            return http::Response::error(503, "DB_BACKEND_REQUIRED");
-        };
         let key = idempotency_key.expect("A9 headers checked");
         let expected = expected_revision.expect("A9 state revision checked");
         let digest = fingerprint(
@@ -894,18 +921,16 @@ pub(crate) fn reply_stateful(
             body,
             Some(&expected.to_string()),
         );
-        return match sql.commit_route_batch(
-            &route.batch_puts,
-            &request,
-            &candidate,
-            expected,
-            method,
-            path,
-            key,
-            &digest,
-            route.status,
-            output,
-        ) {
+        let result = if let Some(db) = session.native_log.as_mut() {
+            db.commit_route_batch(&route.batch_puts, &request, &candidate, expected,
+                method, path, key, &digest, route.status, output)
+        } else if let Some(sql) = session.sqlite_v2.as_mut() {
+            sql.commit_route_batch(&route.batch_puts, &request, &candidate, expected,
+                method, path, key, &digest, route.status, output)
+        } else {
+            return http::Response::error(503, "DB_BACKEND_REQUIRED");
+        };
+        return match result {
             Ok((receipt, replayed)) => {
                 session.values = candidate;
                 session.revision_a6 = Some(receipt.state_revision);
@@ -1081,6 +1106,22 @@ pub fn serve_with_native_index(
     sqlite_v2_state: Option<&Path>,
     native_index: Option<(&Path, &str)>,
 ) -> Result<()> {
+    serve_with_native_backends(program, options, state_dir, transactional, journaled,
+        sqlite_state, sqlite_v2_state, native_index, None)
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn serve_with_native_backends(
+    program: &Server,
+    options: RuntimeOptions,
+    state_dir: Option<&Path>,
+    transactional: bool,
+    journaled: bool,
+    sqlite_state: Option<&Path>,
+    sqlite_v2_state: Option<&Path>,
+    native_index: Option<(&Path, &str)>,
+    native_log_path: Option<&Path>,
+) -> Result<()> {
     if options.max_requests == 0
         || options.max_requests > 10_000
         || options.idle_ms < 500
@@ -1096,6 +1137,7 @@ pub fn serve_with_native_index(
         sqlite_state,
         sqlite_v2_state,
         native_index,
+        native_log_path,
     )?;
     let listener = TcpListener::bind(("127.0.0.1", options.port))
         .map_err(|e| Error(format!("E_SERVER_BIND: unable to bind loopback: {e}")))?;

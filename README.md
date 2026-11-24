@@ -240,3 +240,7 @@ Experimental [self-hosting A5.4a](docs/SELF_HOSTING_PARSER_A54.ru.md): bounded a
 Experimental [A5.4b block parser](docs/SELF_HOSTING_PARSER_A54B.ru.md): restricted action/if headers and structured first syntax diagnostic.
 
 Experimental [A5.5 compound expression AST](docs/SELF_HOSTING_PARSER_A55.ru.md) and [A11 read-only SedravaSQL native index HTTP backend](docs/RUST_NATIVE_SERVER_A11_INDEX.ru.md).
+
+Experimental [A12/A13 native journal transactions and restart verification](docs/RUST_NATIVE_SERVER_A12_LOG.ru.md).
+
+Experimental [A5.6a compound if conditions](docs/SELF_HOSTING_PARSER_A56A.ru.md).

@@ -107,3 +107,7 @@ A5.4a: [стековый арифметический парсер с вложе
 A5.4b: [ограниченные блоки action/if и структурированная синтаксическая диагностика](SELF_HOSTING_PARSER_A54B.ru.md).
 
 A5.5: [составные выражения в AST](SELF_HOSTING_PARSER_A55.ru.md). A11: [чтение нативного индекса SedravaSQL через HTTP-сервер](RUST_NATIVE_SERVER_A11_INDEX.ru.md).
+
+A12/A13: [атомарная запись в нативный журнал и проверка перезапуска](RUST_NATIVE_SERVER_A12_LOG.ru.md).
+
+A5.6a: [составные условия if](SELF_HOSTING_PARSER_A56A.ru.md).

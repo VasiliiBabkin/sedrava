@@ -1,0 +1,1 @@
+{"stage":"A12/A13","environment":"VDS Linux","sedravasql_commit":"884f9339d78f7b60d35b3a4ac65277f2af286720","rust_tests_pass":83,"atomic_http":"PASS","restart":"PASS","after_sync_process_exit":"PASS","after_payload_torn_frame":"PASS","a11_regression":"PASS","a10_regression":"PASS","a10_reads":242,"a10_generations":81,"production":false}
