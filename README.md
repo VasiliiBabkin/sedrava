@@ -236,3 +236,5 @@ with precedence, left-associativity, layout depth and Unicode spans.
 No full language grammar or self-hosted compiler.
 
 Experimental [self-hosting A5.4a](docs/SELF_HOSTING_PARSER_A54.ru.md): bounded arithmetic stack parser with nested parentheses; not a full compiler.
+
+Experimental [A5.4b block parser](docs/SELF_HOSTING_PARSER_A54B.ru.md): restricted action/if headers and structured first syntax diagnostic.

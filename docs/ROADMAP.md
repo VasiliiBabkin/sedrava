@@ -215,3 +215,7 @@ type checker, IR or stage 1/2/3. [RU report](SELF_HOSTING_PARSER_A53.ru.md).
 ### Self-hosting A5.4a: bounded stack-based arithmetic parser
 
 Sedrava-authored two-stack parser supports more than three integer operands and nested groups within existing token/source budgets. Independent recursive tree oracle; block headers, structured diagnostics, RHS identifiers and full grammar remain pending. [RU protocol](SELF_HOSTING_PARSER_A54.ru.md).
+
+### Self-hosting A5.4b: restricted block headers and first syntax diagnostic
+
+Sedrava-authored validation of action and literal-boolean if headers, mandatory indentation and arithmetic assignment syntax before AST parsing. [RU protocol](SELF_HOSTING_PARSER_A54B.ru.md). Lexical diagnostics and full grammar remain pending.
