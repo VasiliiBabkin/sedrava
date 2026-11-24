@@ -217,3 +217,9 @@ The compiler pins a tested B6 SedravaSQL commit. One SQLite commit
 persists both managed keys, the signed server-state snapshot, all
 per-key audits/receipts and the original HTTP response. No general SQL,
 cross-key GET snapshot, public API or production safety claim.
+
+Experimental A10: [coherent SedravaSQL multi-key GET responses](docs/RUST_NATIVE_SERVER_A10_COHERENT_GET.ru.md).
+Existing db_get and db_revision responses now fetch all referenced
+managed records in one SQLite read-only WAL snapshot (B7), pinned by
+commit. This does NOT snapshot in-memory server state, allow general
+SQL queries, or provide a public production API.

@@ -1,0 +1,18 @@
+# A10: GET of two keys+revisions is coherent under concurrent A9 batch PUT.
+# Note: the in-memory counter is intentionally NOT in /pair; it is not
+# part of the multi-key database read snapshot.
+server "A10 Managed Read Snapshot"
+state counter: int = 0
+route PUT "/update":
+    request left: text
+    request right: text
+    request left_rev: int
+    request right_rev: int
+    db_batch_put "public_notes/left" = request.left expect request.left_rev
+    db_batch_put "public_notes/right" = request.right expect request.right_rev
+    set counter = state.counter + 1
+    respond 200 { left: request.left, right: request.right, counter: state.counter }
+route GET "/pair":
+    respond 200 { left: db_get("public_notes/left"), right: db_get("public_notes/right"), left_revision: db_revision("public_notes/left"), right_revision: db_revision("public_notes/right") }
+route GET "/counter":
+    respond 200 { counter: state.counter }

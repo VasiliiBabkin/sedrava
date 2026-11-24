@@ -175,3 +175,16 @@ The compiler pins SedravaSQL commit 7aad14da (B6).
 No general SQL, arbitrary batch, multi-key GET snapshot, public API,
 or hardware power-loss certification.
 [Full RU protocol](RUST_NATIVE_SERVER_A9_ATOMIC_BATCH.ru.md).
+
+### Native Server A10: multi-key coherent GET (experimental, 2026-11-24)
+
+A10 pins SedravaSQL B7 commit 225bf905 and delegates all distinct
+db_get/db_revision expressions in a single HTTP GET to ONE
+read-only SQLite WAL snapshot. Up to 16 unique literal managed keys,
+with fail-closed 404 for absent/deleted key, 503 on invalid text or
+overflowing int32 revision. Existing A7/A8/A9 syntax unchanged.
+Two independent Sedrava processes passed 81 A9 batch writes and
+242 concurrent GET reads with no mixed revisions, validating persisted
+audit/receipts. In-memory server state is NOT part of a B7 read
+snapshot; neither multiple GETs nor other backends gain this
+consistency guarantee. [RU protocol](RUST_NATIVE_SERVER_A10_COHERENT_GET.ru.md).

@@ -789,12 +789,42 @@ pub(crate) fn reply_stateful(
     // Resolve read-only SedravaSQL key/value lookups for GET responses.
     // Transient DB values are never written into server state.
     let mut view = candidate.clone();
-    // Cache a single managed SQL row per key during a response.
-    // A db_get+db_revision pair is coherent for THAT key. Different
-    // keys are not a single database snapshot transaction.
+    // A10: collect all distinct referenced managed keys before fetching.
+    // SedravaSQL B7 reads them in ONE SQLite read-only transaction, so
+    // concurrent B6/A9 batches cannot yield mixed commit generations.
+    // In-memory candidate state is NOT part of this database snapshot.
+    let mut references = BTreeSet::new();
+    for expression in route.response.values() {
+        match expression {
+            state::Expr::DbGet { namespace, key, .. }
+            | state::Expr::DbRevision { namespace, key, .. } => {
+                references.insert((namespace.clone(), key.clone()));
+            }
+            _ => {}
+        }
+    }
     let mut db_rows = BTreeMap::new();
-    for expr in route.response.values() {
-        let (namespace, key, slot, is_revision) = match expr {
+    if !references.is_empty() {
+        let Some(db) = session.sqlite_v2.as_ref() else {
+            return http::Response::error(503, "DB_BACKEND_REQUIRED");
+        };
+        let keys: Vec<_> = references.into_iter().collect();
+        let values = match db.read_text_snapshot(&keys) {
+            Ok(rows) => rows,
+            Err(_) => {
+                session.poisoned = true;
+                return http::Response::error(503, "DB_READ_FAILED");
+            }
+        };
+        for (key, value) in keys.into_iter().zip(values) {
+            let Some(value) = value else {
+                return http::Response::error(404, "DB_KEY_NOT_FOUND");
+            };
+            db_rows.insert(key, value);
+        }
+    }
+    for expression in route.response.values() {
+        let (namespace, key, slot, is_revision) = match expression {
             state::Expr::DbGet {
                 namespace,
                 key,
@@ -807,23 +837,10 @@ pub(crate) fn reply_stateful(
             } => (namespace, key, slot, true),
             _ => continue,
         };
-        let Some(db) = session.sqlite_v2.as_ref() else {
-            return http::Response::error(503, "DB_BACKEND_REQUIRED");
-        };
-        let row_key = (namespace.clone(), key.clone());
-        if !db_rows.contains_key(&row_key) {
-            let row = match db.read_text_and_revision(namespace, key) {
-                Ok(Some(row)) => row,
-                Ok(None) => return http::Response::error(404, "DB_KEY_NOT_FOUND"),
-                Err(_) => {
-                    session.poisoned = true;
-                    return http::Response::error(503, "DB_READ_FAILED");
-                }
-            };
-            db_rows.insert(row_key.clone(), row);
-        }
-        let (value, revision) = db_rows.get(&row_key).expect("row already loaded");
-        let v = if is_revision {
+        let (value, revision) = db_rows
+            .get(&(namespace.clone(), key.clone()))
+            .expect("all requested keys resolved");
+        let result = if is_revision {
             let Ok(number) = i32::try_from(*revision) else {
                 return http::Response::error(503, "DB_REVISION_RANGE");
             };
@@ -831,7 +848,7 @@ pub(crate) fn reply_stateful(
         } else {
             Value::String(value.clone())
         };
-        view.insert(slot.clone(), v);
+        view.insert(slot.clone(), result);
     }
     for (key, expr) in &route.response {
         match state::eval(expr, &request, &view) {

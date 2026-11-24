@@ -1,0 +1,18 @@
+{
+  "schema": "sedrava.native-server.a10.coherent-get.v1",
+  "date": "2026-11-24",
+  "backend": "SedravaSQL SQLite B7 read-only WAL snapshot",
+  "sql_pin": "225bf90576ff911b05304fd7bf971fcc21b9e67d",
+  "program": "examples/native_server/sqlite_a10_snapshot.sdr",
+  "test": "scripts/verify_native_server_coherent_read_a10.py",
+  "atomic_write_generations": 81,
+  "coherent_http_get_responses": 242,
+  "observed_generations": 81,
+  "two_independent_server_processes": true,
+  "tombstone_404": true,
+  "int32_revision_overflow_503": true,
+  "in_memory_server_state_in_snapshot": false,
+  "general_sql_support": false,
+  "physical_power_loss_tested": false,
+  "production_ready": false
+}
