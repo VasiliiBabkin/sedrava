@@ -1,0 +1,20 @@
+# A9: two literal KV writes and a state mutation in ONE SedravaSQL transaction.
+# Request has value and expected revision for each key.
+# X-Sedrava-If-Revision header checks the A6 server-state revision.
+server "A9 Atomic Pair"
+state counter: int = 0
+route PUT "/pair":
+    request left: text
+    request right: text
+    request left_rev: int
+    request right_rev: int
+    db_batch_put "public_notes/left" = request.left expect request.left_rev
+    db_batch_put "public_notes/right" = request.right expect request.right_rev
+    set counter = state.counter + 1
+    respond 200 { left: request.left, right: request.right, counter: state.counter }
+route GET "/snapshot":
+    respond 200 { counter: state.counter }
+route GET "/left":
+    respond 200 { value: db_get("public_notes/left"), revision: db_revision("public_notes/left") }
+route GET "/right":
+    respond 200 { value: db_get("public_notes/right"), revision: db_revision("public_notes/right") }

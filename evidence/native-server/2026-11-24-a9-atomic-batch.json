@@ -1,0 +1,18 @@
+{
+  "schema": "sedrava.native-server.a9.atomic-batch.v1",
+  "date": "2026-11-24",
+  "sedravasql_rev": "7aad14da2af6310a5cc1deccdeecdcf6183c33f2",
+  "example": "examples/native_server/sqlite_a9_batch.sdr",
+  "harness": "scripts/verify_native_server_batch_a9.py",
+  "managed_user_keys": 2,
+  "managed_state_rows": 1,
+  "negative_dsl_cases": 12,
+  "sqlite_debug_abort_points": 4,
+  "cross_process_tested": true,
+  "exact_idempotent_replay": true,
+  "single_sql_transaction_with_state_and_receipts": true,
+  "general_sql": false,
+  "native_log_enabled": false,
+  "real_power_loss_tested": false,
+  "production_ready": false
+}

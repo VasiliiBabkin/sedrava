@@ -210,3 +210,10 @@ Experimental Server A8: [atomic single-key SedravaSQL PUT](docs/RUST_NATIVE_SERV
 from checked Sedrava server source, with per-key CAS, durable stored HTTP
 response, SQLite audit and idempotent replay. No arbitrary SQL, multi-key
 transaction, public listener or NativeLog switch.
+
+Experimental Server A9: [atomic two-key SedravaSQL PUT and Sedrava
+server-state update](docs/RUST_NATIVE_SERVER_A9_ATOMIC_BATCH.ru.md).
+The compiler pins a tested B6 SedravaSQL commit. One SQLite commit
+persists both managed keys, the signed server-state snapshot, all
+per-key audits/receipts and the original HTTP response. No general SQL,
+cross-key GET snapshot, public API or production safety claim.

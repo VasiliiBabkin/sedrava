@@ -77,6 +77,69 @@ pub enum PutFailure {
     Uncertain,
 }
 
+#[derive(Clone, Debug)]
+pub struct BatchPut {
+    pub namespace: String,
+    pub key: String,
+    pub value_field: String,
+    pub revision_field: String,
+}
+impl BatchPut {
+    pub fn parse(raw: &str, request: &BTreeMap<String, ScalarType>) -> Result<Self> {
+        let (path_source, tail) = raw.strip_prefix("db_batch_put ")
+            .and_then(|s| s.split_once(" = request."))
+            .ok_or_else(|| Error("E_SERVER_BATCH: expected db_batch_put literal = request.FIELD expect request.REV".into()))?;
+        let (value_field, revision_field) =
+            tail.split_once(" expect request.").ok_or_else(|| {
+                Error("E_SERVER_BATCH: expected request value and revision fields".into())
+            })?;
+        let path: String = serde_json::from_str(path_source)
+            .map_err(|_| Error("E_SERVER_BATCH: key must be a literal string".into()))?;
+        let (namespace, key) = path
+            .split_once('/')
+            .ok_or_else(|| Error("E_SERVER_BATCH: expected namespace/key".into()))?;
+        if !valid_db_id(namespace)
+            || !valid_db_id(key)
+            || namespace.starts_with("sedrava_native")
+            || !identifier(value_field)
+            || !identifier(revision_field)
+            || value_field == revision_field
+            || request.get(value_field) != Some(&ScalarType::Text)
+            || request.get(revision_field) != Some(&ScalarType::Int)
+        {
+            return fail("E_SERVER_BATCH: invalid key or request types");
+        }
+        Ok(Self {
+            namespace: namespace.into(),
+            key: key.into(),
+            value_field: value_field.into(),
+            revision_field: revision_field.into(),
+        })
+    }
+}
+
+pub const BATCH_HTTP_SCHEMA: &str = "sedrava.server.a9.batch.v1";
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct ServerBatchReceipt {
+    pub schema: String,
+    pub program_signature: String,
+    pub route: String,
+    pub client_key: String,
+    pub fingerprint: String,
+    pub state_revision: u32,
+    pub key_revisions: Vec<u32>,
+    pub status: u16,
+    pub response: Map<String, Value>,
+}
+#[derive(Debug)]
+pub enum BatchFailure {
+    RevisionConflict,
+    IdempotencyConflict,
+    Invalid,
+    Uncertain,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -159,3 +159,19 @@ cross-process HTTP/CLI and four controlled SQL commit windows tested
 on disposable loopback databases. No cross-key/state atomic
 transactions, general SQL, public network service or hardware
 power-loss certification. [RU details](RUST_NATIVE_SERVER_A8_DB_PUT.ru.md).
+
+### Native server A9: 2 managed keys plus one server state (experimental)
+
+The A9 fixed-form server DSL declares exactly two
+db_batch_put namespace/key = request.text expect request.int
+statements followed by one state.set. Per-key CAS and separate A6
+server-state CAS are checked within the same opt-in SedravaSQL B6
+SQLite BEGIN IMMEDIATE transaction. All three record updates,
+legacy audit/receipts and a durable batch response are all-or-none.
+Replay after restart, concurrent server invalidation, external CLI CAS
+conflict, 12 invalid DSL cases and four debug SQLite crash windows
+PASS on disposable localhost-only databases.
+The compiler pins SedravaSQL commit 7aad14da (B6).
+No general SQL, arbitrary batch, multi-key GET snapshot, public API,
+or hardware power-loss certification.
+[Full RU protocol](RUST_NATIVE_SERVER_A9_ATOMIC_BATCH.ru.md).
