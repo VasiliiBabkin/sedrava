@@ -5,7 +5,7 @@ use crate::{database, model::{fail,Error,Result}};
 use sedravasql::native_log::{NativeLog,NativeLimits,Error as DbError,sql::{SqlKind,SqlResult}};
 use serde::Deserialize;
 use sha2::{Sha256,Digest};
-use std::{collections::BTreeMap,io::Write,net::TcpListener,path::Path,thread,time::{Duration,Instant}};
+use std::{collections::BTreeMap,io::Write,net::TcpListener,path::Path,time::{Duration,Instant}};
 #[derive(Clone,Copy,Deserialize,PartialEq,Eq)]
 #[serde(rename_all="snake_case")]
 enum Role { Read, Write }
@@ -143,6 +143,21 @@ pub fn serve_with_auth(api:&Api,path:&Path,trusted:bool,allow_write:bool,limits:
     std::io::stdout().flush().map_err(|e|Error(e.to_string()))?;
     let idle=Duration::from_millis(options.idle_ms.into());let mut last=Instant::now();let mut served=0;
     while served<options.max_requests&&last.elapsed()<idle{
+        #[cfg(unix)]
+        {
+            use rustix::event::{poll, PollFd, PollFlags, Timespec};
+            let remaining=idle.saturating_sub(last.elapsed());
+            if remaining.is_zero(){break;}
+            let timeout=Timespec{tv_sec:remaining.as_secs() as _,tv_nsec:remaining.subsec_nanos() as _};
+            let mut fds=[PollFd::new(&listener,PollFlags::IN)];
+            match poll(&mut fds,Some(&timeout)){
+                Ok(0)=>break,
+                Ok(_)=>{},
+                Err(rustix::io::Errno::INTR)=>continue,
+                Err(e)=>return fail(format!("E_SQL_API_POLL: {e}")),
+            }
+        }
+
         match listener.accept(){
             Ok((mut stream,_))=>{
                 let _=stream.set_read_timeout(Some(Duration::from_millis(1200)));
@@ -152,7 +167,10 @@ pub fn serve_with_auth(api:&Api,path:&Path,trusted:bool,allow_write:bool,limits:
                 if stop{return fail("E_SQL_API: storage uncertain; stopped");}
                 served+=1;last=Instant::now();
             }
-            Err(e) if e.kind()==std::io::ErrorKind::WouldBlock=>thread::sleep(Duration::from_millis(10)),
+            Err(e) if e.kind()==std::io::ErrorKind::WouldBlock=>{
+                #[cfg(not(unix))]
+                std::thread::sleep(Duration::from_millis(10));
+            },
             Err(e) if e.kind()==std::io::ErrorKind::Interrupted=>continue,
             Err(e)=>return fail(format!("E_SQL_API: {e}")),
         }

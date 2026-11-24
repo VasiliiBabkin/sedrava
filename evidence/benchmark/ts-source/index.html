@@ -1,0 +1,7 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Журнал сервисных заявок</title><link rel="stylesheet" href="app.css"><script defer src="app.js"></script></head>
+<body><main><h1>Журнал сервисных заявок</h1><p>Объекты, работы и их статус. Записи сохраняются в этом браузере.</p>
+<section class="grid"><article>Всего <output data-state="ticket_count"></output></article><article>В работе <output data-state="open_count"></output></article><article>Выполнено <output data-state="done_count"></output></article></section>
+<section><h2>Новая заявка</h2><label>Объект<input data-input="site_name" maxlength="1024"></label><label>Неисправность или работа<input data-input="title" maxlength="1024"></label><button data-action="add">Добавить заявку</button></section>
+<label>Поиск<input data-input="search_text" maxlength="1024"></label><table aria-label="Заявки"><thead><tr><th>Заявка</th><th>Объект</th><th>Выполнено</th></tr></thead><tbody></tbody></table>
+<section id="chosen" hidden><h2>Выбранная заявка</h2><label>Новое описание<input data-input="new_title" maxlength="1024"></label><button data-action="rename">Сохранить описание</button><button data-action="toggle">Изменить статус</button><button data-action="delete">Удалить заявку</button></section><p id="error" role="status"></p></main></body></html>

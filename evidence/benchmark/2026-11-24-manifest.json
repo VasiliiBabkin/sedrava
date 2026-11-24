@@ -1,0 +1,14 @@
+{
+  "timestamp": "2026-11-24T15:16:05.968512+00:00",
+  "sedrava_commit": "6883818bee79a04ed84ad7fd84f816652d024fef",
+  "sedravasql_commit": "c0860944a3a8c900864dec6bfee426151fa08c19",
+  "platform": "Linux-6.8.0-147-generic-x86_64-with-glibc2.39",
+  "all_stages": "PASS",
+  "files": {
+    "web.json": "e2f05b1f69af5d3ef111d3a104130c8b53287cd40cfd80f7c09325596d9dd02c",
+    "database.json": "9486df17bcae70bc1146c481c5ff59c85daae6e9805983b293201d81cd0358da",
+    "http.json": "64cbbf294c18d6d998c9fe85a2047a5a43aff2063ea9f9be249ed310f3bc1491",
+    "android.json": "cdfc5f424a541c58fa0d36722bbe0946988d98f0713b96c53e68244e60a55d41",
+    "full.json": "8eba7ccac6e552eabf0bb2d22253812c8c396dff0fd7a12df36a750f98c353a0"
+  }
+}

@@ -17,15 +17,13 @@ Start with [Quick Start](docs/QUICKSTART.md), the [text reference](docs/LANGUAGE
 ## Native Rust 0.12.0-alpha.1 candidate (experimental)
 
 The separate native Rust CLI is now versioned **0.12.0-alpha.1**.
-It is a Linux x86_64 source/release **candidate**, not a stable release
-or published GitHub Release/PyPI package. The Python-based **0.11.0**
+It is a Linux x86_64 experimental native preview, not a stable release or PyPI package. Official Linux downloads: https://sedrava.virtreal.ru/downloads/0.12.0-alpha.1/ . The Python-based **0.11.0**
 remains the only published stable version; the sedrava command and
 existing user data are not changed.
 
 The Rust core implements a tested subset with records, bounded lists,
 functions, navigation, actions, typed errors, Host file effects,
-experimental Site/WebApp/Android source generators and a loopback-only
-Server A6. It also supports a bounded-loop lexer written in Sedrava.
+experimental Site/WebApp/Android generators and loopback-only SQL API A21, including bounded transactions with durable receipts. It also supports a bounded-loop lexer written in Sedrava.
 The Rust CLI is not yet proven compatible with the complete Python 0.11
 language, and an Android source tree is not evidence of a working APK.
 
@@ -42,7 +40,7 @@ Developers can build it with Cargo:
     cargo build --manifest-path rust/Cargo.toml --locked --release --bin sedrava-native
     ./rust/target/release/sedrava-native --version
 
-The eventual verified platform-specific archive can be installed
+A verified platform-specific archive can be installed
 without Python or Rust on the *target* Linux system.
 
 ## Getting started
@@ -272,3 +270,5 @@ Experimental [A5.10d recursive source functions](docs/SELF_HOSTING_FUNCTION_COMP
 Experimental [A5.11a loops](docs/SELF_HOSTING_FUNCTION_COMPILER_A511A.ru.md).
 
 Experimental [A5.11b nested control blocks](docs/SELF_HOSTING_FUNCTION_COMPILER_A511B.ru.md) and [service journal WebApp](docs/SERVICE_JOURNAL_DEMO.ru.md).
+
+[Internal comparative benchmark, 24 Nov 2026](docs/BENCHMARK_2026_11_24.ru.md).

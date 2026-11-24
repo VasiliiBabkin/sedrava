@@ -1,0 +1,24 @@
+{
+  "sedrava": {
+    "status": "PASS",
+    "build_seconds": 207.91370824817568,
+    "apk_bytes": 8772871,
+    "dex_uncompressed_bytes": 21911816,
+    "kotlin_files": 7,
+    "kotlin_lines": 953,
+    "kotlin_bytes": 37068,
+    "apk_sha256": "f63f363ee22417c1d0e8f82fff7e95698a1fdd4fb98aa413c42faaa3847d2ca0",
+    "device_runtime_test": false
+  },
+  "kotlin": {
+    "status": "PASS",
+    "build_seconds": 128.64090101001784,
+    "apk_bytes": 8707335,
+    "dex_uncompressed_bytes": 21762820,
+    "kotlin_files": 1,
+    "kotlin_lines": 29,
+    "kotlin_bytes": 1154,
+    "apk_sha256": "3c10dddafba485a57c91791ccc8480c20025287a28a1b8485bea40fb7a5a5899",
+    "device_runtime_test": false
+  }
+}

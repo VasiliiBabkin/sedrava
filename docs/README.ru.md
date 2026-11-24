@@ -139,3 +139,5 @@ Native Server: [A15 восстановление из архива](RUST_NATIVE_
 [A5.11a циклы и изменяемые локальные переменные](SELF_HOSTING_FUNCTION_COMPILER_A511A.ru.md).
 
 [A5.11b вложенные блоки](SELF_HOSTING_FUNCTION_COMPILER_A511B.ru.md); [журнал сервисных заявок](SERVICE_JOURNAL_DEMO.ru.md).
+
+**Нативная alpha:** [официальные Linux x86_64 загрузки](https://sedrava.virtreal.ru/downloads/0.12.0-alpha.1/), [измерения](BENCHMARK_2026_11_24.ru.md), SQL API A21 и отдельный SedravaSQL B25. Python 0.11.0 не заменяется.

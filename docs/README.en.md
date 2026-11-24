@@ -59,3 +59,5 @@ python -m http.server 8000 --directory build/site
 The integration preview adds shared composition, pure functions, bounded collection queries, forms/tables/dialogs, hash routes, local styling and typed public HTTP. It is now included in published 0.11.0 but is not a generated backend/auth/database service.
 
 Реализованные возможности, сборка четырёх проектов и ограничения: [English guide](011_WEB_PLATFORM.en.md), [руководство](011_WEB_PLATFORM.ru.md), [actual status](011_IMPLEMENTATION_STATUS.md). Existing published 0.10.0 instructions above remain applicable to their original targets.
+
+[Native Linux alpha downloads](https://sedrava.virtreal.ru/downloads/0.12.0-alpha.1/) · [Internal benchmark](BENCHMARK_2026_11_24.ru.md). SQL API A21; B25 is separate from the SQL backend.
