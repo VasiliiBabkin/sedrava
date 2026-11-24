@@ -137,3 +137,7 @@ stage 1/2/3 ещё отсутствуют.
 ### A5.8a/b: inline declarations and typed expression IR
 
 [Prototype declaration parsing and register IR](SELF_HOSTING_PARSER_A58.ru.md). Function bodies, scopes and control-flow lowering pending.
+
+### A5.9a: execution of scalar expression IR
+
+[Flat action interpreter written in Sedrava](SELF_HOSTING_EXECUTOR_A59A.ru.md). Control flow, function bodies and lexical scopes pending.

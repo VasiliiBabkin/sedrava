@@ -18,7 +18,7 @@ def main():
             raw=call([*cmd,*args],fail=fail)
             return json.loads(raw) if raw else None
         def digest():return hashlib.sha256(path.read_bytes()).hexdigest()
-        for p in sample.glob("*.sdr"):call([BIN,"database","check",p])
+        for p in (sample/name for name in ("create_orders.sdr","insert_order.sdr","select_order.sdr","mark_paid.sdr")):call([BIN,"database","check",p])
         before=digest()
         run("create_orders","--allow-write","--request-key","create-orders-001",fail=True,policy=False)
         run("create_orders",fail=True);assert digest()==before

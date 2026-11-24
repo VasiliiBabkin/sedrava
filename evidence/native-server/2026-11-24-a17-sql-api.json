@@ -1,0 +1,1 @@
+{"stage":"A17","environment":"VDS Linux","sedravasql_commit":"810d0a943177e5b7e826b010a70814304652504e","rust_tests_pass":83,"http_requests":14,"static_sql":"PASS","typed_bindings":"PASS","aggregate_response":"PASS","scoped_replay_restart":"PASS","capacity":"PASS","regressions":"PASS","public_network":false,"production":false}

@@ -21,6 +21,7 @@ mod sqlite;
 mod sqlite_v2;
 mod native_index;
 mod native_log;
+pub mod sql_api;
 mod state;
 mod storage;
 mod transaction;

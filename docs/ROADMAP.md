@@ -269,3 +269,11 @@ VDS: 83 Rust tests and A10/A11/A12/A13 integration regressions PASS with pinned 
 ### Self-host A5.8a/b
 
 [Inline declarations and typed expression IR](SELF_HOSTING_PARSER_A58.ru.md).
+
+### A17: static native SQL HTTP API
+
+[Explicit loopback SQL routes](RUST_NATIVE_SQL_API_A17.ru.md).
+
+### A5.9a
+
+[Execute scalar IR instructions](SELF_HOSTING_EXECUTOR_A59A.ru.md).

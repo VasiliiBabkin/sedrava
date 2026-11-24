@@ -1,0 +1,14 @@
+database-api OrdersApi
+route POST "/order":
+    param id: text
+    query "SELECT id,amount,paid,note FROM Orders WHERE id=?"
+route POST "/insert":
+    param id: text
+    param amount: int
+    param note: text
+    execute "INSERT INTO Orders (id,amount,paid,note) VALUES (?,?,false,?)"
+route POST "/paid":
+    param id: text
+    execute "UPDATE Orders SET paid=true WHERE id=?"
+route POST "/summary":
+    query "SELECT COUNT(*) AS n,SUM(amount) AS total FROM Orders"

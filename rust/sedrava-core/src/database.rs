@@ -43,6 +43,23 @@ pub fn parse(source:&str)->Result<Program>{
     let (kind,sql)=statement.ok_or_else(||Error("E_DATABASE: missing statement".into()))?;
     Ok(Program{name,params,sql,kind})
 }
+impl Program {
+    pub(crate) fn kind(&self)->SqlKind { self.kind }
+    pub(crate) fn bind_object(&self,object:&serde_json::Map<String,serde_json::Value>)->Result<Vec<Cell>> {
+        if object.len()!=self.params.len(){return fail("E_DATABASE: parameter schema mismatch");}
+        let mut out=Vec::with_capacity(self.params.len());
+        for (name,kind) in &self.params{
+            let v=object.get(name).ok_or_else(||Error("E_DATABASE: missing parameter".into()))?;
+            let value:Cell=serde_json::from_value(v.clone()).map_err(|_|Error("E_DATABASE: invalid scalar parameter".into()))?;
+            if !kind.accepts(&value){return fail("E_DATABASE: parameter type mismatch");}
+            out.push(value);
+        }
+        Ok(out)
+    }
+    pub(crate) fn execute_on(&self,db:&mut NativeLog,values:&[Cell],request:Option<&str>)->sedravasql::native_log::Result<SqlResult>{
+        sql::execute_bound(db,&self.sql,values,request)
+    }
+}
 pub fn run(program:&Program,path:&Path,trusted:bool,allow_write:bool,request:Option<&str>,supplied:&[String])->Result<SqlResult>{
     if !trusted||!path.is_absolute(){return fail("E_DATABASE_POLICY: explicit trusted mode and absolute database path required");}
     match program.kind{

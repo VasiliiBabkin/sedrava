@@ -123,3 +123,5 @@ A5.7: [таблица символов и скалярный анализ](SELF_
 Native Server: [A15 восстановление из архива](RUST_NATIVE_SERVER_A15_ARCHIVE.ru.md).
 
 [A5.8a/b объявления и IR](SELF_HOSTING_PARSER_A58.ru.md); [A16 SQL host](RUST_NATIVE_DATABASE_A16.ru.md).
+
+[A5.9a исполнение IR](SELF_HOSTING_EXECUTOR_A59A.ru.md); [A17 SQL HTTP API](RUST_NATIVE_SQL_API_A17.ru.md).

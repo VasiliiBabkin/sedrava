@@ -60,13 +60,13 @@ impl Response {
     }
 }
 
-struct Request {
-    method: String,
-    path: String,
-    content_type: Option<String>,
-    idempotency_key: Option<String>,
-    expected_revision: Option<u32>,
-    body: Vec<u8>,
+pub(super) struct Request {
+    pub(super) method: String,
+    pub(super) path: String,
+    pub(super) content_type: Option<String>,
+    pub(super) idempotency_key: Option<String>,
+    pub(super) expected_revision: Option<u32>,
+    pub(super) body: Vec<u8>,
 }
 
 fn separator(raw: &[u8]) -> Option<usize> {
@@ -89,7 +89,7 @@ fn read_deadline(
     stream.read(buf)
 }
 
-fn parse_request(stream: &mut TcpStream) -> std::result::Result<Request, Response> {
+pub(super) fn parse_request(stream: &mut TcpStream) -> std::result::Result<Request, Response> {
     // Absolute cap, not a timeout reset per byte (slowloris guard).
     let deadline = Instant::now() + Duration::from_millis(1500);
     let mut raw = Vec::new();
@@ -288,6 +288,10 @@ pub(super) fn process(server: &Server, session: &mut Session, stream: &mut TcpSt
             response.revision = Some(ledger.revision());
         }
     }
+    finish(stream,response);
+}
+
+pub(super) fn finish(stream:&mut TcpStream,response:Response){
     // The peer may disappear. Never crash the process for a single socket.
     let _ = write_response(stream, response);
     // Large malformed headers may leave unread TCP bytes in the receive

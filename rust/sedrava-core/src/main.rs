@@ -15,7 +15,7 @@ fn usage() {
     println!(
         "Sedrava native Rust core (EXPERIMENTAL)\n\
          Usage:\n\
-           sedrava-native lock DIR\n           sedrava-native verify DIR\n           sedrava-native database check FILE\n           sedrava-native database run FILE --database ABSOLUTE_FILE --trusted [--arg NAME=JSON ...] [--allow-write --request-key KEY]\n           sedrava-native host check FILE
+           sedrava-native lock DIR\n           sedrava-native verify DIR\n           sedrava-native database-api check FILE\n           sedrava-native database-api run FILE --database ABSOLUTE_FILE --trusted [--allow-write] [--port N] [--max-requests N] [--idle-ms N]\n           sedrava-native database check FILE\n           sedrava-native database run FILE --database ABSOLUTE_FILE --trusted [--arg NAME=JSON ...] [--allow-write --request-key KEY]\n           sedrava-native host check FILE
            sedrava-native host run FILE --root DIR --trusted [--allow-read] [--allow-write]
            sedrava-native server check FILE
            sedrava-native server run FILE [--port PORT] [--max-requests N] [--idle-ms N] [--state-dir ABSOLUTE_PRIVATE_DIR] [--transactional] [--journaled] [--sqlite-state FILE] [--sqlite-v2-state FILE] [--native-index FILE --native-index-sha256 SHA256] [--native-log FILE [--native-max-bytes N --native-max-transactions N]]
@@ -300,6 +300,36 @@ fn server_command(args: &[String]) -> Result<()> {
     }
 }
 
+fn database_api_command(args:&[String])->Result<()>{
+    use sedrava_core::server::{sql_api,RuntimeOptions};
+    use sedravasql::native_log::NativeLimits;
+    match args{
+        [cmd,source] if cmd=="check"=>{sql_api::parse(&read_source(source)?)?;println!("OK: database-api (loopback-only)");Ok(())}
+        [cmd,source,rest @ ..] if cmd=="run"=>{
+            let api=sql_api::parse(&read_source(source)?)?;
+            let mut options=RuntimeOptions{port:0,max_requests:32,idle_ms:30000};
+            let mut path=None;let mut trusted=false;let mut write=false;let mut limits=NativeLimits::default();
+            let mut seen=std::collections::BTreeSet::new();let mut it=rest.iter();
+            let bad=||Error("E_SQL_API_CLI: invalid or missing option".into());
+            while let Some(flag)=it.next(){
+                if !seen.insert(flag.as_str()){return Err(bad());}
+                match flag.as_str(){
+                    "--trusted"=>trusted=true,"--allow-write"=>write=true,
+                    "--database"=>path=Some(PathBuf::from(it.next().ok_or_else(bad)?)),
+                    "--port"=>options.port=it.next().ok_or_else(bad)?.parse().map_err(|_|bad())?,
+                    "--max-requests"=>options.max_requests=it.next().ok_or_else(bad)?.parse().map_err(|_|bad())?,
+                    "--idle-ms"=>options.idle_ms=it.next().ok_or_else(bad)?.parse().map_err(|_|bad())?,
+                    "--native-max-bytes"=>limits.max_bytes=it.next().ok_or_else(bad)?.parse().map_err(|_|bad())?,
+                    "--native-max-transactions"=>limits.max_transactions=it.next().ok_or_else(bad)?.parse().map_err(|_|bad())?,
+                    _=>return Err(bad()),
+                }
+            }
+            sql_api::serve(&api,&path.ok_or_else(bad)?,trusted,write,limits,options)
+        }
+        _=>Err(Error("Expected database-api check FILE or database-api run FILE".into())),
+    }
+}
+
 fn database_command(args:&[String])->Result<()> {
     use sedrava_core::database;
     match args {
@@ -350,6 +380,7 @@ fn run() -> Result<()> {
         return Err(Error("Expected a command and a .sdr file".into()));
     }
     let command = &args[1];
+    if command == "database-api" { return database_api_command(&args[2..]); }
     if command == "database" { return database_command(&args[2..]); }
     if command == "host" {
         return host_command(&args[2..]);
