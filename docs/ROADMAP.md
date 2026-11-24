@@ -188,3 +188,15 @@ Two independent Sedrava processes passed 81 A9 batch writes and
 audit/receipts. In-memory server state is NOT part of a B7 read
 snapshot; neither multiple GETs nor other backends gain this
 consistency guarantee. [RU protocol](RUST_NATIVE_SERVER_A10_COHERENT_GET.ru.md).
+
+### Experimental self-hosting A5.2 (2026-11-24)
+
+The Sedrava-authored parse_program action reads actual A5.1
+UnifiedToken stream, returning bounded assignment+indent AST:
+name/literal, depth, line, Unicode-scalar [start,end) positions.
+Narrow grammar only ASCII name=integer lines and 4-space layout.
+30 accepted and 22 rejected programs PASS against independent
+AST/layout/token oracles, plus pre-merge/double-parse rejection;
+83 Rust tests PASS. No full language grammar, IR, type checking,
+self-hosted stage 1/2/3 or new Android APK.
+See SELF_HOSTING_PARSER_A52.ru.md.
