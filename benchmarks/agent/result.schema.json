@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Sedrava Agent Benchmark Trial v0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "task",
+    "language",
+    "target",
+    "trial_id",
+    "repository_commit",
+    "model",
+    "outcome",
+    "build_passed",
+    "behavior_passed",
+    "attempts",
+    "wall_seconds",
+    "input_tokens",
+    "output_tokens",
+    "tool_calls",
+    "cost_usd",
+    "notes"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "0.1"
+    },
+    "task": {
+      "enum": [
+        "counter-v0",
+        "records-v0",
+        "navigation-v0",
+        "http-cards-v0"
+      ]
+    },
+    "language": {
+      "enum": [
+        "sedrava",
+        "typescript",
+        "kotlin"
+      ]
+    },
+    "target": {
+      "enum": [
+        "web",
+        "android"
+      ]
+    },
+    "trial_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "repository_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "model": {
+      "type": "string",
+      "minLength": 1
+    },
+    "outcome": {
+      "enum": [
+        "passed",
+        "failed",
+        "unsupported",
+        "infrastructure_error"
+      ]
+    },
+    "build_passed": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "behavior_passed": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "attempts": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "wall_seconds": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "input_tokens": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "output_tokens": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "tool_calls": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "cost_usd": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "notes": {
+      "type": "string"
+    }
+  }
+}

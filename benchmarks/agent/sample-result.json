@@ -1,0 +1,19 @@
+{
+  "schema_version": "0.1",
+  "task": "counter-v0",
+  "language": "sedrava",
+  "target": "web",
+  "trial_id": "example-not-measured",
+  "repository_commit": "0000000000000000000000000000000000000000",
+  "model": "example-only",
+  "outcome": "unsupported",
+  "build_passed": null,
+  "behavior_passed": null,
+  "attempts": 0,
+  "wall_seconds": null,
+  "input_tokens": null,
+  "output_tokens": null,
+  "tool_calls": null,
+  "cost_usd": null,
+  "notes": "Schema example only; not a benchmark observation."
+}
