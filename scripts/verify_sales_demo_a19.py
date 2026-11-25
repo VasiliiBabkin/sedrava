@@ -2,6 +2,7 @@
 """A19 demo: real authenticated API over native SQL, no public listener."""
 import hashlib,json,os,secrets,selectors,subprocess,tempfile,urllib.request,urllib.error
 from pathlib import Path
+from sql_test_backend import db_command, backend_args, database_bytes
 ROOT=Path(__file__).resolve().parents[1];BIN=Path(os.environ["SEDRAVA_NATIVE_BIN"]);DB=Path(os.environ["SEDRAVASQL_NATIVE_BIN"])
 DEMO=ROOT/"examples/sales_demo"
 def cmd(args):
@@ -13,11 +14,11 @@ def main():
     root=Path(temp);db=root/"sales.log";auth=root/"auth.json"
     tokens={n:secrets.token_hex(32) for n in ("reader","writer")}
     auth.write_text(json.dumps([{"id":n,"sha256":hashlib.sha256(t.encode()).hexdigest(),"role":"read" if n=="reader" else "write"} for n,t in tokens.items()]));auth.chmod(0o600)
-    cmd([DB,"init",db])
-    for i,q in enumerate((DEMO/"schema.sql").read_text().splitlines()):cmd([DB,"sql",db,q,f"demo-schema-{i:04}"])
+    cmd([DB,db_command("init"),db])
+    for i,q in enumerate((DEMO/"schema.sql").read_text().splitlines()):cmd([DB,db_command("sql"),db,q,f"demo-schema-{i:04}"])
     cmd([BIN,"database-api","check",DEMO/"sales_api.sdr"])
     def start(n):
-        p=subprocess.Popen([str(x) for x in [BIN,"database-api","run",DEMO/"sales_api.sdr","--database",db,"--trusted","--allow-write","--auth-file",auth,"--idle-ms","5000","--max-requests",n]],stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+        p=subprocess.Popen([str(x) for x in [BIN,"database-api","run",DEMO/"sales_api.sdr",*backend_args(),"--database",db,"--trusted","--allow-write","--auth-file",auth,"--idle-ms","5000","--max-requests",n]],stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
         try:
             with selectors.DefaultSelector() as sel:
                 sel.register(p.stdout,selectors.EVENT_READ);assert sel.select(10)
@@ -63,6 +64,6 @@ def main():
         assert p.wait(timeout=8)==0,p.stderr.read()
     finally:
         if p.poll() is None:p.kill();p.wait()
-    cmd([DB,"verify",db])
+    cmd([DB,db_command("verify"),db])
  print("PASS A19 demo: 19 authenticated HTTP requests, catalog, cached index invalidation, orders, JOIN, payment flag, revenue, HAVING and restart")
 if __name__=="__main__":main()

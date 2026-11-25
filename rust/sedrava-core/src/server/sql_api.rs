@@ -2,7 +2,7 @@
 //! Separate from the stateful HTTP DSL. No arbitrary SQL submitted over HTTP.
 use super::{http, identifier, pathname, transaction::valid_key, RuntimeOptions, StrictObject};
 use crate::{database, model::{fail,Error,Result}};
-use sedravasql::native_log::{NativeLog,NativeLimits,Error as DbError,sql::{SqlKind,SqlResult}};
+use sedravasql::native_log::{SqlStore,NativeLimits,Error as DbError,sql::{SqlKind,SqlResult}};
 use serde::Deserialize;
 use sha2::{Sha256,Digest};
 use std::{collections::BTreeMap,io::Write,net::TcpListener,path::Path,time::{Duration,Instant}};
@@ -80,7 +80,7 @@ pub fn parse(source:&str)->Result<Api>{
     if routes.is_empty(){return fail("E_SQL_API: no routes");}
     Ok(Api{name,routes})
 }
-fn reply(api:&Api,db:&mut NativeLog,request:http::Request,auth:Option<&Auth>)->(http::Response,bool){
+fn reply(api:&Api,db:&mut dyn SqlStore,request:http::Request,auth:Option<&Auth>)->(http::Response,bool){
     let error=|status,code| (http::Response::error(status,code),false);
     let principal=if let Some(auth)=auth{
         match auth.authenticate(request.authorization.as_deref()){
@@ -131,12 +131,13 @@ pub fn serve(api:&Api,path:&Path,trusted:bool,allow_write:bool,limits:NativeLimi
     serve_with_auth(api,path,trusted,allow_write,limits,options,None)
 }
 pub fn serve_with_auth(api:&Api,path:&Path,trusted:bool,allow_write:bool,limits:NativeLimits,options:RuntimeOptions,auth:Option<&Auth>)->Result<()>{
+    serve_with_backend(api,path,trusted,allow_write,limits,options,auth,database::Backend::NativeLog)
+}
+pub fn serve_with_backend(api:&Api,path:&Path,trusted:bool,allow_write:bool,limits:NativeLimits,options:RuntimeOptions,auth:Option<&Auth>,backend:database::Backend)->Result<()>{
     if !trusted||!path.is_absolute(){return fail("E_SQL_API_POLICY: trusted and absolute DB path required");}
     if api.routes.values().any(|p|p.kind()==SqlKind::Write)&&!allow_write{return fail("E_SQL_API_POLICY: write routes require --allow-write");}
     if !(1..=10000).contains(&options.max_requests)||!(500..=120000).contains(&options.idle_ms){return fail("E_SQL_API: invalid runtime limits");}
-    let mut db=NativeLog::open(path).map_err(|e|Error(format!("E_SQL_API: {e}")))?;
-    db.set_limits(limits).map_err(|e|Error(format!("E_SQL_API: {e}")))?;
-    db.verify().map_err(|e|Error(format!("E_SQL_API: {e}")))?;
+    let mut db=database::open_backend(path,backend,limits).map_err(|e|Error(format!("E_SQL_API: {e}")))?;
     let listener=TcpListener::bind(("127.0.0.1",options.port)).map_err(|e|Error(format!("E_SQL_API_BIND: {e}")))?;
     listener.set_nonblocking(true).map_err(|e|Error(e.to_string()))?;
     println!("LISTENING http://127.0.0.1:{}",listener.local_addr().map_err(|e|Error(e.to_string()))?.port());
@@ -162,7 +163,7 @@ pub fn serve_with_auth(api:&Api,path:&Path,trusted:bool,allow_write:bool,limits:
             Ok((mut stream,_))=>{
                 let _=stream.set_read_timeout(Some(Duration::from_millis(1200)));
                 let _=stream.set_write_timeout(Some(Duration::from_millis(1200)));
-                let (response,stop)=match http::parse_request(&mut stream){Ok(r)=>reply(api,&mut db,r,auth),Err(e)=>(e,false)};
+                let (response,stop)=match http::parse_request(&mut stream){Ok(r)=>reply(api,db.as_mut(),r,auth),Err(e)=>(e,false)};
                 http::finish(&mut stream,response);
                 if stop{return fail("E_SQL_API: storage uncertain; stopped");}
                 served+=1;last=Instant::now();

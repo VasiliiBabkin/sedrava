@@ -14,7 +14,7 @@ fn usage() {
     println!(
         "Sedrava — Rust toolchain (ALPHA)\n\
          Usage:\n\
-           sedrava lock DIR\n           sedrava verify DIR\n           sedrava database-api check FILE\n           sedrava database-api run FILE --database ABSOLUTE_FILE --trusted [--allow-write] [--auth-file ABSOLUTE_FILE] [--port N] [--max-requests N] [--idle-ms N]\n           sedrava database check FILE\n           sedrava database run FILE --database ABSOLUTE_FILE --trusted [--arg NAME=JSON ...] [--allow-write --request-key KEY]\n           sedrava host check FILE
+           sedrava lock DIR\n           sedrava verify DIR\n           sedrava database-api check FILE\n           sedrava database-api run FILE --database ABSOLUTE_FILE --trusted [--backend native-log|cow] [--allow-write] [--auth-file ABSOLUTE_FILE] [--port N] [--max-requests N] [--idle-ms N]\n           sedrava database check FILE\n           sedrava database run FILE --database ABSOLUTE_FILE --trusted [--backend native-log|cow] [--arg NAME=JSON ...] [--allow-write --request-key KEY]\n           sedrava host check FILE
            sedrava host run FILE --root DIR --trusted [--allow-read] [--allow-write]
            sedrava server check FILE
            sedrava server run FILE [--port PORT] [--max-requests N] [--idle-ms N] [--state-dir ABSOLUTE_PRIVATE_DIR] [--transactional] [--journaled] [--sqlite-state FILE] [--sqlite-v2-state FILE] [--native-index FILE --native-index-sha256 SHA256] [--native-log FILE [--native-max-bytes N --native-max-transactions N]]
@@ -307,12 +307,13 @@ fn database_api_command(args:&[String])->Result<()>{
         [cmd,source,rest @ ..] if cmd=="run"=>{
             let api=sql_api::parse(&read_source(source)?)?;
             let mut options=RuntimeOptions{port:0,max_requests:32,idle_ms:30000};
-            let mut path=None;let mut auth_file=None;let mut trusted=false;let mut write=false;let mut limits=NativeLimits::default();
+            let mut backend=sedrava_core::database::Backend::default();let mut path=None;let mut auth_file=None;let mut trusted=false;let mut write=false;let mut limits=NativeLimits::default();
             let mut seen=std::collections::BTreeSet::new();let mut it=rest.iter();
             let bad=||Error("E_SQL_API_CLI: invalid or missing option".into());
             while let Some(flag)=it.next(){
                 if !seen.insert(flag.as_str()){return Err(bad());}
                 match flag.as_str(){
+                    "--backend"=>backend=sedrava_core::database::Backend::parse(it.next().ok_or_else(bad)?)?,
                     "--trusted"=>trusted=true,"--allow-write"=>write=true,
                     "--auth-file"=>auth_file=Some(PathBuf::from(it.next().ok_or_else(bad)?)),
                     "--database"=>path=Some(PathBuf::from(it.next().ok_or_else(bad)?)),
@@ -325,7 +326,7 @@ fn database_api_command(args:&[String])->Result<()>{
                 }
             }
             let auth=auth_file.as_deref().map(sql_api::Auth::load).transpose()?;
-            sql_api::serve_with_auth(&api,&path.ok_or_else(bad)?,trusted,write,limits,options,auth.as_ref())
+            sql_api::serve_with_backend(&api,&path.ok_or_else(bad)?,trusted,write,limits,options,auth.as_ref(),backend)
         }
         _=>Err(Error("Expected database-api check FILE or database-api run FILE".into())),
     }
@@ -341,11 +342,12 @@ fn database_command(args:&[String])->Result<()> {
         }
         [cmd,source,rest @ ..] if cmd=="run"=>{
             let program=database::parse(&read_source(source)?)?;
-            let mut path=None;let mut trusted=false;let mut write=false;let mut key=None;
+            let mut backend=database::Backend::default();let mut path=None;let mut trusted=false;let mut write=false;let mut key=None;
             let mut supplied=Vec::new();let mut seen=std::collections::BTreeSet::new();let mut it=rest.iter();
             while let Some(flag)=it.next(){
                 if flag!="--arg"&&!seen.insert(flag.as_str()){return Err(Error("E_DATABASE_CLI: duplicate option".into()));}
                 match flag.as_str(){
+                    "--backend"=>backend=database::Backend::parse(it.next().ok_or_else(||Error("E_DATABASE_CLI: missing backend".into()))?)?,
                     "--trusted"=>trusted=true,
                     "--allow-write"=>write=true,
                     "--database"=>path=it.next().map(PathBuf::from),
@@ -355,7 +357,7 @@ fn database_command(args:&[String])->Result<()> {
                 }
             }
             let path=path.ok_or_else(||Error("E_DATABASE_CLI: database path required".into()))?;
-            let result=database::run(&program,&path,trusted,write,key,&supplied)?;
+            let result=database::run_with_backend(&program,&path,trusted,write,key,&supplied,backend)?;
             println!("{}",serde_json::to_string(&result).map_err(|e|Error(e.to_string()))?);
             Ok(())
         }

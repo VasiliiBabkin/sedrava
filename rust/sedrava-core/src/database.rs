@@ -1,7 +1,7 @@
 //! A16 standalone, explicit-capability SQL host domain.
 //! One checked statement, positional typed parameters, no implicit IO or interpolation.
 use crate::model::{fail, Error, Result};
-use sedravasql::native_log::{sql::{self,SqlKind,SqlResult,BoundStatement},table::Cell,NativeLog};
+use sedravasql::native_log::{sql::{self,SqlKind,SqlResult,BoundStatement},table::Cell,NativeLog,NativeLimits,SqlStore};
 use std::{collections::BTreeSet,path::Path};
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 enum Type{Int,Bool,Text}
@@ -87,7 +87,7 @@ impl Program {
         }
         Ok(out)
     }
-    pub(crate) fn execute_on(&self,db:&mut NativeLog,values:&[Cell],request:Option<&str>)->sedravasql::native_log::Result<SqlResult>{
+    pub(crate) fn execute_on(&self,db:&mut dyn SqlStore,values:&[Cell],request:Option<&str>)->sedravasql::native_log::Result<SqlResult>{
         if self.transaction.is_empty(){return sql::execute_bound(db,&self.sql,values,request);}
         let request=request.ok_or(sedravasql::native_log::Error::Invalid("database transaction requires request key"))?;
         if values.len()!=self.params.len(){return Err(sedravasql::native_log::Error::Invalid("database transaction argument count"));}
@@ -108,7 +108,39 @@ impl Program {
         Ok(())
     }
 }
+#[derive(Clone,Copy,Debug,Default,PartialEq,Eq)]
+pub enum Backend { #[default] NativeLog, Cow }
+impl Backend {
+    pub fn parse(raw:&str)->Result<Self>{match raw{
+        "native-log"=>Ok(Self::NativeLog),"cow"=>Ok(Self::Cow),
+        _=>fail("E_DATABASE_POLICY: backend must be native-log or cow")
+    }}
+}
+pub(crate) fn open_backend(path:&Path,backend:Backend,limits:NativeLimits)->sedravasql::native_log::Result<Box<dyn SqlStore>>{
+    match backend {
+        Backend::NativeLog=>{
+            let mut db=NativeLog::open(path)?;
+            db.set_limits(limits)?;
+            db.verify()?;
+            Ok(Box::new(db))
+        },
+        Backend::Cow=>{
+            #[cfg(unix)]
+            {
+                let mut db=sedravasql::native_log::cow_store::CowStore::open(path)?;
+                db.set_limits(limits)?;
+                db.verify()?;
+                Ok(Box::new(db))
+            }
+            #[cfg(not(unix))]
+            Err(sedravasql::native_log::Error::Unsupported("COW backend requires Unix".into()))
+        }
+    }
+}
 pub fn run(program:&Program,path:&Path,trusted:bool,allow_write:bool,request:Option<&str>,supplied:&[String])->Result<SqlResult>{
+    run_with_backend(program,path,trusted,allow_write,request,supplied,Backend::NativeLog)
+}
+pub fn run_with_backend(program:&Program,path:&Path,trusted:bool,allow_write:bool,request:Option<&str>,supplied:&[String],backend:Backend)->Result<SqlResult>{
     if !trusted||!path.is_absolute(){return fail("E_DATABASE_POLICY: explicit trusted mode and absolute database path required");}
     match program.kind{
         SqlKind::Query if allow_write||request.is_some()=>return fail("E_DATABASE_POLICY: query does not accept write options"),
@@ -130,6 +162,6 @@ pub fn run(program:&Program,path:&Path,trusted:bool,allow_write:bool,request:Opt
     }
     // Recheck bound SQL before acquiring an exclusive DB handle.
     program.check_bound(&bound)?;
-    let mut db=NativeLog::open(path).map_err(|e|Error(format!("E_DATABASE: {e}")))?;
-    program.execute_on(&mut db,&bound,request).map_err(|e|Error(format!("E_DATABASE: {e}")))
+    let mut db=open_backend(path,backend,NativeLimits::default()).map_err(|e|Error(format!("E_DATABASE: {e}")))?;
+    program.execute_on(db.as_mut(),&bound,request).map_err(|e|Error(format!("E_DATABASE: {e}")))
 }

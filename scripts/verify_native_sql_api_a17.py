@@ -2,6 +2,7 @@
 """Real loopback HTTP SQL API: static queries, explicit policy, scoped durable receipts."""
 import hashlib,json,os,selectors,subprocess,tempfile,urllib.request,urllib.error
 from pathlib import Path
+from sql_test_backend import db_command, backend_args, database_bytes
 ROOT=Path(__file__).resolve().parents[1]
 BIN=Path(os.environ["SEDRAVA_NATIVE_BIN"]);DB=Path(os.environ["SEDRAVASQL_NATIVE_BIN"])
 API=ROOT/"examples/database/orders_api.sdr"
@@ -12,9 +13,9 @@ def cmd(args,fail=False):
 def main():
     with tempfile.TemporaryDirectory(prefix="sedrava-a17-") as t:
         db=Path(t)/"journal"
-        cmd([DB,"init",db]);cmd([DB,"sql",db,"CREATE TABLE Orders (id TEXT PRIMARY KEY, amount INT, paid BOOL, note TEXT)","create-orders-001"])
+        cmd([DB,db_command("init"),db]);cmd([DB,db_command("sql"),db,"CREATE TABLE Orders (id TEXT PRIMARY KEY, amount INT, paid BOOL, note TEXT)","create-orders-001"])
         cmd([BIN,"database-api","check",API])
-        base=[BIN,"database-api","run",API,"--database",db,"--trusted","--idle-ms","5000"]
+        base=[BIN,"database-api","run",API,*backend_args(),"--database",db,"--trusted","--idle-ms","5000"]
         cmd(base,fail=True)
         def start(n,cap=65536):
             p=subprocess.Popen([str(x) for x in [*base,"--allow-write","--max-requests",n,"--native-max-transactions",cap]],stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
@@ -31,7 +32,7 @@ def main():
             try:r=urllib.request.urlopen(q,timeout=5)
             except urllib.error.HTTPError as e:r=e
             with r:return r.status,json.loads(r.read()),dict(r.headers)
-        def digest():return hashlib.sha256(db.read_bytes()).hexdigest()
+        def digest():return hashlib.sha256(database_bytes(db)).hexdigest()
         payload={"id":"o1","amount":42,"note":"x'); DELETE FROM Orders WHERE id='o1'; --"}
         p,url=start(10,2)
         try:
@@ -59,6 +60,6 @@ def main():
             assert p.wait(timeout=8)==0,p.stderr.read()
         finally:
             if p.poll() is None:p.kill();p.wait()
-        cmd([DB,"verify",db])
+        cmd([DB,db_command("verify"),db])
     print("PASS A17: 14 HTTP requests, static SQL, typed parameters, aggregate response, scoped replay/restart, capacity, unchanged journal on refusal")
 if __name__=="__main__":main()
