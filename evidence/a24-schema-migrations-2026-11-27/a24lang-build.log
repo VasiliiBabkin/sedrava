@@ -1,0 +1,5 @@
+    Updating git repository `https://github.com/VasiliiBabkin/sedravasql.git`
+   Compiling sedravasql-native-engine v0.0.1 (https://github.com/VasiliiBabkin/sedravasql.git?rev=60a7d0488a23135fa064b7cf2496f93a78b519bd#60a7d048)
+   Compiling sedravasql v0.1.0-alpha.1 (https://github.com/VasiliiBabkin/sedravasql.git?rev=60a7d0488a23135fa064b7cf2496f93a78b519bd#60a7d048)
+   Compiling sedrava-core v0.12.0-alpha.2 (/var/www/popizdim_tf7_usr/data/.sedrava-dev/a24lang-work/rust/sedrava-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1m 04s

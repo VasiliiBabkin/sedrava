@@ -307,13 +307,15 @@ fn database_api_command(args:&[String])->Result<()>{
         [cmd,source,rest @ ..] if cmd=="run"=>{
             let api=sql_api::parse(&read_source(source)?)?;
             let mut options=RuntimeOptions{port:0,max_requests:32,idle_ms:30000};
-            let mut session_ttl=None;let mut ui_dir=None;let mut path=None;let mut auth_file=None;let mut trusted=false;let mut write=false;let mut limits=NativeLimits::default();
+            let mut migration_file=None;let mut apply_migrations=false;let mut session_ttl=None;let mut ui_dir=None;let mut path=None;let mut auth_file=None;let mut trusted=false;let mut write=false;let mut limits=NativeLimits::default();
             let mut seen=std::collections::BTreeSet::new();let mut it=rest.iter();
             let bad=||Error("E_SQL_API_CLI: invalid or missing option".into());
             while let Some(flag)=it.next(){
                 if !seen.insert(flag.as_str()){return Err(bad());}
                 match flag.as_str(){
                     "--trusted"=>trusted=true,"--allow-write"=>write=true,
+                    "--migrations"=>migration_file=Some(PathBuf::from(it.next().ok_or_else(bad)?)),
+                    "--apply-migrations"=>apply_migrations=true,
                     "--session-ttl"=>session_ttl=Some(it.next().ok_or_else(bad)?.parse::<u32>().map_err(|_|bad())?),
                     "--web-ui"=>ui_dir=Some(PathBuf::from(it.next().ok_or_else(bad)?)),
                     "--auth-file"=>auth_file=Some(PathBuf::from(it.next().ok_or_else(bad)?)),
@@ -328,7 +330,12 @@ fn database_api_command(args:&[String])->Result<()>{
             }
             let auth=auth_file.as_deref().map(sql_api::Auth::load).transpose()?;
             let ui=ui_dir.as_deref().map(sql_api::WebUi::load).transpose()?;
-            sql_api::serve_with_sessions(&api,&path.ok_or_else(bad)?,trusted,write,limits,options,(auth.as_ref(),ui.as_ref(),session_ttl))
+            if apply_migrations && migration_file.is_none(){return Err(bad());}
+            let migration_plan=migration_file.as_deref().map(|p|{
+                if !p.is_absolute(){return Err(Error("E_SQL_MIGRATION: absolute manifest path required".into()));}
+                sedravasql::native_log::migration::Plan::read(p).map_err(|e|Error(format!("E_SQL_MIGRATION: {e}")))
+            }).transpose()?;
+            sql_api::serve_with_migrations(&api,&path.ok_or_else(bad)?,trusted,write,limits,options,(auth.as_ref(),ui.as_ref(),session_ttl,migration_plan.as_ref().map(|p|(p,apply_migrations))))
         }
         _=>Err(Error("Expected database-api check FILE or database-api run FILE".into())),
     }

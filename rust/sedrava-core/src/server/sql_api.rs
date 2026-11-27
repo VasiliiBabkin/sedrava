@@ -251,7 +251,13 @@ pub fn serve_with_ui(api:&Api,path:&Path,trusted:bool,allow_write:bool,limits:Na
     serve_with_sessions(api,path,trusted,allow_write,limits,options,(presentation.0,presentation.1,None))
 }
 pub fn serve_with_sessions(api:&Api,path:&Path,trusted:bool,allow_write:bool,limits:NativeLimits,options:RuntimeOptions,presentation:(Option<&Auth>,Option<&WebUi>,Option<u32>))->Result<()>{
-    let (auth,ui,ttl)=presentation;
+    serve_with_migrations(api,path,trusted,allow_write,limits,options,(presentation.0,presentation.1,presentation.2,None))
+}
+pub fn serve_with_migrations(api:&Api,path:&Path,trusted:bool,allow_write:bool,limits:NativeLimits,options:RuntimeOptions,presentation:(Option<&Auth>,Option<&WebUi>,Option<u32>,Option<(&sedravasql::native_log::migration::Plan,bool)>))->Result<()>{
+    let (auth,ui,ttl,migrations)=presentation;
+    if migrations.is_some_and(|(_,apply)|apply) && !allow_write {
+        return fail("E_SQL_MIGRATION_POLICY: applying migrations requires --allow-write");
+    }
     if ttl.is_some() && auth.is_none(){return fail("E_SQL_SESSIONS: authentication file required");}
     if (ttl.is_some() || ui.is_some()) && SESSION_ROUTES.iter().any(|p|api.routes.contains_key(*p)){
         return fail("E_SQL_SESSIONS: session routes reserved");
@@ -268,6 +274,15 @@ pub fn serve_with_sessions(api:&Api,path:&Path,trusted:bool,allow_write:bool,lim
     db.verify().map_err(|e|Error(format!("E_SQL_API: {e}")))?;
     let listener=TcpListener::bind(("127.0.0.1",options.port)).map_err(|e|Error(format!("E_SQL_API_BIND: {e}")))?;
     listener.set_nonblocking(true).map_err(|e|Error(e.to_string()))?;
+    // Bind first so a conflicting port cannot cause migrations to be applied.
+    // No HTTP request is accepted until the migration gate has succeeded.
+    if let Some((plan,apply))=migrations {
+        use sedravasql::native_log::migration;
+        let report=if apply {migration::apply(&mut db,plan)} else {migration::status(&db,plan)}
+            .map_err(|e|Error(format!("E_SQL_MIGRATION: {e}")))?;
+        if !report.pending.is_empty(){return fail("E_SQL_MIGRATION: pending migrations; explicit --apply-migrations required");}
+        eprintln!("SCHEMA_VERSION {}",report.current_version);
+    }
     println!("LISTENING http://127.0.0.1:{}",listener.local_addr().map_err(|e|Error(e.to_string()))?.port());
     std::io::stdout().flush().map_err(|e|Error(e.to_string()))?;
     let idle=Duration::from_millis(options.idle_ms.into());let mut last=Instant::now();let mut served=0;
