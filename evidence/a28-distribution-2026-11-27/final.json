@@ -1,0 +1,23 @@
+{
+  "archive": "/var/www/popizdim_tf7_usr/data/.sedrava-dev/a28-dist/final/sedrava-platform-a28-preview-linux-x86_64.tar.gz",
+  "archive_bytes": 4732501,
+  "archive_sha256": "284b4f59d596dd64682a9dc7a2e49c6286db3eb52735ae31ddbb0253a783ab5c",
+  "binaries": {
+    "sedrava": "e90f1c4553d0bcc5527873e31a042a5e48bb93148ab2cbd83e7a216344c64873",
+    "sedravasql-native-preview": "ffd952196bf5a6416ec9bebbd1713e95365e0ce7ea7165ee0398d4ba7be68dc6"
+  },
+  "channel": "experimental",
+  "compiler": "rustc 1.100.0 (0ef1bc386 2026-11-09)\nbinary: rustc\ncommit-hash: 0ef1bc386059596dada8fb65b50425aab2ea637a\ncommit-date: 2026-11-09\nhost: x86_64-unknown-linux-gnu\nrelease: 1.100.0\nLLVM version: 23.1.5",
+  "distribution": "a28-preview",
+  "format": 1,
+  "limitations": "Source and binary hashes are provenance records, not signatures.",
+  "sources": {
+    "sedrava": "f688f992f0e6e047b03ffdb968ddd4a454b091fe",
+    "sedravasql": "60a7d0488a23135fa064b7cf2496f93a78b519bd"
+  },
+  "target": "x86_64-unknown-linux-gnu",
+  "versions": {
+    "native-engine": "0.0.1",
+    "sedrava": "0.12.0-alpha.2"
+  }
+}
