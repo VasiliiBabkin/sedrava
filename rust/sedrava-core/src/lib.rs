@@ -20,6 +20,8 @@ pub mod modules;
 pub mod navigation;
 pub mod packages;
 pub mod parser;
+#[cfg(unix)]
+pub mod project;
 pub mod runtime;
 pub mod server;
 pub mod site;

@@ -14,6 +14,12 @@ fn usage() {
     println!(
         "Sedrava — Rust toolchain (ALPHA)\n\
          Usage:\n\
+           sedrava new NAME
+           sedrava build | test
+           sedrava migrate --data ABSOLUTE_DIR --trusted [--apply]
+           sedrava serve --data ABSOLUTE_DIR --auth-file ABSOLUTE_FILE --trusted [--allow-write] [--port N]
+           sedrava package --output NEW_DIR
+           sedrava project verify-package DIR
            sedrava lock DIR\n           sedrava verify DIR\n           sedrava database-api check FILE\n           sedrava database-api run FILE --database ABSOLUTE_FILE --trusted [--allow-write] [--auth-file ABSOLUTE_FILE] [--web-ui ABSOLUTE_DIR] [--session-ttl SECONDS] [--port N] [--max-requests N] [--idle-ms N]\n           sedrava database check FILE\n           sedrava database run FILE --database ABSOLUTE_FILE --trusted [--arg NAME=JSON ...] [--allow-write --request-key KEY]\n           sedrava host check FILE
            sedrava host run FILE --root DIR --trusted [--allow-read] [--allow-write]
            sedrava server check FILE
@@ -385,6 +391,17 @@ fn run() -> Result<()> {
             env!("CARGO_PKG_VERSION")
         );
         return Ok(());
+    }
+    #[cfg(unix)]
+    {
+        let command=args[1].as_str();
+        if command=="project" {
+            return sedrava_core::project::run(&args[2..]);
+        }
+        if matches!(command,"new"|"migrate"|"serve"|"package") ||
+            (matches!(command,"build"|"test") && args.len()==2) {
+            return sedrava_core::project::run(&args[1..]);
+        }
     }
     if args.len() < 3 {
         usage();

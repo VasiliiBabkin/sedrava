@@ -1,0 +1,2 @@
+PASS A23e generated DOM: typed SQL rows, role checks, session-only requests, XSS-safe rendering, malformed envelope, same-principal durable replay, no browser storage
+PASS A25: scaffold, no-overwrite, deterministic build, immutable package, manifest/symlink/data guards, migrations, serve from bundle, 7 direct HTTP requests, real generated DOM
