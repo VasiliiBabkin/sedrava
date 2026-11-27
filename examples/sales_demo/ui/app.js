@@ -2,9 +2,24 @@
 (() => {
   const $ = id => document.getElementById(id);
   let token = "", busy = false, pending = null;
+  const PAGE_SIZE = 25;
+  const initialPage = () => ({after:"",history:[],next:null});
+  let pages = {products:initialPage(),orders:initialPage()};
+  function syncButtons(){
+    document.querySelectorAll("button").forEach(b=>b.disabled=busy);
+    for (const kind of ["products","orders"]){
+      $(kind+"-prev").disabled=busy || !!pending || pages[kind].history.length===0;
+      $(kind+"-next").disabled=busy || !!pending || pages[kind].next===null;
+    }
+  }
+  function resetPages(){
+    pages={products:initialPage(),orders:initialPage()};
+    for(const kind of ["products","orders"]) $(kind+"-page").textContent="Страница 1";
+    syncButtons();
+  }
   const status = message => { $("status").textContent = message; };
   const clear = () => {
-    token = ""; pending = null; $("token").value = "";
+    token = ""; pending = null; $("token").value = ""; resetPages();
     $("workspace").hidden = true;
     for (const id of ["products","orders","product-select"]) $(id).replaceChildren();
     for (const id of ["paid-count","revenue","product-count"]) $(id).textContent = "—";
@@ -26,14 +41,19 @@
     const td = document.createElement("td");
     td.textContent = String(value ?? "—"); row.append(td); return td;
   }
-  async function refresh() {
-    const products = await api("/products"), orders = await api("/orders"), paid = await api("/paid-summary");
+  async function refresh(target=pages) {
+    const products = await api("/products-page",{after:target.products.after});
+    const orders = await api("/orders-page",{after:target.orders.after});
+    const paid = await api("/paid-summary"), count = await api("/product-count");
+    const productRows=products.rows.slice(0,PAGE_SIZE), orderRows=orders.rows.slice(0,PAGE_SIZE);
+    const page=(state,rows,all)=>({...state,next:all.length>PAGE_SIZE?rows.at(-1)[0]:null});
+    const updated={products:page(target.products,productRows,products.rows),orders:page(target.orders,orderRows,orders.rows)};
     $("products").replaceChildren(); $("orders").replaceChildren(); $("product-select").replaceChildren();
-    for (const values of products.rows) {
+    for (const values of productRows) {
       const row = document.createElement("tr"); values.forEach(v => cell(row,v)); $("products").append(row);
       const option = document.createElement("option"); option.value = values[0]; option.textContent = values[1]+" ("+values[0]+")"; $("product-select").append(option);
     }
-    for (const values of orders.rows) {
+    for (const values of orderRows) {
       const row = document.createElement("tr"); values.slice(0,3).forEach(v=>cell(row,v)); cell(row,values[3]?"Оплачен":"Не оплачен");
       const actions = cell(row,"");
       if (!values[3]) {
@@ -43,14 +63,23 @@
       }
       $("orders").append(row);
     }
-    $("paid-count").textContent = String(paid.rows[0][0]); $("revenue").textContent = String(paid.rows[0][1] ?? 0); $("product-count").textContent = String(products.rows.length);
+    $("paid-count").textContent = String(paid.rows[0][0]); $("revenue").textContent = String(paid.rows[0][1] ?? 0); $("product-count").textContent = String(count.rows[0][0]);
+    pages=updated;
+    for(const kind of ["products","orders"]) $(kind+"-page").textContent="Страница "+(pages[kind].history.length+1);
+  }
+  function navigate(kind,direction){
+    if(pending) return;
+    const p=pages[kind];
+    const next=direction===1 && p.next!==null?{after:p.next,history:[...p.history,p.after],next:null}:
+      direction===-1 && p.history.length?{after:p.history.at(-1),history:p.history.slice(0,-1),next:null}:null;
+    if(next) task(()=>refresh({...pages,[kind]:next}));
   }
   async function task(fn) {
     if (busy) return;
-    busy=true; document.querySelectorAll("button").forEach(b=>b.disabled=true);
+    busy=true; syncButtons();
     try { await fn(); }
     catch(e) { status("Ошибка: "+e.message); }
-    finally { busy=false; document.querySelectorAll("button").forEach(b=>b.disabled=false); }
+    finally { busy=false; syncButtons(); }
   }
   async function write(path, body, form) {
     const signature=JSON.stringify([path,body]);
@@ -78,10 +107,15 @@
   });
   function clearWorkspaceOnly(){
     if (pending) throw new Error("Повторите незавершённую запись или отключитесь.");
-    $("workspace").hidden=true; token="";
+    $("workspace").hidden=true; token=""; resetPages();
   }
   $("logout").addEventListener("click",()=>{clear();status("Отключено.");});
   $("refresh").addEventListener("click",()=>task(async()=>{await refresh();status("Данные обновлены.");}));
+  for(const kind of ["products","orders"]){
+    $(kind+"-prev").addEventListener("click",()=>navigate(kind,-1));
+    $(kind+"-next").addEventListener("click",()=>navigate(kind,1));
+  }
+  resetPages();
   for(const [id,path] of [["product-form","/add-product"],["order-form","/add-order"],["correct-form","/correct-order"],["atomic-form","/new-product-order"]]){
     const form=$(id);
     form.addEventListener("submit",e=>{

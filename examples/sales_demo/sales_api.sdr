@@ -64,3 +64,13 @@ route POST "/correct-order":
     require old_amount range 0 2147483647
     require new_amount range 0 2147483647
     sequential [{"sql":"SELECT amount,paid FROM Orders WHERE id=?","using":["id"]},{"sql":"UPDATE Orders SET amount=? WHERE id=? AND amount=? AND paid=false","using":["new_amount","id","old_amount"]},{"sql":"SELECT amount,paid FROM Orders WHERE id=?","using":["id"]}]
+route POST "/products-page":
+    param after: text
+    require after length 0 128
+    query "SELECT id,title,category,price FROM Products WHERE id>? ORDER BY id LIMIT 26"
+route POST "/orders-page":
+    param after: text
+    require after length 0 128
+    query "SELECT Orders.id,Products.title,Orders.amount,Orders.paid FROM Orders LEFT JOIN Products ON Orders.product_id=Products.id WHERE Orders.id>? ORDER BY Orders.id LIMIT 26"
+route POST "/product-count":
+    query "SELECT COUNT(*) AS total FROM Products"
