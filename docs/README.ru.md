@@ -48,8 +48,8 @@ cargo test --manifest-path rust/Cargo.toml --locked --all-targets
 
 - Типизированное состояние, действия, инварианты, записи, ограниченные списки, функции, навигация, Unicode, импорты и локальные пакеты.
 - Генерация автономного Web, Site, WebApp и поддерживаемых Android-приложений.
-- Ограниченный trusted Host, локальный HTTP, типизированный SQL API A21 с ролями, квитанциями и последовательными транзакциями.
-- [SedravaSQL](https://sql.virtreal.ru/): NativeLog SQL; страничное B+Tree B25 пока отдельный эксперимент.
+- Ограниченный trusted Host, локальный HTTP, типизированный SQL API A21 с ролями, квитанциями и последовательными транзакциями; кандидат A26 добавляет сессии, нативный WebApp, миграции и проектный CLI.
+- [SedravaSQL](https://sql.virtreal.ru/): NativeLog SQL; COW B32–B36 остаётся исследованием.
 - Self-host A5.11b — отдельный эксперимент собственного компилятора, не основной компилятор.
 
 Не все конструкции поддерживаются всеми целевыми генераторами. Полная матрица браузеров/устройств, Windows/macOS, совместимость старых проектов и промышленная безопасность не установлены.
@@ -58,4 +58,8 @@ cargo test --manifest-path rust/Cargo.toml --locked --all-targets
 
 Посвящение: [Геннадию Ивановичу Смирных](../DEDICATION.md). Лицензия Apache-2.0.
 
-**Контрольная точка:** [состояние B31 и отчёты](DEVELOPMENT_STATUS.ru.md). В main — NativeLog SQL B28; B31 — отдельная исследовательская ветка. Публичные выпуски не изменены.
+**Кандидат A28 (27 ноября 2026).** Интеграция A26 прошла обе проверки Forgejo; автономный комплект Linux x86-64 A28 и его установка проверены. Публичные alpha-архивы не изменены. SQL использует NativeLog; COW B32–B36 не принят как основной движок. [Дистрибутив](https://github.com/VasiliiBabkin/sedrava/blob/feat/a28-distribution/docs/PLATFORM_DISTRIBUTION_A28.ru.md) · [Отчёт](https://github.com/VasiliiBabkin/sedrava/blob/integration/a26-platform/docs/INTEGRATION_A26.ru.md).
+
+## Платформа A28 (кандидат исходников)
+
+[Проектный CLI](PROJECT_CLI_A25.ru.md) · [Миграции](SCHEMA_MIGRATIONS_A24.ru.md) · [Установка](PLATFORM_DISTRIBUTION_A28.ru.md). Команды new/build/test/migrate/serve/package требуют кандидата A26, не прежнего опубликованного архива alpha.2.

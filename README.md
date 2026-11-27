@@ -34,8 +34,8 @@ cargo build --manifest-path rust/Cargo.toml --locked --release --bin sedrava
 | Web | Standalone HTML, Site, interactive WebApp; verified DOM subset |
 | Android | Kotlin/Compose sources; explicit application ID, tested debug APK build; limited device acceptance |
 | Host | Trusted bounded local file effects |
-| Server | Local HTTP and typed SQL API A21, bearer roles, bounded transactions and durable receipts |
-| Storage | [SedravaSQL](https://sql.virtreal.ru/): NativeLog SQL B28 in main; B31 separate storage research |
+| Server | Published alpha and A21 baseline; A26 candidate adds sessions, generated WebApp, migration gates and project binding |
+| Storage | [SedravaSQL](https://sql.virtreal.ru/): NativeLog; A24 additive migrations in the A26 candidate |
 | Self-host | Experimental compiler A5.11b written in Sedrava, not the primary compiler |
 
 One source can target different runtimes when its constructs are supported by the chosen generator. Unsupported constructs fail rather than silently switching implementation. Public deployment, complete platform coverage and production security are not established.
@@ -50,4 +50,8 @@ For maintainers: run cargo test --manifest-path rust/Cargo.toml --locked --all-t
 
 Apache-2.0 license.
 
-**Development checkpoint:** [B31 status and evidence](docs/DEVELOPMENT_STATUS.en.md). Public binaries are unchanged; B31 is not the SQL backend.
+**A28 development candidate (27 November 2026).** A26 integration passed both Forgejo jobs; A28 offline Linux x86-64 package and installation passed. Published alpha archives are unchanged. NativeLog remains the SQL backend; B32–B36 COW research is not adopted. See [platform distribution](https://github.com/VasiliiBabkin/sedrava/blob/feat/a28-distribution/docs/PLATFORM_DISTRIBUTION_A28.ru.md) and [integration evidence](https://github.com/VasiliiBabkin/sedrava/blob/integration/a26-platform/docs/INTEGRATION_A26.ru.md).
+
+## A28 platform preview (source candidate)
+
+[Project CLI](docs/PROJECT_CLI_A25.ru.md) · [Migration gate](docs/SCHEMA_MIGRATIONS_A24.ru.md) · [Offline distribution](docs/PLATFORM_DISTRIBUTION_A28.ru.md). Commands new/build/test/migrate/serve/package require the A26 source candidate, not the previously published alpha.2 archive.
