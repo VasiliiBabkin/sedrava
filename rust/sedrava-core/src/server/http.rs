@@ -299,6 +299,20 @@ pub(super) fn process(server: &Server, session: &mut Session, stream: &mut TcpSt
 pub(super) fn finish(stream:&mut TcpStream,response:Response){
     // The peer may disappear. Never crash the process for a single socket.
     let _ = write_response(stream, response);
+    finish_connection(stream);
+}
+
+/// A22: fixed, startup-loaded trusted UI assets. No user path resolution.
+pub(super) fn finish_asset(stream: &mut TcpStream, mime: &str, bytes: &[u8]) {
+    let _ = (|| -> std::io::Result<()> {
+        write!(stream, "HTTP/1.1 200 OK\r\nContent-Type: {mime}\r\nContent-Length: {}\r\nConnection: close\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nReferrer-Policy: no-referrer\r\nX-Frame-Options: DENY\r\nContent-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'\r\n\r\n", bytes.len())?;
+        stream.write_all(bytes)?;
+        stream.flush()
+    })();
+    finish_connection(stream);
+}
+
+fn finish_connection(stream: &mut TcpStream) {
     // Large malformed headers may leave unread TCP bytes in the receive
     // buffer. Linux can reset the connection on close and discard our JSON
     // error response. Half-close writing and best-effort drain a strictly

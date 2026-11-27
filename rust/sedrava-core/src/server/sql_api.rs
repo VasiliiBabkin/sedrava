@@ -127,10 +127,59 @@ fn reply(api:&Api,db:&mut NativeLog,request:http::Request,auth:Option<&Auth>)->(
         Err(_)=>(http::Response::error(503,"SQL_STORAGE_UNCERTAIN"),true),
     }
 }
+/// Explicit allowlisted static assets, loaded once before binding the listener.
+pub struct WebUi {
+    html: Vec<u8>,
+    script: Vec<u8>,
+    style: Vec<u8>,
+}
+impl WebUi {
+    #[cfg(unix)]
+    pub fn load(dir: &Path) -> Result<Self> {
+        use std::io::Read;
+        use std::os::unix::fs::OpenOptionsExt;
+        use rustix::fs::OFlags;
+        if !dir.is_absolute() || !std::fs::symlink_metadata(dir).is_ok_and(|m|m.is_dir()) {
+            return fail("E_SQL_UI: absolute non-symlink asset directory required");
+        }
+        let read = |name: &str| -> Result<Vec<u8>> {
+            let file = std::fs::OpenOptions::new().read(true)
+                .custom_flags((OFlags::NOFOLLOW | OFlags::NONBLOCK).bits() as i32)
+                .open(dir.join(name)).map_err(|_|Error("E_SQL_UI: cannot open asset".into()))?;
+            let m=file.metadata().map_err(|_|Error("E_SQL_UI: asset metadata".into()))?;
+            if !m.is_file() || m.len()==0 || m.len()>262144 {
+                return fail("E_SQL_UI: expected bounded regular asset");
+            }
+            let mut bytes=Vec::new();
+            file.take(262145).read_to_end(&mut bytes).map_err(|_|Error("E_SQL_UI: asset read".into()))?;
+            if bytes.is_empty() || bytes.len()>262144 || std::str::from_utf8(&bytes).is_err() {
+                return fail("E_SQL_UI: expected bounded UTF-8 asset");
+            }
+            Ok(bytes)
+        };
+        Ok(Self{html:read("index.html")?,script:read("app.js")?,style:read("app.css")?})
+    }
+    #[cfg(not(unix))]
+    pub fn load(_dir: &Path) -> Result<Self> { fail("E_SQL_UI: Unix asset loader required") }
+    fn asset(&self,path:&str)->Option<(&'static str,&[u8])>{
+        match path {
+            "/" => Some(("text/html; charset=utf-8",&self.html)),
+            "/ui-script" => Some(("text/javascript; charset=utf-8",&self.script)),
+            "/ui-style" => Some(("text/css; charset=utf-8",&self.style)),
+            _=>None,
+        }
+    }
+}
 pub fn serve(api:&Api,path:&Path,trusted:bool,allow_write:bool,limits:NativeLimits,options:RuntimeOptions)->Result<()>{
     serve_with_auth(api,path,trusted,allow_write,limits,options,None)
 }
 pub fn serve_with_auth(api:&Api,path:&Path,trusted:bool,allow_write:bool,limits:NativeLimits,options:RuntimeOptions,auth:Option<&Auth>)->Result<()>{
+    serve_with_ui(api,path,trusted,allow_write,limits,options,auth,None)
+}
+pub fn serve_with_ui(api:&Api,path:&Path,trusted:bool,allow_write:bool,limits:NativeLimits,options:RuntimeOptions,auth:Option<&Auth>,ui:Option<&WebUi>)->Result<()>{
+    if ui.is_some() && (auth.is_none() || ["/","/ui-script","/ui-style"].iter().any(|p|api.routes.contains_key(*p))) {
+        return fail("E_SQL_UI: authentication required and UI routes reserved");
+    }
     if !trusted||!path.is_absolute(){return fail("E_SQL_API_POLICY: trusted and absolute DB path required");}
     if api.routes.values().any(|p|p.kind()==SqlKind::Write)&&!allow_write{return fail("E_SQL_API_POLICY: write routes require --allow-write");}
     if !(1..=10000).contains(&options.max_requests)||!(500..=120000).contains(&options.idle_ms){return fail("E_SQL_API: invalid runtime limits");}
@@ -162,7 +211,18 @@ pub fn serve_with_auth(api:&Api,path:&Path,trusted:bool,allow_write:bool,limits:
             Ok((mut stream,_))=>{
                 let _=stream.set_read_timeout(Some(Duration::from_millis(1200)));
                 let _=stream.set_write_timeout(Some(Duration::from_millis(1200)));
-                let (response,stop)=match http::parse_request(&mut stream){Ok(r)=>reply(api,&mut db,r,auth),Err(e)=>(e,false)};
+                let (response,stop)=match http::parse_request(&mut stream){
+                    Ok(r)=>{
+                        if let Some((mime,bytes))=ui.and_then(|u|u.asset(&r.path)){
+                            if r.method=="GET" && r.body.is_empty() && r.expected_revision.is_none() && r.idempotency_key.is_none(){
+                                http::finish_asset(&mut stream,mime,bytes);
+                                served+=1;last=Instant::now();continue;
+                            }
+                            (http::Response::error(405,"UI_GET_ONLY").with_allow("GET".into()),false)
+                        }else{reply(api,&mut db,r,auth)}
+                    },
+                    Err(e)=>(e,false)
+                };
                 http::finish(&mut stream,response);
                 if stop{return fail("E_SQL_API: storage uncertain; stopped");}
                 served+=1;last=Instant::now();

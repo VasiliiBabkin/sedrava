@@ -1,0 +1,9 @@
+ca72337847fb23857515fe312313b820b051bba267ef9554dab4a19e08d30b47  /var/www/popizdim_tf7_usr/data/.sedrava-sqlite-a5.auiH6QDN/sedrava/rust/target/debug/sedrava
+dae6c78959a66a621fdb48a52d6c84aebe9cea472594da237af0700d3f826b1b  /var/www/popizdim_tf7_usr/data/.sedrava-sqlite-a5.auiH6QDN/sedravasql/target/debug/sedravasql-native-preview
+PASS A22 DOM + real HTTP: read/write auth, XSS-safe text, lost-response replay, add/correct/pay, atomic rollback, refresh/logout, no browser storage
+PASS A22 HTTP: exact static assets, CSP, loopback Host, route guard, auth required, symlink refusal, real database restart and verification
+PASS A17: 14 HTTP requests, static SQL, typed parameters, aggregate response, scoped replay/restart, capacity, unchanged journal on refusal
+PASS A18: 11 HTTP requests, missing/wrong credential denied, role authorization, principal-scoped replay, private/duplicate credential guards, restart and unchanged journal
+PASS A19 demo: 19 authenticated HTTP requests, catalog, cached index invalidation, orders, JOIN, payment flag, revenue, HAVING and restart
+PASS A20: 9 authenticated HTTP requests, atomic product+order, FK rejection, no partial writes, typed input and restart replay
+PASS A21: 10 authenticated HTTP requests, sequential before/after reads, paid-order refusal, atomic rollback and historical replay

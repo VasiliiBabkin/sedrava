@@ -1,0 +1,2 @@
+PASS A22 DOM + real HTTP: read/write auth, XSS-safe text, lost-response replay, add/correct/pay, atomic rollback, refresh/logout, no browser storage
+PASS A22 HTTP: exact static assets, CSP, loopback Host, route guard, auth required, symlink refusal, real database restart and verification
