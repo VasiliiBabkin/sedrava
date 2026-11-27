@@ -174,9 +174,10 @@ pub fn serve(api:&Api,path:&Path,trusted:bool,allow_write:bool,limits:NativeLimi
     serve_with_auth(api,path,trusted,allow_write,limits,options,None)
 }
 pub fn serve_with_auth(api:&Api,path:&Path,trusted:bool,allow_write:bool,limits:NativeLimits,options:RuntimeOptions,auth:Option<&Auth>)->Result<()>{
-    serve_with_ui(api,path,trusted,allow_write,limits,options,auth,None)
+    serve_with_ui(api,path,trusted,allow_write,limits,options,(auth,None))
 }
-pub fn serve_with_ui(api:&Api,path:&Path,trusted:bool,allow_write:bool,limits:NativeLimits,options:RuntimeOptions,auth:Option<&Auth>,ui:Option<&WebUi>)->Result<()>{
+pub fn serve_with_ui(api:&Api,path:&Path,trusted:bool,allow_write:bool,limits:NativeLimits,options:RuntimeOptions,presentation:(Option<&Auth>,Option<&WebUi>))->Result<()>{
+    let (auth,ui)=presentation;
     if ui.is_some() && (auth.is_none() || ["/","/ui-script","/ui-style"].iter().any(|p|api.routes.contains_key(*p))) {
         return fail("E_SQL_UI: authentication required and UI routes reserved");
     }

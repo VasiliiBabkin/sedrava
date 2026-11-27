@@ -327,7 +327,7 @@ fn database_api_command(args:&[String])->Result<()>{
             }
             let auth=auth_file.as_deref().map(sql_api::Auth::load).transpose()?;
             let ui=ui_dir.as_deref().map(sql_api::WebUi::load).transpose()?;
-            sql_api::serve_with_ui(&api,&path.ok_or_else(bad)?,trusted,write,limits,options,auth.as_ref(),ui.as_ref())
+            sql_api::serve_with_ui(&api,&path.ok_or_else(bad)?,trusted,write,limits,options,(auth.as_ref(),ui.as_ref()))
         }
         _=>Err(Error("Expected database-api check FILE or database-api run FILE".into())),
     }

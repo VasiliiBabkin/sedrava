@@ -1,0 +1,202 @@
+    Checking sedrava-core v0.12.0-alpha.2 (/var/www/popizdim_tf7_usr/data/.sedrava-dev/a22-work/rust/sedrava-core)
+error: the following explicit lifetimes could be elided: 'a
+   --> sedrava-core/src/collections.rs:223:19
+    |
+223 | fn selected_field<'a>(row: &'a ListItem, field: &str) -> Result<Value> {
+    |                   ^^        ^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.100.0/index.html#needless_lifetimes
+    = note: `-D clippy::needless-lifetimes` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::needless_lifetimes)]`
+help: elide the lifetimes
+    |
+223 - fn selected_field<'a>(row: &'a ListItem, field: &str) -> Result<Value> {
+223 + fn selected_field(row: &ListItem, field: &str) -> Result<Value> {
+    |
+
+error: unnecessary use of `clone` to create a slice from a reference
+   --> sedrava-core/src/modules.rs:262:55
+    |
+262 |     let output = expander.expand(&source, &canonical, &[canonical.clone()], 0)?;
+    |                                                       ^^^^^^^^^^^^^^^^^^^^ help: try: `std::slice::from_ref(&canonical)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.100.0/index.html#cloned_ref_to_slice_refs
+    = note: `-D clippy::cloned-ref-to-slice-refs` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::cloned_ref_to_slice_refs)]`
+
+error: the following explicit lifetimes could be elided: 'a
+   --> sedrava-core/src/parser.rs:129:15
+    |
+129 | fn split_decl<'a>(rest: &'a str, number: usize) -> Result<(&'a str, &'a str)> {
+    |               ^^         ^^                                 ^^       ^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.100.0/index.html#needless_lifetimes
+help: elide the lifetimes
+    |
+129 - fn split_decl<'a>(rest: &'a str, number: usize) -> Result<(&'a str, &'a str)> {
+129 + fn split_decl(rest: &str, number: usize) -> Result<(&str, &str)> {
+    |
+
+error: methods called `as_*` usually take `self` by reference or `self` by mutable reference
+  --> sedrava-core/src/server/http.rs:57:22
+   |
+57 |     pub fn as_replay(mut self) -> Self {
+   |                      ^^^^^^^^
+   |
+   = help: consider choosing a less ambiguous name
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.100.0/index.html#wrong_self_convention
+   = note: `-D clippy::wrong-self-convention` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(clippy::wrong_self_convention)]`
+
+error: this call to `as_ref` does nothing
+   --> sedrava-core/src/server/http.rs:162:18
+    |
+162 |         None => (host.as_ref(), None),
+    |                  ^^^^^^^^^^^^^ help: try: `host`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.100.0/index.html#useless_asref
+    = note: `-D clippy::useless-asref` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::useless_asref)]`
+
+error: this OR pattern can be rewritten using a range
+   --> sedrava-core/src/server/sqlite_v2.rs:375:34
+    |
+375 |             || !matches!(status, 200 | 201 | 202)
+    |                                  ^^^^^^^^^^^^^^^ help: try: `200..=202`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.100.0/index.html#manual_range_patterns
+    = note: `-D clippy::manual-range-patterns` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::manual_range_patterns)]`
+
+error: this OR pattern can be rewritten using a range
+  --> sedrava-core/src/server/transaction.rs:59:40
+   |
+59 |                 || !matches!(r.status, 200 | 201 | 202)
+   |                                        ^^^^^^^^^^^^^^^ help: try: `200..=202`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.100.0/index.html#manual_range_patterns
+
+error: this OR pattern can be rewritten using a range
+   --> sedrava-core/src/server.rs:327:44
+    |
+327 |                 if !matches!(route.status, 200 | 201 | 202) {
+    |                                            ^^^^^^^^^^^^^^^ help: try: `200..=202`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.100.0/index.html#manual_range_patterns
+
+error: this function has too many arguments (9/7)
+   --> sedrava-core/src/server.rs:464:5
+    |
+464 | /     fn open(
+465 | |         program: &Server,
+466 | |         state_dir: Option<&Path>,
+467 | |         transactional: bool,
+...   |
+473 | |         native_limits: NativeLimits,
+474 | |     ) -> Result<Self> {
+    | |_____________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.100.0/index.html#too_many_arguments
+    = note: `-D clippy::too-many-arguments` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::too_many_arguments)]`
+
+error: this function has too many arguments (8/7)
+   --> sedrava-core/src/server.rs:633:1
+    |
+633 | / pub(crate) fn reply_stateful(
+634 | |     program: &Server,
+635 | |     session: &mut Session,
+636 | |     method: &str,
+...   |
+641 | |     expected_revision: Option<u32>,
+642 | | ) -> http::Response {
+    | |___________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.100.0/index.html#too_many_arguments
+
+error: this function has too many arguments (8/7)
+    --> sedrava-core/src/server.rs:1103:1
+     |
+1103 | / pub fn serve_with_native_index(
+1104 | |     program: &Server,
+1105 | |     options: RuntimeOptions,
+1106 | |     state_dir: Option<&Path>,
+...    |
+1111 | |     native_index: Option<(&Path, &str)>,
+1112 | | ) -> Result<()> {
+     | |_______________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.100.0/index.html#too_many_arguments
+
+error: this function has too many arguments (8/7)
+   --> sedrava-core/src/site/syntax.rs:125:1
+    |
+125 | / fn imports(
+126 | |     source: &str,
+127 | |     root: Option<&Path>,
+128 | |     webapp: bool,
+...   |
+133 | |     out: &mut Vec<Line>,
+134 | | ) -> Result<()> {
+    | |_______________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.100.0/index.html#too_many_arguments
+
+error: this function has too many arguments (9/7)
+   --> sedrava-core/src/site/webapp.rs:312:1
+    |
+312 | / fn validate_controls(
+313 | |     nodes: &[Node],
+314 | |     dialogs: &BTreeSet<String>,
+315 | |     views: &BTreeSet<String>,
+...   |
+321 | |     remote_row: bool,
+322 | | ) -> Result<()> {
+    | |_______________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.100.0/index.html#too_many_arguments
+
+error: this `if` statement can be collapsed
+   --> sedrava-core/src/site/webapp.rs:385:9
+    |
+385 | /         if kind == "remote" {
+386 | |             if node
+387 | |                 .props
+388 | |                 .get("search")
+...   |
+399 | |         }
+    | |_________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.100.0/index.html#collapsible_if
+    = note: `-D clippy::collapsible-if` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::collapsible_if)]`
+help: collapse nested if block
+    |
+385 ~         if kind == "remote"
+386 ~             && (node
+387 |                 .props
+...
+392 |                     .get("title")
+393 ~                     .is_some_and(|key| service.unwrap().fields.get(key) != Some(&"text")))
+394 |             {
+...
+397 |                     .error("Remote search requires text state and title requires a text field"));
+398 ~             }
+    |
+
+error: could not compile `sedrava-core` (lib) due to 14 previous errors
+warning: build failed, waiting for other jobs to finish...
+error: useless use of `format!`
+   --> sedrava-core/src/server/storage.rs:547:19
+    |
+547 |           let raw = format!(
+    |  ___________________^
+548 | |             r#"{{"schema":"sedrava.server.state.v1","signature":"wrong","state":{{"n":1}}}}"#
+549 | |         );
+    | |_________^ help: consider using `.to_string()`: `r#"{"schema":"sedrava.server.state.v1","signature":"wrong","state":{"n":1}}"#.to_string()`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.100.0/index.html#useless_format
+    = note: `-D clippy::useless-format` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::useless_format)]`
+
+error: could not compile `sedrava-core` (lib test) due to 15 previous errors
