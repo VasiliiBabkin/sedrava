@@ -1,0 +1,62 @@
+webapp "Sedrava · Native Sales"
+state cursor = ""
+state product_id = ""
+state title = ""
+state category = "food"
+state price = 0
+service products:
+    origin self
+    path "/products-page"
+    method POST
+    auth session
+    body-field after cursor
+    max-items 26
+    response sql-rows:
+        id text
+        title text
+        category text
+        price int32
+service add_product:
+    origin self
+    path "/add-product"
+    method POST
+    auth session
+    idempotency true
+    body-field id product_id
+    body-field title title
+    body-field category category
+    body-field price price
+    response one:
+        kind text
+        affected int32
+        sequence int32
+        replayed bool
+view main:
+    container max 1000 padding 20:
+        column gap 20:
+            heading "Управление каталогом"
+            paragraph "Интерфейс и HTTP-сервисы объявлены на Sedrava."
+            session "Ключ доступа"
+            paragraph "При потере ответа повторите запись с прежними полями. Выход или перезагрузка страницы удаляют локальный ключ повтора." variant muted
+            card:
+                column gap 12:
+                    heading "Каталог" level 2
+                    input cursor label "После ID" kind text
+                    request "Загрузить товары" service products
+                    remote products:
+                        field id
+                        field title
+                        field category
+                        field price
+            card:
+                column gap 12:
+                    heading "Новый товар" level 2
+                    input product_id label "ID" kind text
+                    input title label "Название" kind text
+                    input category label "Категория" kind text
+                    input price label "Цена"
+                    request "Сохранить / повторить" service add_product
+                    remote add_product:
+                        field affected
+                        field sequence
+                        field replayed

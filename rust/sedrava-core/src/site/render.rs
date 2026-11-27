@@ -296,6 +296,11 @@ impl Render<'_> {
             "dialog" => attr(out, "data-dialog", p("id")),
             "field" => attr(out, "data-row-field", p("field")),
             "row-when" => attr(out, "data-row-when", p("field")),
+            "session" => {
+                out.push_str(" data-session-control>");
+                write!(out, "<label>{}<input type=\"password\" data-session-key autocomplete=\"off\" maxlength=\"64\" spellcheck=\"false\"></label><button type=\"button\" class=\"s-button\" data-session-login>Войти</button><button type=\"button\" class=\"s-button\" data-session-logout>Выйти</button><p data-session-status role=\"status\" aria-live=\"polite\">Не подключено</p></div>",html(p("text"))).unwrap();
+                return Ok(());
+            }
             "remote" => {
                 attr(out, "data-remote", p("service"));
                 for (key, data) in [

@@ -32,6 +32,7 @@ pub(super) fn widget(kind: &str) -> Option<Widget> {
         "title", "status", "search", "sort", "where", "equals", "active", "empty", "fields",
     ];
     let (block, positional, required, optional): (_, _, &[_], &[_]) = match kind {
+        "session" => (false, "text", &["text"], &[]),
         "request" | "cancel" => (false, "text", &["text", "service"], &[]),
         "remote" => (false, "service", &["service"], &["search", "title"]),
         "value" => (false, "state", &["state"], &[]),
@@ -329,6 +330,9 @@ fn validate_controls(
         {
             return Err(node.line.error("Reserved generated UI ID prefix"));
         }
+        if kind == "session" && (form || row_fields.is_some() || parent == Some("dialog")) {
+            return Err(node.line.error("Session control cannot be nested in forms, rows or dialogs"));
+        }
         if kind == "form" && form
             || kind == "submit" && !form
             || kind == "option" && parent != Some("select")
@@ -356,6 +360,7 @@ fn validate_controls(
                         | "remote"
                         | "request"
                         | "cancel"
+                        | "session"
                 )
             {
                 return Err(node
@@ -663,6 +668,15 @@ pub fn generate(source: &str, root: Option<&Path>) -> Result<StaticSite> {
             &services,
             false,
         )?;
+    }
+    fn count_sessions(nodes: &[Node]) -> usize {
+        nodes.iter().map(|n| usize::from(n.kind=="session")+count_sessions(&n.children)).sum()
+    }
+    let auth=services.values().any(|s|s.session);
+    let main_count=parsed.iter().filter(|v|v.name=="main").map(|v|count_sessions(&v.nodes)).sum::<usize>();
+    let total_count=parsed.iter().map(|v|count_sessions(&v.nodes)).sum::<usize>();
+    if (auth && (main_count!=1 || total_count!=1)) || (!auth && total_count!=0) {
+        return fail("Authenticated WebApp requires exactly one session control in main view");
     }
     if parsed
         .iter()

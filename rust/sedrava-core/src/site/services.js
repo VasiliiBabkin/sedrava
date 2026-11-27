@@ -2,8 +2,81 @@ const services = Object.create(null);
 const requestTimes = [];
 const utf8Encoder = new TextEncoder();
 let servicesReady = false;
+// Auth state deliberately lives outside the serializable Sedrava state.
+let session = null, sessionBusy = false;
+let sessionControl = null;
+function sessionStatus(message) {
+    if(sessionControl) sessionControl.querySelector('[data-session-status]').textContent=message;
+}
+function clearSession(discardPending=false) {
+    session=null;
+    for(const [name,service] of Object.entries(services)) {
+        if(serviceConfigs[name].session) service.resetAuth(discardPending);
+    }
+    renderRemote();
+}
+async function sessionCall(path,authorization) {
+    if(!["http:","https:"].includes(location.protocol)) throw Error("HTTP origin required");
+    const response=await fetch(new URL(path,location.origin).href,{
+        method:'POST',body:'{}',headers:{Authorization:authorization,'Content-Type':'application/json'},
+        mode:'same-origin',credentials:'omit',redirect:'error',cache:'no-store',referrerPolicy:'no-referrer',
+        signal:AbortSignal.timeout(10000)
+    });
+    if(path==="/session-logout" && response.status===401) return {revoked:false};
+    // Reuse bounded, strict response decoding. Never expose raw response/error to UI.
+    const schema=path==='/session-login'
+        ? {token:'text',principal:'text',role:'text',expires_in:'int32'}
+        : {revoked:'bool'};
+    return readServiceResponse(response,{many:false,maxItems:1,maxBytes:4096,fields:schema});
+}
+async function changeSession(login) {
+    if(sessionBusy) return;
+    sessionBusy=true;
+    const keyInput=sessionControl.querySelector('[data-session-key]');
+    const key=keyInput.value; keyInput.value='';
+    try {
+        if(login) {
+            if(session) throw Error('Сначала завершите текущую сессию');
+            if(!/^[0-9a-f]{64}$/.test(key)) throw Error('Неверный формат ключа');
+            const result=await sessionCall('/session-login','Bearer '+key);
+            if(!/^[0-9a-f]{64}$/.test(result.token)||!/^[A-Za-z][A-Za-z0-9_]{0,47}$/.test(result.principal)||
+                !['read','write'].includes(result.role)||result.expires_in<1||result.expires_in>3600) throw Error('Некорректный ответ входа');
+            if(Object.values(services).some(s=>s.pending && s.pending.owner!==result.principal)) {
+                await sessionCall('/session-logout','Session '+result.token);
+                throw Error('Войдите под прежним пользователем для повтора записи');
+            }
+            session={token:result.token,principal:result.principal};
+            sessionStatus('Подключено: '+result.principal+' ('+result.role+')');
+        } else {
+            if(session) await sessionCall('/session-logout','Session '+session.token);
+            clearSession(true);
+            sessionStatus('Не подключено');
+        }
+    } catch(error) {
+        sessionStatus('Ошибка: '+String(error.message||'Network error'));
+    } finally { sessionBusy=false; }
+}
+function setupSession() {
+    sessionControl=document.querySelector('[data-session-control]');
+    if(!sessionControl) return;
+    sessionControl.querySelector('[data-session-login]').onclick=()=>changeSession(true);
+    sessionControl.querySelector('[data-session-logout]').onclick=()=>changeSession(false);
+}
+
 
 function checkRemote(data, config) {
+    if(config.sqlColumns) {
+        if(!isPlainRecord(data)||Object.keys(data).length!==3||
+            !['rows','join_rows','aggregate_rows'].includes(data.kind)||
+            !Array.isArray(data.columns)||!Array.isArray(data.rows)||
+            data.columns.length!==config.sqlColumns.length||
+            !config.sqlColumns.every((key,i)=>key===data.columns[i])||
+            data.rows.length>config.maxItems) throw Error('Invalid SQL response envelope');
+        data=data.rows.map(row=>{
+            if(!Array.isArray(row)||row.length!==config.sqlColumns.length) throw Error('Invalid SQL row');
+            return Object.fromEntries(config.sqlColumns.map((key,i)=>[key,row[i]]));
+        });
+    }
     const rows = config.many ? data : [data];
     if (!Array.isArray(rows) || rows.length > config.maxItems) {
         throw Error('Invalid response collection');
@@ -41,6 +114,7 @@ async function readServiceResponse(response, config) {
     if (!response.ok) throw Error('HTTP ' + response.status);
     if (response.status === 204) {
         if (!config.many) throw Error('Empty response requires a many schema');
+        if(config.sqlColumns) throw Error("SQL response envelope required");
         return [];
     }
     const mime = (response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
@@ -122,7 +196,7 @@ function consumeRequestBudget() {
 function createService(name, config) {
     const service = {
         status: 'idle', data: null, error: '', sequence: 0, controller: null,
-        manuallyCancelled: false,
+        manuallyCancelled: false, pending: null,
     };
     let cacheKey = '';
     let cacheRejected = false;
@@ -157,6 +231,11 @@ function createService(name, config) {
         }
     }
 
+    function resetAuth(discardPending) {
+        invalidateRequest();
+        service.data=null;service.status='idle';service.error='';
+        if(discardPending) service.pending=null;
+    }
     function cancel(manual = false) {
         invalidateRequest();
         service.manuallyCancelled = manual;
@@ -182,6 +261,9 @@ function createService(name, config) {
 
     async function load() {
         if (invalidInput()) return;
+        if(config.session && (!session || sessionBusy)){
+            service.status='error';service.error='Требуется вход';service.data=null;renderRemote();return;
+        }
         const values = resolved(state);
         sync(values);
         cancel();
@@ -213,13 +295,28 @@ function createService(name, config) {
             }
             const headers = {Accept: 'application/json'};
             if (body !== undefined) headers['Content-Type'] = 'application/json';
+            if(config.session) headers.Authorization='Session '+session.token;
+            if(config.idempotency) {
+                const signature=JSON.stringify([target.pathname,body]);
+                if(service.pending && (service.pending.owner!==session.principal||service.pending.signature!==signature))
+                    throw Error('Восстановите прежние параметры незавершённой записи');
+                service.pending ??= {owner:session.principal,signature,key:crypto.randomUUID()};
+                headers['Idempotency-Key']=service.pending.key;
+            }
             const response = await fetch(target.href, {
                 method: config.method, body, headers, mode: 'same-origin', credentials: 'omit',
                 redirect: 'error', cache: 'no-store', referrerPolicy: 'no-referrer', signal: controller.signal,
             });
+            if(config.session && response.status===401) {
+                if(sequence===service.sequence){clearSession();sessionStatus('Сессия завершена. Войдите снова');}
+                return;
+            }
+            if(config.idempotency && sequence===service.sequence &&
+                [400,403,404,405,409,415,422,428,507].includes(response.status)) service.pending=null;
             const data = await readServiceResponse(response, config);
             if (controller.signal.aborted) throw Error('Request aborted');
             if (sequence !== service.sequence) return;
+            if(config.idempotency) service.pending=null;
             service.data = data;
             service.status = 'success';
             service.error = cacheRejected ? 'Saved API data rejected; original retained' : '';
@@ -239,7 +336,7 @@ function createService(name, config) {
         }
     }
 
-    return Object.assign(service, {sync, cancel, load});
+    return Object.assign(service, {sync, cancel, load, resetAuth});
 }
 
 function setupServices() {
@@ -259,6 +356,7 @@ function setupServices() {
         for (const service of Object.values(services)) service.cancel();
     });
     window.addEventListener('pageshow', syncServiceViews);
+    setupSession();
     servicesReady = true;
     syncServiceViews();
 }

@@ -23,8 +23,13 @@ pub(super) struct Service {
     pub fields: BTreeMap<String, &'static str>,
     auto: bool,
     cache: bool,
+    pub session: bool,
+    idempotency: bool,
+    sql_columns: Option<Vec<String>>,
     #[serde(skip)]
     body: Option<Expr>,
+    #[serde(skip)]
+    body_fields: BTreeMap<String, Expr>,
 }
 
 impl Service {
@@ -66,17 +71,32 @@ pub(super) fn parse(blocks: &[&[Line]], program: &Program) -> Result<Services> {
         let mut properties = BTreeMap::new();
         let mut fields = BTreeMap::new();
         let mut many = None;
+        let mut sql_rows = false;
+        let mut columns = Vec::new();
+        let mut body_fields = BTreeMap::new();
         for line in &block[1..] {
             let (key, value) = line
                 .text
                 .split_once(' ')
                 .ok_or_else(|| line.error("Missing HTTP declaration value"))?;
             match line.depth {
+                1 if many.is_none() && key == "body-field" => {
+                    let (field,raw)=value.split_once(' ').ok_or_else(||line.error("Expected body-field NAME EXPRESSION"))?;
+                    if !name(field) || body_fields.len()>=32 || body_fields.contains_key(field){
+                        return Err(line.error("Invalid or duplicate HTTP body field"));
+                    }
+                    let value=expr::parse(raw)?;
+                    if !matches!(expr::infer(&value,&program.types)?,Kind::Int|Kind::Text|Kind::Bool){
+                        return Err(line.error("HTTP body-field requires a scalar expression"));
+                    }
+                    body_fields.insert(field.to_owned(),value);
+                }
                 1 if many.is_none() && key == "response" => {
                     many = Some(match value {
                         "one:" => false,
                         "many:" => true,
-                        _ => return Err(line.error("Expected response one: or response many:")),
+                        "sql-rows:" => { sql_rows = true; true },
+                        _ => return Err(line.error("Expected response one:, many: or sql-rows:")),
                     });
                 }
                 1 if many.is_none()
@@ -91,6 +111,8 @@ pub(super) fn parse(blocks: &[&[Line]], program: &Program) -> Result<Services> {
                             | "auto"
                             | "cache"
                             | "body"
+                            | "auth"
+                            | "idempotency"
                     ) =>
                 {
                     if properties.insert(key, value).is_some() {
@@ -104,6 +126,7 @@ pub(super) fn parse(blocks: &[&[Line]], program: &Program) -> Result<Services> {
                         "bool" => "bool",
                         _ => return Err(line.error("Unknown HTTP field type")),
                     };
+                    columns.push(key.to_owned());
                     if fields.len() >= 32 || fields.insert(key.to_owned(), kind).is_some() {
                         return Err(line.error("Duplicate HTTP field or field limit exceeded"));
                     }
@@ -174,7 +197,10 @@ pub(super) fn parse(blocks: &[&[Line]], program: &Program) -> Result<Services> {
             .get("body")
             .map(|value| expr::parse(value))
             .transpose()?;
-        if mutation != body.is_some() {
+        if body.is_some() && !body_fields.is_empty(){
+            return Err(header.error("HTTP body and body-field cannot be combined"));
+        }
+        if mutation != (body.is_some() || !body_fields.is_empty()) {
             return Err(
                 header.error("POST, PUT and PATCH require a typed body; GET and DELETE forbid one")
             );
@@ -184,13 +210,36 @@ pub(super) fn parse(blocks: &[&[Line]], program: &Program) -> Result<Services> {
                 return Err(header.error("HTTP body requires a typed record"));
             }
         }
+        let session = match properties.get("auth") {
+            None => false,
+            Some(&"session") => true,
+            _ => return Err(header.error("HTTP auth requires session")),
+        };
+        let idempotency = match properties.get("idempotency") {
+            None | Some(&"false") => false,
+            Some(&"true") if session && mutation => true,
+            _ => return Err(header.error("HTTP idempotency requires authenticated POST, PUT or PATCH")),
+        };
+        if sql_rows && flag("cache")? {
+            return Err(header.error("SQL row envelopes forbid persistent cache"));
+        }
+        if session && (flag("auto")? || flag("cache")?) {
+            return Err(header.error("Authenticated services forbid auto and persistent cache"));
+        }
+        if session && ["/session-policy","/session-login","/session-logout"].contains(&path) {
+            return Err(header.error("Session endpoints are reserved"));
+        }
         services.insert(
             service_name.to_owned(),
             Service {
                 path: path.into(),
                 method: method.into(),
                 body,
+                body_fields,
                 fields,
+                session,
+                idempotency,
+                sql_columns: sql_rows.then_some(columns),
                 many: many.unwrap(),
                 timeout: integer("timeout", 10000, 100, 30000)?,
                 max_bytes: integer("max-bytes", 65536, 1, 200000)?,
@@ -225,6 +274,9 @@ pub(super) fn emit(
                 web::expr_js(body, names)?
             )
             .unwrap();
+        } else if !service.body_fields.is_empty() {
+            let entries=service.body_fields.iter().map(|(field,value)| Ok(format!("[{},{}]",web::json(field),web::expr_js(value,names)?))).collect::<Result<Vec<_>>>()?;
+            writeln!(js,"serviceBodies[{}] = (r) => Object.fromEntries([{}]);",web::json(name),entries.join(",")).unwrap();
         }
     }
     js.push_str(include_str!("services.js"));

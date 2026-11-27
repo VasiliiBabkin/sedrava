@@ -133,7 +133,7 @@ pub(super) fn parse_request(stream: &mut TcpStream) -> std::result::Result<Reque
     if !matches!(
         method,
         "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS"
-    ) || !super::pathname(path)
+    ) || (!super::pathname(path) && !matches!(path,"/app.js"|"/app.css"))
     {
         return Err(Response::error(400, "INVALID_REQUEST_TARGET"));
     }

@@ -235,8 +235,8 @@ impl WebUi {
     fn asset(&self,path:&str)->Option<(&'static str,&[u8])>{
         match path {
             "/" => Some(("text/html; charset=utf-8",&self.html)),
-            "/ui-script" => Some(("text/javascript; charset=utf-8",&self.script)),
-            "/ui-style" => Some(("text/css; charset=utf-8",&self.style)),
+            "/ui-script" | "/app.js" => Some(("text/javascript; charset=utf-8",&self.script)),
+            "/ui-style" | "/app.css" => Some(("text/css; charset=utf-8",&self.style)),
             _=>None,
         }
     }
@@ -257,7 +257,7 @@ pub fn serve_with_sessions(api:&Api,path:&Path,trusted:bool,allow_write:bool,lim
         return fail("E_SQL_SESSIONS: session routes reserved");
     }
     let mut sessions=ttl.map(Sessions::new).transpose()?;
-    if ui.is_some() && (auth.is_none() || ["/","/ui-script","/ui-style"].iter().any(|p|api.routes.contains_key(*p))) {
+    if ui.is_some() && (auth.is_none() || ["/","/ui-script","/ui-style","/app.js","/app.css"].iter().any(|p|api.routes.contains_key(*p))) {
         return fail("E_SQL_UI: authentication required and UI routes reserved");
     }
     if !trusted||!path.is_absolute(){return fail("E_SQL_API_POLICY: trusted and absolute DB path required");}

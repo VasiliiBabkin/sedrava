@@ -1,0 +1,4 @@
+57371cc8805b18d132ad30126e2d57bc2bb3cd30b920f14a465ea4252093dd99  /var/www/popizdim_tf7_usr/data/.sedrava-sqlite-a5.auiH6QDN/sedrava/rust/target/debug/sedrava
+dae6c78959a66a621fdb48a52d6c84aebe9cea472594da237af0700d3f826b1b  /var/www/popizdim_tf7_usr/data/.sedrava-sqlite-a5.auiH6QDN/sedravasql/target/debug/sedravasql-native-preview
+PASS A23e generated DOM: typed SQL rows, role checks, session-only requests, XSS-safe rendering, malformed envelope, same-principal durable replay, no browser storage
+PASS A23e: native .sdr build, 7 compiler rejections, generated asset delivery, real session API, database verification
