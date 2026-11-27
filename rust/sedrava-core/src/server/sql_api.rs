@@ -52,6 +52,7 @@ impl Auth {
         found
     }
 }
+const MAX_ROUTES: usize = 24;
 pub struct Api {name:String,routes:BTreeMap<String,database::Program>}
 pub fn parse(source:&str)->Result<Api>{
     if source.len()>32768||source.contains('\r')||source.contains('\0'){return fail("E_SQL_API: invalid source");}
@@ -63,7 +64,7 @@ pub fn parse(source:&str)->Result<Api>{
             if let Some((path,body))=current.take(){
                 if routes.insert(path,database::parse(&body)?).is_some(){return fail("E_SQL_API: duplicate route");}
             }
-            if routes.len()>=16{return fail("E_SQL_API: route budget");}
+            if routes.len()>=MAX_ROUTES{return fail("E_SQL_API: route budget");}
             let raw=raw.strip_suffix(':').ok_or_else(||Error("E_SQL_API: route must end with colon".into()))?;
             let path:String=serde_json::from_str(raw).map_err(|_|Error("E_SQL_API: route path string".into()))?;
             if !pathname(&path){return fail("E_SQL_API: invalid path");}

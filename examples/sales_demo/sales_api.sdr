@@ -74,3 +74,34 @@ route POST "/orders-page":
     query "SELECT Orders.id,Products.title,Orders.amount,Orders.paid FROM Orders LEFT JOIN Products ON Orders.product_id=Products.id WHERE Orders.id>? ORDER BY Orders.id LIMIT 26"
 route POST "/product-count":
     query "SELECT COUNT(*) AS total FROM Products"
+route POST "/edit-product":
+    param id: text
+    param old_title: text
+    param old_category: text
+    param old_price: int
+    param title: text
+    param category: text
+    param price: int
+    require id key
+    require old_title length 0 128
+    require old_category length 0 128
+    require title nonblank
+    require title length 1 128
+    require category nonblank
+    require category length 1 128
+    require price range 0 2147483647
+    sequential [{"sql":"UPDATE Products SET title=?,category=?,price=? WHERE id=? AND title=? AND category=? AND price=?","using":["title","category","price","id","old_title","old_category","old_price"]}]
+route POST "/delete-product":
+    param id: text
+    param old_title: text
+    param old_category: text
+    param old_price: int
+    require id key
+    require old_title length 0 128
+    require old_category length 0 128
+    sequential [{"sql":"DELETE FROM Products WHERE id=? AND title=? AND category=? AND price=?","using":["id","old_title","old_category","old_price"]}]
+route POST "/delete-order":
+    param id: text
+    param old_amount: int
+    require id key
+    sequential [{"sql":"DELETE FROM Orders WHERE id=? AND amount=? AND paid=false","using":["id","old_amount"]}]
