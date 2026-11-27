@@ -378,6 +378,7 @@ dependencies = [
 name = "sedrava-core"
 version = "0.12.0-alpha.2"
 dependencies = [
+ "getrandom",
  "regex",
  "roxmltree",
  "rustix",

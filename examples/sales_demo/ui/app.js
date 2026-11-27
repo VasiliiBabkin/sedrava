@@ -1,14 +1,14 @@
 "use strict";
 (() => {
   const $ = id => document.getElementById(id);
-  let token = "", busy = false, pending = null, editing = null;
+  let token = "", sessionMode = false, principal = null, busy = false, pending = null, editing = null;
   const PAGE_SIZE = 25;
   const initialPage = () => ({after:"",history:[],next:null});
   let pages = {products:initialPage(),orders:initialPage()};
   function syncButtons(){
     document.querySelectorAll("button").forEach(b=>b.disabled=busy);
     $("retry").hidden=!pending;
-    $("retry").disabled=busy || !pending;
+    $("retry").disabled=busy || !pending || !token;
     for (const kind of ["products","orders"]){
       $(kind+"-prev").disabled=busy || !!pending || pages[kind].history.length===0;
       $(kind+"-next").disabled=busy || !!pending || pages[kind].next===null;
@@ -30,16 +30,18 @@
     for(const [k,v] of Object.entries({id:values[0],title:values[1],category:values[2],price:values[3]})) f.elements.namedItem(k).value=String(v);
     $("edit-panel").hidden=false;
   }
-  const clear = () => {
+  const clear = (preservePending=false) => {
     closeEdit();
-    token = ""; pending = null; $("token").value = ""; resetPages();
+    token = ""; principal=null;
+    if(!preservePending) pending = null;
+    $("token").value = ""; resetPages();
     $("workspace").hidden = true;
     for (const id of ["products","orders","product-select"]) $(id).replaceChildren();
     for (const id of ["paid-count","revenue","product-count"]) $(id).textContent = "—";
     for (const id of ["product-form","order-form","correct-form","atomic-form"]) $(id).reset();
   };
-  async function api(path, body = {}, key = null) {
-    const headers = {"Content-Type":"application/json","Authorization":"Bearer "+token};
+  async function api(path, body = {}, key = null, authorization = (sessionMode?"Session ":"Bearer ")+token) {
+    const headers = {"Content-Type":"application/json","Authorization":authorization};
     if (key) headers["Idempotency-Key"] = key;
     const response = await fetch(path,{method:"POST",headers,body:JSON.stringify(body),cache:"no-store",redirect:"error",credentials:"omit"});
     const data = await response.json();
@@ -96,16 +98,21 @@
     if (busy) return;
     busy=true; syncButtons();
     try { await fn(); }
-    catch(e) { status("Ошибка: "+e.message); }
+    catch(e) {
+      if(sessionMode && token && e.httpStatus===401){
+        clear(true); status("Сессия завершена. Войдите снова"+(pending?" с тем же ключом, затем повторите запись.":"."));
+      }else status("Ошибка: "+e.message);
+    }
     finally { busy=false; syncButtons(); }
   }
   async function write(path, body, form) {
     const signature=JSON.stringify([path,body]);
     if (pending && pending.signature!==signature) throw new Error("Сначала повторите предыдущую запись с прежними полями.");
-    pending ??= {signature,key:crypto.randomUUID(),path,body,form};
+    pending ??= {signature,key:crypto.randomUUID(),path,body,form,owner:principal};
     let result;
     try { result=await api(path,body,pending.key); }
     catch(e) {
+      if(sessionMode && e.httpStatus===401) throw e;
       if ([400,401,403,404,405,409,415,422,428,507].includes(e.httpStatus)) pending=null;
       else throw new Error("Результат записи неизвестен. Повторите те же поля. "+e.message);
       throw e;
@@ -114,20 +121,43 @@
     if (form) form.reset();
     if(path==="/edit-product" || path==="/delete-product") closeEdit();
     status(result.replayed?"Повтор подтверждён.":"Запись сохранена.");
-    try { await refresh(); } catch(e) { status("Запись сохранена, но обновление не удалось: "+e.message); }
+    try { await refresh(); } catch(e) {
+      if(sessionMode && e.httpStatus===401){clear();status("Запись сохранена. Сессия завершена; войдите снова.");}
+      else status("Запись сохранена, но обновление не удалось: "+e.message);
+    }
   }
   $("login").addEventListener("submit",e=>{
     e.preventDefault();task(async()=>{
-      clearWorkspaceOnly();
-      token=$("token").value; $("token").value="";
-      try { await refresh(); $("workspace").hidden=false; status("Подключено."); }
-      catch(e) { clear(); throw e; }
+      const key=$("token").value;
+      $("token").value="";
+      if(pending && token) throw new Error("Сначала повторите незавершённую запись.");
+      if(token && sessionMode) {
+        try { await api("/session-logout"); } catch(e) {if(e.httpStatus!==401) throw e;}
+      }
+      clear(true);
+      const res=await fetch("/session-policy",{method:"GET",headers:{},cache:"no-store",redirect:"error",credentials:"omit"});
+      if(!res.ok) throw new Error("Не удалось определить режим доступа.");
+      const policy=await res.json();
+      if(typeof policy.sessions!=="boolean") throw new Error("Некорректный режим доступа.");
+      sessionMode=policy.sessions;
+      if(sessionMode){
+        const result=await api("/session-login",{},null,"Bearer "+key);
+        if(pending && pending.owner!==result.principal){
+          await api("/session-logout",{},null,"Session "+result.token);
+          throw new Error("Для повторения записи войдите под прежним пользователем.");
+        }
+        token=result.token;principal=result.principal;
+      }else{
+        if(pending && pending.owner!==null) throw new Error("Для повторения записи нужен прежний режим сессий.");
+        token=key;
+      }
+      try { await refresh(); $("workspace").hidden=false; status(pending?"Подключено. Повторите незавершённую запись.":"Подключено."); }
+      catch(e) {
+        if(sessionMode && token){try{await api("/session-logout");}catch(_){}}
+        clear(true); throw e;
+      }
     });
   });
-  function clearWorkspaceOnly(){
-    if (pending) throw new Error("Повторите незавершённую запись или отключитесь.");
-    $("workspace").hidden=true; token=""; closeEdit(); resetPages();
-  }
   $("retry").addEventListener("click",()=>{if(pending){const p=pending;task(()=>write(p.path,p.body,p.form));}});
   $("edit-product-form").addEventListener("submit",e=>{
     e.preventDefault();if(!editing) return;
@@ -138,7 +168,13 @@
     if(editing && !busy && !pending && confirm("Удалить товар "+editing.id+"?")) task(()=>write("/delete-product",{...editing}));
   });
   $("cancel-edit").addEventListener("click",()=>{if(!pending) closeEdit();});
-  $("logout").addEventListener("click",()=>{clear();status("Отключено.");});
+  $("logout").addEventListener("click",()=>{
+    if(!sessionMode || !token){clear();status("Отключено.");return;}
+    task(async()=>{
+      try{await api("/session-logout");}catch(e){if(e.httpStatus!==401)throw e;}
+      clear();status("Отключено.");
+    });
+  });
   $("refresh").addEventListener("click",()=>task(async()=>{await refresh();status("Данные обновлены.");}));
   for(const kind of ["products","orders"]){
     $(kind+"-prev").addEventListener("click",()=>navigate(kind,-1));

@@ -21,6 +21,7 @@ pub struct Response {
     /// A9 revisions, in declared db_batch_put order (two managed public keys).
     pub batch_kv_revisions: Option<Vec<u32>>,
     pub replayed: bool,
+    session_challenge: bool,
 }
 
 impl Response {
@@ -33,10 +34,15 @@ impl Response {
             kv_revision: None,
             batch_kv_revisions: None,
             replayed: false,
+            session_challenge: false,
         }
     }
     pub fn error(status: u16, code: &str) -> Self {
         Self::json(status, json!({"error":{"code":code}}))
+    }
+    pub(super) fn with_session_challenge(mut self) -> Self {
+        self.session_challenge = true;
+        self
     }
     pub fn with_allow(mut self, methods: String) -> Self {
         self.allow = Some(methods);
@@ -233,6 +239,7 @@ fn reason(status: u16) -> &'static str {
         413 => "Content Too Large",
         415 => "Unsupported Media Type",
         422 => "Unprocessable Content",
+        429 => "Too Many Requests",
         503 => "Service Unavailable",
         431 => "Request Header Fields Too Large",
         _ => "Internal Server Error",
@@ -247,7 +254,7 @@ fn write_response(stream: &mut TcpStream, response: Response) -> std::io::Result
     write!(stream,
         "HTTP/1.1 {} {}\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\n",
         status,reason(status),bytes.len())?;
-    if status == 401 { stream.write_all(b"WWW-Authenticate: Bearer\r\n")?; }
+    if status == 401 { stream.write_all(if response.session_challenge { b"WWW-Authenticate: Session\r\n" } else { b"WWW-Authenticate: Bearer\r\n" })?; }
     if let Some(allowed) = response.allow.as_deref() {
         write!(stream, "Allow: {allowed}\r\n")?;
     }

@@ -52,6 +52,75 @@ impl Auth {
         found
     }
 }
+// A23d: process-local sessions; operator credentials remain the source of roles.
+const SESSION_ROUTES: [&str; 3] = ["/session-policy","/session-login","/session-logout"];
+const MAX_SESSIONS: usize = 128;
+const MAX_USER_SESSIONS: usize = 4;
+struct ActiveSession {
+    id: String,
+    expires: Instant,
+}
+struct Sessions {
+    ttl: Duration,
+    entries: BTreeMap<[u8;32], ActiveSession>,
+}
+fn session_digest(header: Option<&str>) -> Option<[u8;32]> {
+    let token=header?.strip_prefix("Session ")?;
+    if token.len()!=64 || !token.bytes().all(|b|b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) {
+        return None;
+    }
+    Some(Sha256::digest(token.as_bytes()).into())
+}
+impl Sessions {
+    fn new(seconds:u32)->Result<Self>{
+        if !(1..=3600).contains(&seconds){return fail("E_SQL_SESSIONS: ttl must be 1..3600 seconds");}
+        Ok(Self{ttl:Duration::from_secs(seconds.into()),entries:BTreeMap::new()})
+    }
+    fn prune(&mut self,now:Instant){self.entries.retain(|_,v|v.expires>now);}
+    fn principal<'a>(&self,header:Option<&str>,auth:&'a Auth)->Option<&'a Credential>{
+        let s=self.entries.get(&session_digest(header)?)?;
+        if s.expires<=Instant::now(){return None;}
+        auth.credentials.iter().find(|c|c.id==s.id)
+    }
+    fn login(&mut self,c:&Credential)->http::Response{
+        self.prune(Instant::now());
+        if self.entries.len()>=MAX_SESSIONS || self.entries.values().filter(|s|s.id==c.id).count()>=MAX_USER_SESSIONS {
+            return http::Response::error(429,"SESSION_CAPACITY");
+        }
+        let mut bytes=[0u8;32];
+        if getrandom::fill(&mut bytes).is_err(){return http::Response::error(503,"SESSION_UNAVAILABLE");}
+        let token=bytes.iter().map(|b|format!("{b:02x}")).collect::<String>();
+        let digest:[u8;32]=Sha256::digest(token.as_bytes()).into();
+        if self.entries.contains_key(&digest){return http::Response::error(503,"SESSION_UNAVAILABLE");}
+        self.entries.insert(digest,ActiveSession{id:c.id.clone(),expires:Instant::now()+self.ttl});
+        http::Response::json(200,serde_json::json!({
+            "token":token,"principal":c.id,"role":if c.role==Role::Write{"write"}else{"read"},"expires_in":self.ttl.as_secs()
+        }))
+    }
+    fn logout(&mut self,header:Option<&str>)->http::Response{
+        self.prune(Instant::now());
+        if session_digest(header).and_then(|d|self.entries.remove(&d)).is_none(){
+            return http::Response::error(401,"AUTH_REQUIRED").with_session_challenge();
+        }
+        http::Response::json(200,serde_json::json!({"revoked":true}))
+    }
+}
+fn session_reply(request:&http::Request,auth:&Auth,sessions:&mut Sessions)->http::Response{
+    if request.method!="POST"{return http::Response::error(405,"METHOD_NOT_ALLOWED").with_allow("POST".into());}
+    if request.expected_revision.is_some()||request.idempotency_key.is_some(){return http::Response::error(400,"SESSION_HEADERS_UNSUPPORTED");}
+    if request.content_type.as_deref()!=Some("application/json"){return http::Response::error(415,"JSON_CONTENT_TYPE_REQUIRED");}
+    let mut decoder=serde_json::Deserializer::from_slice(&request.body);
+    match StrictObject::deserialize(&mut decoder){
+        Ok(StrictObject(value)) if value.is_empty() && decoder.end().is_ok()=>{},
+        _=>return http::Response::error(400,"SESSION_EMPTY_OBJECT_REQUIRED"),
+    }
+    if request.path=="/session-login"{
+        match auth.authenticate(request.authorization.as_deref()){
+            Some(c)=>sessions.login(c),
+            None=>http::Response::error(401,"AUTH_REQUIRED"),
+        }
+    }else{sessions.logout(request.authorization.as_deref())}
+}
 const MAX_ROUTES: usize = 24;
 pub struct Api {name:String,routes:BTreeMap<String,database::Program>}
 pub fn parse(source:&str)->Result<Api>{
@@ -81,12 +150,12 @@ pub fn parse(source:&str)->Result<Api>{
     if routes.is_empty(){return fail("E_SQL_API: no routes");}
     Ok(Api{name,routes})
 }
-fn reply(api:&Api,db:&mut NativeLog,request:http::Request,auth:Option<&Auth>)->(http::Response,bool){
+fn reply(api:&Api,db:&mut NativeLog,request:http::Request,auth:Option<&Auth>,sessions:Option<&Sessions>)->(http::Response,bool){
     let error=|status,code| (http::Response::error(status,code),false);
     let principal=if let Some(auth)=auth{
-        match auth.authenticate(request.authorization.as_deref()){
+        match if let Some(s)=sessions{s.principal(request.authorization.as_deref(),auth)}else{auth.authenticate(request.authorization.as_deref())}{
             Some(c)=>Some(c),
-            None=>return error(401,"AUTH_REQUIRED"),
+            None=>return (if sessions.is_some(){http::Response::error(401,"AUTH_REQUIRED").with_session_challenge()}else{http::Response::error(401,"AUTH_REQUIRED")},false),
         }
     }else{
         if request.authorization.is_some(){return error(400,"AUTH_NOT_CONFIGURED");}
@@ -179,7 +248,15 @@ pub fn serve_with_auth(api:&Api,path:&Path,trusted:bool,allow_write:bool,limits:
     serve_with_ui(api,path,trusted,allow_write,limits,options,(auth,None))
 }
 pub fn serve_with_ui(api:&Api,path:&Path,trusted:bool,allow_write:bool,limits:NativeLimits,options:RuntimeOptions,presentation:(Option<&Auth>,Option<&WebUi>))->Result<()>{
-    let (auth,ui)=presentation;
+    serve_with_sessions(api,path,trusted,allow_write,limits,options,(presentation.0,presentation.1,None))
+}
+pub fn serve_with_sessions(api:&Api,path:&Path,trusted:bool,allow_write:bool,limits:NativeLimits,options:RuntimeOptions,presentation:(Option<&Auth>,Option<&WebUi>,Option<u32>))->Result<()>{
+    let (auth,ui,ttl)=presentation;
+    if ttl.is_some() && auth.is_none(){return fail("E_SQL_SESSIONS: authentication file required");}
+    if (ttl.is_some() || ui.is_some()) && SESSION_ROUTES.iter().any(|p|api.routes.contains_key(*p)){
+        return fail("E_SQL_SESSIONS: session routes reserved");
+    }
+    let mut sessions=ttl.map(Sessions::new).transpose()?;
     if ui.is_some() && (auth.is_none() || ["/","/ui-script","/ui-style"].iter().any(|p|api.routes.contains_key(*p))) {
         return fail("E_SQL_UI: authentication required and UI routes reserved");
     }
@@ -216,13 +293,19 @@ pub fn serve_with_ui(api:&Api,path:&Path,trusted:bool,allow_write:bool,limits:Na
                 let _=stream.set_write_timeout(Some(Duration::from_millis(1200)));
                 let (response,stop)=match http::parse_request(&mut stream){
                     Ok(r)=>{
-                        if let Some((mime,bytes))=ui.and_then(|u|u.asset(&r.path)){
+                        if (ui.is_some()||sessions.is_some()) && r.path=="/session-policy" {
+                            if r.method=="GET" && r.body.is_empty() && r.expected_revision.is_none() && r.idempotency_key.is_none() {
+                                (http::Response::json(200,serde_json::json!({"sessions":sessions.is_some()})),false)
+                            }else{(http::Response::error(405,"METHOD_NOT_ALLOWED").with_allow("GET".into()),false)}
+                        }else if matches!(r.path.as_str(),"/session-login"|"/session-logout") && sessions.is_some(){
+                            (session_reply(&r,auth.expect("session auth policy"),sessions.as_mut().expect("enabled sessions")),false)
+                        }else if let Some((mime,bytes))=ui.and_then(|u|u.asset(&r.path)){
                             if r.method=="GET" && r.body.is_empty() && r.expected_revision.is_none() && r.idempotency_key.is_none(){
                                 http::finish_asset(&mut stream,mime,bytes);
                                 served+=1;last=Instant::now();continue;
                             }
                             (http::Response::error(405,"UI_GET_ONLY").with_allow("GET".into()),false)
-                        }else{reply(api,&mut db,r,auth)}
+                        }else{reply(api,&mut db,r,auth,sessions.as_ref())}
                     },
                     Err(e)=>(e,false)
                 };
