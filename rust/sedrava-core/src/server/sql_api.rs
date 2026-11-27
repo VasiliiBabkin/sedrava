@@ -102,6 +102,7 @@ fn reply(api:&Api,db:&mut NativeLog,request:http::Request,auth:Option<&Auth>)->(
         _=>return error(400,"INVALID_JSON"),
     };
     let params=match route.bind_object(&object){Ok(p)=>p,Err(_)=>return error(422,"REQUEST_SCHEMA_MISMATCH")};
+    if route.validate_guards(&params).is_err(){return error(422,"REQUEST_REQUIREMENT_FAILED");}
     let key=match route.kind(){
         SqlKind::Query=>{if request.idempotency_key.is_some(){return error(400,"READ_CANNOT_USE_TRANSACTION_HEADERS");}None}
         SqlKind::Write=>{

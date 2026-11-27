@@ -3,6 +3,8 @@ route POST "/products":
     query "SELECT id,title,category,price FROM Products ORDER BY id"
 route POST "/category":
     param category: text
+    require category nonblank
+    require category length 1 128
     query "SELECT id,title,price FROM Products WHERE category=? ORDER BY id"
 route POST "/categories":
     query "SELECT DISTINCT category FROM Products ORDER BY category"
@@ -11,21 +13,32 @@ route POST "/add-product":
     param title: text
     param category: text
     param price: int
+    require id key
+    require title nonblank
+    require title length 1 128
+    require category nonblank
+    require category length 1 128
+    require price range 0 2147483647
     execute "INSERT INTO Products (id,title,category,price) VALUES (?,?,?,?)"
 route POST "/add-order":
     param id: text
     param product_id: text
     param amount: int
+    require id key
+    require product_id key
+    require amount range 0 2147483647
     execute "INSERT INTO Orders (id,product_id,amount,paid) VALUES (?,?,?,false)"
 route POST "/orders":
     query "SELECT Orders.id,Products.title,Orders.amount,Orders.paid FROM Orders LEFT JOIN Products ON Orders.product_id=Products.id ORDER BY Orders.id"
 route POST "/mark-paid":
     param id: text
+    require id key
     execute "UPDATE Orders SET paid=true WHERE id=?"
 route POST "/paid-summary":
     query "SELECT COUNT(*) AS count_paid,SUM(amount) AS revenue FROM Orders WHERE paid=true"
 route POST "/top-products":
     param minimum: int
+    require minimum range 0 2147483647
     query "SELECT product_id,SUM(amount) AS total FROM Orders WHERE paid=true GROUP BY product_id HAVING total>=? ORDER BY total DESC"
 route POST "/new-product-order":
     param product_id: text
@@ -34,9 +47,20 @@ route POST "/new-product-order":
     param price: int
     param order_id: text
     param amount: int
+    require product_id key
+    require title nonblank
+    require title length 1 128
+    require category nonblank
+    require category length 1 128
+    require price range 0 2147483647
+    require order_id key
+    require amount range 0 2147483647
     transaction [{"sql":"INSERT INTO Products (id,title,category,price) VALUES (?,?,?,?)","using":["product_id","title","category","price"]},{"sql":"INSERT INTO Orders (id,product_id,amount,paid) VALUES (?,?,?,false)","using":["order_id","product_id","amount"]}]
 route POST "/correct-order":
     param id: text
     param old_amount: int
     param new_amount: int
+    require id key
+    require old_amount range 0 2147483647
+    require new_amount range 0 2147483647
     sequential [{"sql":"SELECT amount,paid FROM Orders WHERE id=?","using":["id"]},{"sql":"UPDATE Orders SET amount=? WHERE id=? AND amount=? AND paid=false","using":["new_amount","id","old_amount"]},{"sql":"SELECT amount,paid FROM Orders WHERE id=?","using":["id"]}]
