@@ -254,7 +254,11 @@ pub fn serve_with_sessions(api:&Api,path:&Path,trusted:bool,allow_write:bool,lim
     serve_with_migrations(api,path,trusted,allow_write,limits,options,(presentation.0,presentation.1,presentation.2,None))
 }
 pub fn serve_with_migrations(api:&Api,path:&Path,trusted:bool,allow_write:bool,limits:NativeLimits,options:RuntimeOptions,presentation:(Option<&Auth>,Option<&WebUi>,Option<u32>,Option<(&sedravasql::native_log::migration::Plan,bool)>))->Result<()>{
-    let (auth,ui,ttl,migrations)=presentation;
+    serve_project(api,path,trusted,allow_write,limits,options,(presentation.0,presentation.1,presentation.2,presentation.3,None))
+}
+type ProjectPresentation<'a> = (Option<&'a Auth>,Option<&'a WebUi>,Option<u32>,Option<(&'a sedravasql::native_log::migration::Plan,bool)>,Option<&'a str>);
+pub(crate) fn serve_project(api:&Api,path:&Path,trusted:bool,allow_write:bool,limits:NativeLimits,options:RuntimeOptions,presentation:ProjectPresentation<'_>)->Result<()>{
+    let (auth,ui,ttl,migrations,project_name)=presentation;
     if migrations.is_some_and(|(_,apply)|apply) && !allow_write {
         return fail("E_SQL_MIGRATION_POLICY: applying migrations requires --allow-write");
     }
@@ -272,6 +276,12 @@ pub fn serve_with_migrations(api:&Api,path:&Path,trusted:bool,allow_write:bool,l
     let mut db=NativeLog::open(path).map_err(|e|Error(format!("E_SQL_API: {e}")))?;
     db.set_limits(limits).map_err(|e|Error(format!("E_SQL_API: {e}")))?;
     db.verify().map_err(|e|Error(format!("E_SQL_API: {e}")))?;
+    if let Some(name)=project_name {
+        #[cfg(unix)]
+        crate::project::verify_identity(&db,name)?;
+        #[cfg(not(unix))]
+        { let _=name;return fail("E_PROJECT: unsupported platform"); }
+    }
     let listener=TcpListener::bind(("127.0.0.1",options.port)).map_err(|e|Error(format!("E_SQL_API_BIND: {e}")))?;
     listener.set_nonblocking(true).map_err(|e|Error(e.to_string()))?;
     // Bind first so a conflicting port cannot cause migrations to be applied.

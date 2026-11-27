@@ -6,7 +6,9 @@ use crate::{
     server::{sql_api, RuntimeOptions},
     site,
 };
-use sedravasql::native_log::{migration, NativeLimits, NativeLog};
+use sedravasql::native_log::{
+    migration, NativeChange, NativeLimits, NativeLog, NativeMutation, TransactionalStore,
+};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -102,6 +104,45 @@ fn private_data(path: &Path) -> Result<PathBuf> {
     }
     Ok(path.join("app.log"))
 }
+// One marker in the same journal as migrations and rows. Only an empty
+// journal may be bound; do not silently adopt pre-A26 or unmanaged data.
+const IDENTITY_NS: &str = "sedrava_project_identity";
+const IDENTITY_KEY: &str = "name";
+const IDENTITY_REQUEST: &str = "sedrava-project-identity-v1";
+
+pub(crate) fn verify_identity(db: &NativeLog, name: &str) -> Result<()> {
+    let row = db
+        .read(IDENTITY_NS, IDENTITY_KEY)
+        .map_err(err)?
+        .ok_or_else(|| err("database is not bound to a project"))?;
+    if row.revision != 1 || row.value.as_deref() != Some(name) {
+        return fail("E_PROJECT: database belongs to a different project or identity changed");
+    }
+    let receipt = db
+        .lookup_receipt(IDENTITY_REQUEST)
+        .map_err(err)?
+        .ok_or_else(|| err("missing project identity receipt"))?;
+    if receipt.sequence != 1 || receipt.entries.as_slice() != [row] {
+        return fail("E_PROJECT: inconsistent project identity");
+    }
+    Ok(())
+}
+fn bind_identity(db: &mut NativeLog, name: &str, apply: bool) -> Result<()> {
+    if apply && db.sequence() == 0 {
+        db.commit_batch(
+            IDENTITY_REQUEST,
+            &[NativeMutation {
+                namespace: IDENTITY_NS.into(),
+                key: IDENTITY_KEY.into(),
+                expected_revision: 0,
+                change: NativeChange::Put(name.into()),
+            }],
+        )
+        .map_err(err)?;
+    }
+    verify_identity(db, name)
+}
+
 struct Project {
     manifest: Manifest,
     sources: BTreeMap<String, Vec<u8>>,
@@ -168,6 +209,7 @@ impl Project {
         fs::set_permissions(tmp.path(), fs::Permissions::from_mode(0o700)).map_err(err)?;
         let file = tmp.path().join("test.log");
         let mut db = NativeLog::create(&file).map_err(err)?;
+        bind_identity(&mut db, &self.manifest.name, true)?;
         let result = migration::apply(&mut db, &self.plan).map_err(err)?;
         let before = read(&file, 64 * 1024 * 1024)?;
         let repeat = migration::apply(&mut db, &self.plan).map_err(err)?;
@@ -392,6 +434,7 @@ pub fn run(args: &[String]) -> Result<()> {
             }
             .map_err(err)?;
             db.verify().map_err(err)?;
+            bind_identity(&mut db, &project.manifest.name, o.apply)?;
             let result = if o.apply {
                 migration::apply(&mut db, &project.plan)
             } else {
@@ -407,7 +450,7 @@ pub fn run(args: &[String]) -> Result<()> {
             let auth = sql_api::Auth::load(o.auth.as_deref().unwrap())?;
             let output = build(&project, &root)?;
             let ui = sql_api::WebUi::load(&output.join("ui"))?;
-            sql_api::serve_with_migrations(
+            sql_api::serve_project(
                 &project.api,
                 &path,
                 true,
@@ -423,6 +466,7 @@ pub fn run(args: &[String]) -> Result<()> {
                     Some(&ui),
                     Some(o.ttl.unwrap_or(900)),
                     Some((&project.plan, false)),
+                    Some(&project.manifest.name),
                 ),
             )
         }

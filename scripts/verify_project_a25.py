@@ -64,8 +64,21 @@ def main():
     db=data/"app.log";before=db.read_bytes()
     assert json.loads(run("migrate",*args,cwd=src).stdout)["current_version"]==5
     run("migrate",*args,"--apply",cwd=bundle);assert db.read_bytes()==before
+    run("new","other-shop")
+    other=root/"other-shop"
+    run("migrate",*args,cwd=other,fail=True)
+    run("migrate",*args,"--apply",cwd=other,fail=True)
+    assert db.read_bytes()==before
+    unmanaged=root/"unmanaged";unmanaged.mkdir(mode=0o700)
+    subprocess.run([str(DB),"init",str(unmanaged/"app.log")],check=True,capture_output=True)
+    subprocess.run([str(DB),"sql",str(unmanaged/"app.log"),"CREATE TABLE Old (id TEXT PRIMARY KEY)","a26-manual-0001"],check=True,capture_output=True)
+    unmanaged_before=(unmanaged/"app.log").read_bytes()
+    run("migrate","--data",unmanaged,"--trusted","--apply",cwd=src,fail=True)
+    assert (unmanaged/"app.log").read_bytes()==unmanaged_before
+
     serve=["serve",*args,"--auth-file",auth,"--port","0","--max-requests","1000","--idle-ms","30000"]
     run(*serve,cwd=bundle,fail=True);assert db.read_bytes()==before
+    run(*serve,"--allow-write",cwd=other,fail=True);assert db.read_bytes()==before
     p=subprocess.Popen([str(BIN),*map(str,serve),"--allow-write"],cwd=bundle,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
     count=0
     try:
