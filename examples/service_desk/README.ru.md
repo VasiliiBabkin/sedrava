@@ -31,7 +31,7 @@ sedrava migrate --data "$DATA" --trusted --apply
 
 ```sh
 DATA="$HOME/service-desk-data"
-sedrava serve --data "$DATA" --auth-file "$DATA/auth.json" --trusted --allow-write --port 8080 --idle-ms 600000
+sedrava serve --data "$DATA" --auth-file "$DATA/auth.json" --trusted --allow-write --port 8080 --idle-ms 120000
 ```
 
 Если порт занят, выберите другой. Откройте http://127.0.0.1:8080/ в браузере на той же машине. Войдите ключом из приватного operator-key.txt. Сессия по умолчанию 900 секунд, сервер имеет ограничение числа запросов (1000) и времени простоя. Завершайте сервер штатно; не удаляйте lock-файлы работающего процесса. Не выставляйте сервис через публичный reverse proxy. Для чтения без права изменения можно отдельно создать пользователя с ролью read по SERVER_SESSIONS_A23D.ru.md из дистрибутива.
