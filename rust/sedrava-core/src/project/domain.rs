@@ -282,7 +282,12 @@ pub(super) fn lower(src: &str) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>)> {
         if wf.is_some() {
             app.push_str("        w_status text\n        w_revision text\n");
         }
-        writeln!(app,"service create_{n}:\n    origin self\n    path \"/domain-{n}-create\"\n    method POST\n    auth session\n    idempotency true\n    body-field id id_{n}").unwrap();
+        let refresh = if wf.is_some() {
+            format!("list_{n} wf_history")
+        } else {
+            format!("list_{n}")
+        };
+        writeln!(app,"service create_{n}:\n    origin self\n    path \"/domain-{n}-create\"\n    method POST\n    auth session\n    idempotency true\n    refresh {refresh}\n    body-field id id_{n}").unwrap();
         for f in &e.fields {
             writeln!(app, "    body-field {} {}", col(f), state(e, f)).unwrap();
         }
@@ -292,7 +297,7 @@ pub(super) fn lower(src: &str) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>)> {
         w.schema(&mut steps);
         w.services(&mut app, &mut api);
     }
-    writeln!(app,"view main:\n    container max 1180 padding 24:\n        column gap 20:\n            heading \"{title}\"\n            session \"Ключ доступа\"\n            paragraph \"Локальное приложение. Выберите раздел, загрузите список. Для следующей страницы укажите последний ID.\"\n            grid columns 3 md-columns 1 gap 8:").unwrap();
+    writeln!(app,"view main:\n    container max 1180 padding 24:\n        column gap 20:\n            heading \"{title}\"\n            session \"Ключ доступа\"\n            paragraph \"Локальное приложение. Откройте список; после записи открытые списки обновляются автоматически. Для следующей страницы укажите последний ID.\"\n            grid columns 3 md-columns 1 gap 8:").unwrap();
     for e in &entities {
         writeln!(
             app,

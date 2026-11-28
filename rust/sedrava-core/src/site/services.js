@@ -5,13 +5,29 @@ let servicesReady = false;
 // Auth state deliberately lives outside the serializable Sedrava state.
 let session = null, sessionBusy = false;
 let sessionControl = null;
+function reactiveWriteBusy() {
+    return Object.entries(services).some(([n,s])=>serviceConfigs[n].refresh?.length && s.controller);
+}
+function invalidateDependents(config, confirmed=false) {
+    for (const target of config.refresh) services[target].invalidateRead(confirmed);
+}
+function flushReactiveReads() {
+    if (!session || sessionBusy || reactiveWriteBusy() || invalidInput()) return;
+    for (const [name,s] of Object.entries(services)) {
+        if (s.refreshNeeded && !s.controller && !s.manuallyCancelled &&
+            [...document.querySelectorAll('[data-remote]')].some(p=>p.dataset.remote===name && !p.closest('[hidden]'))) {
+            s.load();
+        }
+    }
+}
 function sessionStatus(message) {
     if(sessionControl) sessionControl.querySelector('[data-session-status]').textContent=message;
 }
 function clearSession(discardPending=false) {
+    const keepReadIntent=!discardPending && Object.values(services).some(s=>s.pending);
     session=null;
     for(const [name,service] of Object.entries(services)) {
-        if(serviceConfigs[name].session) service.resetAuth(discardPending);
+        if(serviceConfigs[name].session) service.resetAuth(discardPending,keepReadIntent);
     }
     // Explicit logout clears all volatile state of remote-pick apps. On a 401
     // preserve pending mutation parameters for same-principal retry, otherwise reset.
@@ -237,6 +253,7 @@ function createService(name, config) {
     const service = {
         status: 'idle', data: null, error: '', sequence: 0, controller: null,
         manuallyCancelled: false, pending: null, resultSignature: null,
+        requested:false, refreshNeeded:false, readSignature:null,
     };
     let cacheKey = '';
     let cacheRejected = false;
@@ -249,7 +266,9 @@ function createService(name, config) {
 
     function sync(values) {
         const path = config.path.replace(/:([A-Za-z][A-Za-z0-9_]*)/g, (_, key) => String(values[key]));
-        if (service.path === path) return;
+        const signature=config.tracked?serviceSignature(name,values):null;
+        if (service.path === path && service.readSignature===signature) return;
+        service.readSignature=signature;
         invalidateRequest();
         service.path = path;
         service.status = 'idle';
@@ -272,14 +291,23 @@ function createService(name, config) {
         }
     }
 
-    function resetAuth(discardPending) {
+    function resetAuth(discardPending,keepReadIntent=false) {
         invalidateRequest();
         service.data=null;service.resultSignature=null;service.status='idle';service.error='';
+        if(!keepReadIntent) service.requested=false;
+        service.refreshNeeded=false;service.manuallyCancelled=false;
         if(discardPending) service.pending=null;
+    }
+    function invalidateRead(confirmed) {
+        invalidateRequest();
+        service.data=null;service.resultSignature=null;service.status='idle';service.error='';
+        service.refreshNeeded=confirmed && service.requested;
+        service.manuallyCancelled=false;
     }
     function cancel(manual = false) {
         invalidateRequest();
         service.manuallyCancelled = manual;
+        if(manual) service.refreshNeeded=false;
         if (service.status === 'loading') {
             service.status = 'idle';
             service.error = 'Request cancelled';
@@ -302,12 +330,14 @@ function createService(name, config) {
 
     async function load() {
         if (invalidInput()) return;
+        if ((config.tracked || config.refresh?.length) && reactiveWriteBusy()) return;
         if(config.session && (!session || sessionBusy)){
             service.status='error';service.error='Требуется вход';service.data=null;renderRemote();return;
         }
         const values = resolved(state);
         sync(values);
         cancel();
+        if(config.tracked){service.requested=true;service.refreshNeeded=false;}
         if (!consumeRequestBudget()) {
             service.status = 'error';
             service.error = 'HTTP request budget exhausted';
@@ -344,6 +374,7 @@ function createService(name, config) {
                 service.pending ??= {owner:session.principal,signature,key:crypto.randomUUID()};
                 headers['Idempotency-Key']=service.pending.key;
             }
+            if(config.refresh?.length){invalidateDependents(config);renderRemote();}
             const response = await fetch(target.href, {
                 method: config.method, body, headers, mode: 'same-origin', credentials: 'omit',
                 redirect: 'error', cache: 'no-store', referrerPolicy: 'no-referrer', signal: controller.signal,
@@ -357,7 +388,10 @@ function createService(name, config) {
             const data = await readServiceResponse(response, config);
             if (controller.signal.aborted) throw Error('Request aborted');
             if (sequence !== service.sequence) return;
+            if(config.refresh?.length && (data.kind!=='write' ||
+                data.affected<1 || data.sequence<1)) throw Error('Invalid mutation receipt');
             if(config.idempotency) service.pending=null;
+            if(config.refresh?.length) invalidateDependents(config,true);
             service.data = data;
             service.resultSignature=serviceSignature(name,values);
             service.status = 'success';
@@ -374,11 +408,12 @@ function createService(name, config) {
             if (sequence === service.sequence) {
                 service.controller = null;
                 renderRemote();
+                if(config.refresh?.length) flushReactiveReads();
             }
         }
     }
 
-    return Object.assign(service, {sync, cancel, load, resetAuth});
+    return Object.assign(service, {sync, cancel, load, resetAuth, invalidateRead});
 }
 
 function setupServices() {
@@ -411,9 +446,14 @@ function syncServiceViews() {
         .map(panel => panel.dataset.remote));
     for (const [name, service] of Object.entries(services)) {
         service.sync(values);
-        if (!visible.has(name) && service.controller) service.cancel();
+        if (!visible.has(name) && service.controller && !serviceConfigs[name].refresh?.length) {
+            const resume=serviceConfigs[name].tracked && service.requested;
+            service.cancel();
+            if(resume) service.refreshNeeded=true;
+        }
         if (visible.has(name) && serviceConfigs[name].auto && service.status === 'idle' &&
                 !service.manuallyCancelled && !invalidInput()) service.load();
     }
     renderRemote(values);
+    flushReactiveReads();
 }

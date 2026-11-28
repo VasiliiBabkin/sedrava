@@ -1,0 +1,17 @@
+{
+  "examples/service_directory/domain.sdr": {
+    "sha256": "98a78fd4f76c46e26f72ce7cb7b8518f7a2c51e49ebd3bd5a8a8deaa43868820",
+    "lines": 16,
+    "additional_lines": 0
+  },
+  "examples/service_workflow/domain.sdr": {
+    "sha256": "1fb17f1d4d3788d81cb4f9e6dbf455c259b6a76287aa815975d17fc8fac13325",
+    "lines": 27,
+    "additional_lines": 0
+  },
+  "examples/service_workflow/sedrava-project.json": {
+    "sha256": "bc75e3c1d0de5ecfce373c0f974fac4764e58e4400ec5fffcad5f2a2c64907f3",
+    "lines": 1,
+    "additional_lines": 0
+  }
+}

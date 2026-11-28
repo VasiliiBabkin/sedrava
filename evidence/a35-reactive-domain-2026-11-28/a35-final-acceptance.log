@@ -1,0 +1,2 @@
+PASS A35 reactive DOM 15 real requests; automatic targeted refresh, stale response rejection, replay, hidden deferral, draft retention and logout
+PASS A35 40 direct HTTP; initial history, state transitions, stale revision refusal, rollback, roles, replay, restart and immutable package
