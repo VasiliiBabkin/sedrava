@@ -1,0 +1,1 @@
+PASS A40 Chromium: first-visible read, no unauthenticated/hidden fetch, targeted refresh, no typing/polling, explicit retry, fresh principal; requests 16

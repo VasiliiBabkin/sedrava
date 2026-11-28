@@ -1,0 +1,22 @@
+{
+  "examples/service_directory/domain.sdr": {
+    "sha256": "98a78fd4f76c46e26f72ce7cb7b8518f7a2c51e49ebd3bd5a8a8deaa43868820",
+    "additional_lines": 0
+  },
+  "examples/service_workflow/domain.sdr": {
+    "sha256": "1fb17f1d4d3788d81cb4f9e6dbf455c259b6a76287aa815975d17fc8fac13325",
+    "additional_lines": 0
+  },
+  "examples/service_views/domain.sdr": {
+    "sha256": "c5064056a29d5e0d47911efb518eca2b0c1b99b0ddef2da1a0b304fd11fe4671",
+    "additional_lines": 0
+  },
+  "examples/service_complete/domain.sdr": {
+    "sha256": "23a5f7b22d3e096716f157d4ef8ef95efcf65febd35d170e0a687b15e76b2d9e",
+    "additional_lines": 0
+  },
+  "book/examples/contacts/domain.sdr": {
+    "sha256": "33af13a6120c8c608e7db54e444802a4fa9f58aefd97625a471ba32f577dd730",
+    "additional_lines": 0
+  }
+}

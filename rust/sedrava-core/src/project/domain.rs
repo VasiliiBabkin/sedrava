@@ -300,7 +300,7 @@ pub(super) fn lower(src: &str) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>)> {
             )
             .unwrap();
         }
-        writeln!(app,"service list_{n}:\n    origin self\n    path \"/domain-{n}-list\"\n    method POST\n    auth session\n    body-field after after_{n}\n    max-items 20\n    response sql-rows:\n        id text").unwrap();
+        writeln!(app,"service list_{n}:\n    origin self\n    path \"/domain-{n}-list\"\n    method POST\n    auth session\n    initial-read true\n    body-field after after_{n}\n    max-items 20\n    response sql-rows:\n        id text").unwrap();
         for f in &e.fields {
             writeln!(app, "        {} {}", col(f), wire_type(&f.ty)).unwrap();
         }
@@ -338,7 +338,7 @@ pub(super) fn lower(src: &str) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>)> {
             workflow.as_ref(),
         );
     }
-    writeln!(app,"view main:\n    container max 1180 padding 24:\n        column gap 20:\n            heading \"{title}\"\n            session \"Ключ доступа\"\n            paragraph \"Локальное приложение. Откройте список; после записи открытые списки обновляются автоматически. Для следующей страницы укажите последний ID.\"\n            grid columns 3 md-columns 1 gap 8:").unwrap();
+    writeln!(app,"view main:\n    container max 1180 padding 24:\n        column gap 20:\n            heading \"{title}\"\n            session \"Ключ доступа\"\n            paragraph \"Локальное приложение. Справочник загружается после входа и открытия раздела; после записи открытые списки обновляются автоматически. Для следующей страницы укажите последний ID.\"\n            grid columns 3 md-columns 1 gap 8:").unwrap();
     for e in &entities {
         writeln!(
             app,
@@ -349,7 +349,7 @@ pub(super) fn lower(src: &str) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>)> {
     }
     for e in &entities {
         let n = &e.name;
-        writeln!(app,"            when show_{n}:\n                card:\n                    column gap 12:\n                        heading \"{}\" level 2\n                        input after_{n} label \"После ID\" kind text\n                        request \"Загрузить список\" service list_{n}\n                        remote list_{n}:\n                            row gap 8:\n                                paragraph \"ID:\"\n                                field id",e.label).unwrap();
+        writeln!(app,"            when show_{n}:\n                card:\n                    column gap 12:\n                        heading \"{}\" level 2\n                        input after_{n} label \"После ID\" kind text\n                        request \"Обновить список\" service list_{n}\n                        remote list_{n}:\n                            row gap 8:\n                                paragraph \"ID:\"\n                                field id",e.label).unwrap();
         for f in &e.fields {
             writeln!(app,"                            row gap 8:\n                                paragraph \"{}:\"\n                                field {}",f.label,col(f)).unwrap();
         }

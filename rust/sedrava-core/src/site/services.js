@@ -14,7 +14,8 @@ function invalidateDependents(config, confirmed=false) {
 function flushReactiveReads() {
     if (!session || sessionBusy || reactiveWriteBusy() || invalidInput()) return;
     for (const [name,s] of Object.entries(services)) {
-        if (s.refreshNeeded && !s.controller && !s.manuallyCancelled &&
+        const initial=serviceConfigs[name].initialRead && !s.requested && !Object.values(services).some(x=>x.pending);
+        if ((s.refreshNeeded || initial) && !s.controller && !s.manuallyCancelled &&
             [...document.querySelectorAll('[data-remote]')].some(p=>p.dataset.remote===name && !p.closest('[hidden]'))) {
             s.load();
         }
@@ -82,7 +83,7 @@ async function changeSession(login) {
         }
     } catch(error) {
         sessionStatus('Ошибка: '+String(error.message||'Network error'));
-    } finally { sessionBusy=false; }
+    } finally { sessionBusy=false; if(session && Object.values(serviceConfigs).some(c=>c.initialRead)) syncServiceViews(); }
 }
 function setupSession() {
     sessionControl=document.querySelector('[data-session-control]');
@@ -334,6 +335,7 @@ function createService(name, config) {
 
     async function load() {
         if (invalidInput()) return;
+        if(config.initialRead && service.controller) return;
         if ((config.tracked || config.refresh?.length) && reactiveWriteBusy()) return;
         if(config.session && (!session || sessionBusy)){
             service.status='error';service.error='Требуется вход';service.data=null;renderRemote();return;

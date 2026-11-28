@@ -30,6 +30,8 @@ pub(super) struct Service {
     refresh: Vec<String>,
     #[serde(skip_serializing_if = "is_false")]
     tracked: bool,
+    #[serde(skip_serializing_if = "is_false")]
+    initial_read: bool,
     #[serde(skip)]
     body: Option<Expr>,
     #[serde(skip)]
@@ -133,6 +135,7 @@ pub(super) fn parse(blocks: &[&[Line]], program: &Program) -> Result<Services> {
                             | "auth"
                             | "idempotency"
                             | "refresh"
+                            | "initial-read"
                     ) =>
                 {
                     if properties.insert(key, value).is_some() {
@@ -296,6 +299,11 @@ pub(super) fn parse(blocks: &[&[Line]], program: &Program) -> Result<Services> {
                 sql_columns: sql_rows.then_some(columns),
                 refresh,
                 tracked: false,
+                initial_read: match properties.get("initial-read") {
+                    None | Some(&"false") => false,
+                    Some(&"true") if matches!(method, "GET" | "POST") => true,
+                    _ => return Err(header.error("initial-read requires boolean and GET or POST")),
+                },
                 many: many.unwrap(),
                 timeout: integer("timeout", 10000, 100, 30000)?,
                 max_bytes: integer("max-bytes", 65536, 1, 200000)?,
@@ -321,6 +329,19 @@ pub(super) fn parse(blocks: &[&[Line]], program: &Program) -> Result<Services> {
             return Err(crate::model::Error("E_HTTP: refresh target must be authenticated non-idempotent SQL rows without cache or auto".into()));
         }
         service.tracked = true;
+    }
+    for service in services.values() {
+        if service.initial_read
+            && (!service.tracked
+                || !service.allows_remote_pick()
+                || service.cache
+                || service.auto
+                || !service.refresh.is_empty())
+        {
+            return Err(crate::model::Error(
+                "E_HTTP: initial-read requires tracked authenticated SQL rows".into(),
+            ));
+        }
     }
     Ok(services)
 }
@@ -443,6 +464,13 @@ mod tests {
         let prefix="webapp \"Refresh\"\nstate value = \"x\"\nservice rows:\n    origin self\n    path \"/rows\"\n    auth session\n    response sql-rows:\n        id text\nservice write:\n    origin self\n    path \"/write\"\n    method POST\n    auth session\n    idempotency true\n    refresh rows\n    body-field id value\n    response one:\n        kind text\n        affected int32\n        sequence int32\n        replayed bool\nview main:\n    heading \"Refresh\"\n    session \"Key\"\n    remote rows:\n        field id\n    remote write:\n        field affected\n";
         let build = |s: &str| super::super::webapp::generate(s, None);
         assert!(build(prefix).is_ok());
+        let initial = prefix.replacen("auth session\n", "auth session\n    initial-read true\n", 1);
+        assert!(build(&initial).is_ok());
+        assert!(build(&initial.replace("    refresh rows\n", "")).is_err());
+        assert!(build(&initial.replace("initial-read true", "initial-read maybe")).is_err());
+        assert!(
+            build(&prefix.replace("refresh rows", "initial-read true\n    refresh rows")).is_err()
+        );
         for s in [
             prefix.replace("refresh rows", "refresh missing"),
             prefix.replace("refresh rows", "refresh rows rows"),
