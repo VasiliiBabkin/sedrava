@@ -1,0 +1,25 @@
+{
+  "archive": "/var/www/popizdim_tf7_usr/data/.sedrava-dev/a39-dist/qualified/sedrava-platform-0.12.0-alpha.4-sql-0.1.0-alpha.2-linux-x86_64.tar.gz",
+  "archive_bytes": 6172347,
+  "archive_sha256": "984350bb3fc55a34a4a6a874ea1842dc8c63f9e253002f11172c374f195016b5",
+  "binaries": {
+    "sedrava": "5dcb07a8486efb8394fadd906d30d8383bf09ba6bb1daf5d763c72acac1bd935",
+    "sedravasql": "bdad1dbf20d012c48ce553ee7fb9a54e339e62eaed294e806943bff8e3ecb034",
+    "sedravasql-native-preview": "3df4d956ec09cd81ecbde7a7e7e6922a29fcf81a15f90c638e1412278d55efba"
+  },
+  "channel": "experimental",
+  "compiler": "rustc 1.100.0 (0ef1bc386 2026-11-09)\nbinary: rustc\ncommit-hash: 0ef1bc386059596dada8fb65b50425aab2ea637a\ncommit-date: 2026-11-09\nhost: x86_64-unknown-linux-gnu\nrelease: 1.100.0\nLLVM version: 23.1.5",
+  "distribution": "0.12.0-alpha.4-sql-0.1.0-alpha.2",
+  "format": 1,
+  "limitations": "Source and binary hashes are provenance records, not signatures.",
+  "sources": {
+    "sedrava": "a309e23580b15828447ef9a78d4beb98f07e82ec",
+    "sedravasql": "b36a628c95598a3e8e04b40ebf9c86cdc20e0604"
+  },
+  "target": "x86_64-unknown-linux-gnu",
+  "versions": {
+    "native-engine": "0.0.2",
+    "sedrava": "0.12.0-alpha.4",
+    "sedravasql": "0.1.0-alpha.2"
+  }
+}

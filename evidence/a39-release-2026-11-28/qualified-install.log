@@ -1,0 +1,31 @@
+PASS A23e generated DOM: typed SQL rows, role checks, session-only requests, XSS-safe rendering, malformed envelope, same-principal durable replay, no browser storage
+PASS A25: scaffold, no-overwrite, deterministic build, immutable package, manifest/symlink/data guards, migrations, serve from bundle, 7 direct HTTP requests, real generated DOM
+PASS A23e generated DOM: typed SQL rows, role checks, session-only requests, XSS-safe rendering, malformed envelope, same-principal durable replay, no browser storage
+PASS A24: 16 direct HTTP requests, 5 migration versions, pending gate, port conflict without write, explicit upgrade, data/FK, repeat with byte-identical journal, downgrade/modified manifest refusal
+PASS A37 generated complete DOM 21 real requests; event capture, automatic sums, defaults on close/reopen, lost-response replay and logout
+PASS A38 real Chromium 141.0.7390.37 requests 27 desktop { width: 1366, scroll: 1366 } mobile { width: 390, scroll: 390 } roles, XSS-safe text, workflow and reactive totals, logout
+PASS A38 single-entity Chromium logout clears draft, requests 7
+PASS A38 semantic gate: seven same-DDL changes refused by migrate/status/serve, labels accepted, journal unchanged
+PASS A38 90 direct HTTP; calendar validation, typed event payload, defaults, atomic history, 105 minutes / 4000 RUB, reports, filters, replay, restart, immutable package
+{
+  "namespace": "demo",
+  "key": "hello",
+  "value": "Hello",
+  "revision": 1
+}
+{
+  "integrity": "ok",
+  "schema_version": 1
+}
+sedrava 0.12.0-alpha.4 (Rust alpha)
+Created project offline-demo
+PASS project offline-demo: WebApp generation, API parsing, 5 migration versions, byte-identical repeat, native verification
+/tmp/a39-install-lta9g1cw/offline-demo/build/ca23a70b20c8284bb18c30482da08f730efe59099d09072dc3a00b1f7c552209
+Packaged offline-demo at /tmp/a39-install-lta9g1cw/package
+PASS package ca23a70b20c8284bb18c30482da08f730efe59099d09072dc3a00b1f7c552209
+{"current_version":5,"target_version":5,"applied":[{"version":1,"name":"products","sha256":"49389aa9abe80270d7d2cd1c3f37ba8ffa939463c56fe5bfec6c51ee609defc7","sequence":2},{"version":2,"name":"orders","sha256":"93e93764a53924bda198934004503f99ea74560d80e860a63c3a32e9bf01df23","sequence":3},{"version":3,"name":"products_category","sha256":"4a13611b1193d166d2ffa8e8f83714ee7e389c721a62e78054e4c34c01cf2f27","sequence":4},{"version":4,"name":"orders_paid","sha256":"d0dde2432a5124f2091379ed006275a50dd15c2524b27001410ca64337ad95e7","sequence":5},{"version":5,"name":"orders_product_fk","sha256":"fd2289d18382637a71d6480e8e311f01bda53e1030a13dd7e22aadae52fdab9d","sequence":6}],"pending":[]}
+{"engine":"native-log-v1","verified":true,"sequence":6}
+/tmp/a39-install-lta9g1cw/domain-example/build/1d2a9c5f62a432d5dc51b39f9067634baad896e4f92a3eeea694158af0350cd9
+{"current_version":13,"target_version":13,"applied":[{"version":1,"name":"dd22c44293f3c177d01e8b93f815bafc9eea98096fda40a957bb2feee3f496ec","sha256":"827ac0714c8cbe627d75428101026ab389c4f6d89fe409341382a0ab4a529d7a","sequence":2},{"version":2,"name":"dbcd77c6f0f228e31f3c4cbff904f445c91a9da4ad57b93b8f5968a52b6000da","sha256":"c189db6d93ab6c73d955f4c16876a89ce002f6104f49881c4b0c975b1f4b6690","sequence":3},{"version":3,"name":"index_site_client","sha256":"36080c547a1a39d57cba7c461dba219334174197a753a609e11cbfe4bcfba416","sequence":4},{"version":4,"name":"fk_site_client","sha256":"2e60035d788c66fecd0eaf5bf41f670d328cdb211bcac734253d29b708979c78","sequence":5},{"version":5,"name":"dd53fcb839bd93d497ca0dc2f6073e61911a27de880e4567a1d1a62f2edbedb0","sha256":"681a606face4a4f9df2dd4f7f63b177ed9f32f705cd1751bb8ad2cae088e270e","sequence":6},{"version":6,"name":"index_asset_site","sha256":"9a62e1be9d8de5cb49f30cd8b8af87bac2281a8e959685519dc0d9c5e1830bca","sequence":7},{"version":7,"name":"fk_asset_site","sha256":"b845ac9c1b0ef2547d992e9cbb597e9825ee93945b3e037b44bfc5f4c9ead1d5","sequence":8},{"version":8,"name":"dafd5dbe6300132d90581c8c27445502e960dfd9285934679d7c69df7c76b710","sha256":"af129cf5be37dd9eb1a1a5e4d129e2042d54eee935a5601bc55e82be37a52bcb","sequence":9},{"version":9,"name":"index_ticket_asset","sha256":"7954e9095b3ccc6a0e22a0fddfd14859504a37e5e0d40286b4dcd468e15ba87a","sequence":10},{"version":10,"name":"fk_ticket_asset","sha256":"6486a0a9ba5f882c1c9b19814bc06697f051e83394b2d9ab9e773d4c3c29553c","sequence":11},{"version":11,"name":"history_ticket","sha256":"9c2468fc2788e5138c75faae581c68480a5f643d8258fe78e2edda2b83382bf7","sequence":12},{"version":12,"name":"history_index_ticket","sha256":"47c2cd035edc3e406f9525131e605ce8b8c11d74662d4e8f24004cf23921b24b","sequence":13},{"version":13,"name":"history_fk_ticket","sha256":"52699f7236e8c93e5182b167f7c0cdd669a06bde10de8cbdd31e3bde0049bfb7","sequence":14}],"pending":[]}
+{"engine":"native-log-v1","verified":true,"sequence":14}
+PASS A39 offline install, 6 negative cases, three installed binaries, new/test/build/package/migrate/verify without Python or Rust on PATH; installed format 2 domain example

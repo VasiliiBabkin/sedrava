@@ -1,0 +1,50 @@
+
+> sedrava-site@0.1.0 build
+> astro build
+
+17:20:15 [content] Syncing content
+17:20:18 [content] Synced content
+17:20:18 [types] Generated 10.10s
+17:20:18 [build] output: "static"
+17:20:18 [build] mode: "static"
+17:20:18 [build] directory: /var/www/popizdim_tf7_usr/data/.sedrava-dev/a39-site/dist/
+17:20:18 [build] Collecting build info...
+17:20:18 [build] ✓ Completed in 11.09s.
+17:20:19 [build] Building static entrypoints...
+17:20:25 [vite] ✓ built in 6.16s
+17:20:26 [vite] ✓ built in 790ms
+17:20:26 [build] Rearranging server assets...
+
+ generating static routes
+17:20:26   ├─ /404.html (+232ms)
+17:20:27   ├─ /benchmarks/index.html (+179ms)
+17:20:27   ├─ /examples/index.html (+96ms)
+17:20:27   ├─ /getting-started/index.html (+94ms)
+17:20:27   ├─ /index.html (+186ms)
+17:20:27   ├─ /language-overview/index.html (+97ms)
+17:20:27   ├─ /platform/index.html (+41ms)
+17:20:27   ├─ /releases/index.html (+95ms)
+17:20:27   ├─ /roadmap/index.html (+52ms)
+17:20:27   ├─ /ru/index.html (+133ms)
+17:20:28   ├─ /ru/benchmarks/index.html (+47ms)
+17:20:28   ├─ /ru/examples/index.html (+34ms)
+17:20:28   ├─ /ru/getting-started/index.html (+34ms)
+17:20:28   ├─ /ru/language-overview/index.html (+54ms)
+17:20:28   ├─ /ru/platform/index.html (+61ms)
+17:20:28   ├─ /ru/releases/index.html (+144ms)
+17:20:28   ├─ /ru/roadmap/index.html (+220ms)
+17:20:28   ├─ /ru/rust-native/index.html (+85ms)
+17:20:28   ├─ /ru/sedravasql/index.html (+59ms)
+17:20:28   ├─ /ru/text-010/index.html (+61ms)
+17:20:28   ├─ /rust-native/index.html (+149ms)
+17:20:29   ├─ /sedravasql/index.html (+45ms)
+17:20:29   ├─ /text-010/index.html (+62ms)
+17:20:29 ✓ Completed in 2.72s.
+
+17:20:29 [build] ✓ Completed in 10.21s.
+17:20:29 [starlight:pagefind] Building search index with Pagefind...
+17:20:29 [starlight:pagefind] Found 23 HTML files.
+17:20:29 [starlight:pagefind] Finished building search index in 550ms.
+17:20:29 [@astrojs/sitemap] `sitemap-index.xml` created at `dist`
+17:20:29 [build] 23 page(s) built in 22.02s
+17:20:29 [build] Complete!

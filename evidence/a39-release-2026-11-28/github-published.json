@@ -1,0 +1,52 @@
+{
+  "id": 461615835,
+  "tag": "v0.12.0-alpha.4",
+  "sha": "a309e23580b15828447ef9a78d4beb98f07e82ec",
+  "draft": false,
+  "assets": [
+    {
+      "name": "domain.sdr",
+      "size": 1562,
+      "digest": "sha256:23a5f7b22d3e096716f157d4ef8ef95efcf65febd35d170e0a687b15e76b2d9e"
+    },
+    {
+      "name": "install_platform_a39.sh",
+      "size": 3720,
+      "digest": "sha256:9f08cfe38b88abf03fa5385b0b22694b0763c3e0cc06b4f18f684bb0b5ec79be"
+    },
+    {
+      "name": "manifest.json",
+      "size": 995,
+      "digest": "sha256:c4e61f9e4c0494c6271be52e25892baeb6499c32a8a1d1a07935fe39361880db"
+    },
+    {
+      "name": "PLATFORM_RELEASE_A39.ru.md",
+      "size": 4629,
+      "digest": "sha256:9afd5035c5e0a0eea43888b795300f87b68701bd5a3c7bfbb56af8d9ee9fc738"
+    },
+    {
+      "name": "RELEASE_NOTES_0_12_0_ALPHA4.md",
+      "size": 1496,
+      "digest": "sha256:8a2dd32ef117666b5c265d2ab23c7e86b567fc5f96f3ccdb5592442c221b4652"
+    },
+    {
+      "name": "sedrava-platform-0.12.0-alpha.4-sql-0.1.0-alpha.2-linux-x86_64.tar.gz",
+      "size": 6172347,
+      "digest": "sha256:984350bb3fc55a34a4a6a874ea1842dc8c63f9e253002f11172c374f195016b5"
+    },
+    {
+      "name": "sedrava-project.json",
+      "size": 57,
+      "digest": "sha256:e647221455c9cf358939adef55ed4b37ff1241400f4fab365cf93a3ee9134fe8"
+    },
+    {
+      "name": "SHA256SUMS",
+      "size": 660,
+      "digest": "sha256:2f711d3b6831bf6a2b5d88fdb4757b8941d80f68444f56d574ce580c946cab42"
+    }
+  ],
+  "published_at": "2026-11-28T14:32:31Z",
+  "url": "https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.12.0-alpha.4",
+  "forgejo": "https://git.virtreal.ru/kontinentus/sedrava-ci/actions/runs/7",
+  "forgejo_status": "success"
+}

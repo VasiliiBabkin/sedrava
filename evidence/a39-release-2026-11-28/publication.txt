@@ -1,0 +1,4 @@
+Forgejo run 5: A38 success.
+Forgejo run 6: failure; source alpha version test was pinned to alpha.3. Test corrected to derive expected version from source manifest.
+Forgejo run 7: SUCCESS; workflow 04780a468e0d062e242f8be89781c9b7fb79fb03, source a309e23580b15828447ef9a78d4beb98f07e82ec.
+Official language site: 86 files deployed; 9 download files verified via HTTPS; 22 previous download files preserved. Site source commit 1cfd091181f2d8de646919a14d08f0b17fdbb81f. Backup a39-atlpt0ct.
