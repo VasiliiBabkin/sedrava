@@ -1,3 +1,5 @@
 # Contributing to Sedrava
 
+Before any contribution, read and apply the [normative declaration and Architecture Gate](docs/DECLARATION.ru.md). Record the before/after example or infrastructure metric and the relevant acceptance evidence. Do not change the declaration without explicit owner agreement.
+
 Use the Rust workspace in rust/. Run cargo test --manifest-path rust/Cargo.toml --locked --all-targets. Build and check the canonical CLI with cargo build --manifest-path rust/Cargo.toml --locked --release --bin sedrava. Preserve explicit bounds, security policy and existing wire formats. Add tests for changes and describe unsupported functionality honestly. Avoid modifying or republishing historical releases. [Current roadmap](docs/ROADMAP.md) · [History](docs/HISTORY.md).

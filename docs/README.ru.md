@@ -2,6 +2,8 @@
 
 **Описал — получил.**
 
+[Декларация проекта и обязательный архитектурный шлюз](DECLARATION.ru.md). Основа всех дальнейших решений.
+
 Sedrava — декларативный язык программирования. Основная и единственная развиваемая реализация — Rust. Текущая линия **0.12.0-alpha.3**: экспериментальная, не для промышленной эксплуатации.
 
 [Загрузить Linux x86-64](https://sedrava.virtreal.ru/downloads/0.12.0-alpha.3/) · [Релиз GitHub](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.12.0-alpha.3) · [Официальный сайт](https://sedrava.virtreal.ru/ru/) · [English](README.en.md).

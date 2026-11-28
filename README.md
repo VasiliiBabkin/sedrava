@@ -4,6 +4,8 @@
 
 **Describe the application; get the application.**
 
+[Normative project declaration and Architecture Gate (RU)](docs/DECLARATION.ru.md). Read before proposing or implementing new features.
+
 Sedrava is a declarative programming language with a Rust compiler and runtime. The current release line is **0.12.0-alpha.3**. It is experimental, not a production-ready release.
 
 [Download Linux x86-64](https://sedrava.virtreal.ru/downloads/0.12.0-alpha.3/) · [GitHub release](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.12.0-alpha.3) · [Official documentation](https://sedrava.virtreal.ru/) · [Русский](docs/README.ru.md)
