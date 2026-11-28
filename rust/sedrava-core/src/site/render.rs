@@ -98,7 +98,7 @@ impl Render<'_> {
         let dynamic = self.webapp && super::webapp::widget(kind).is_some();
         let tag = match kind {
             "button" if dynamic => "button",
-            "submit" | "open" | "close" | "navigate" | "back" | "pick" | "request" | "cancel" => {
+            "submit" | "open" | "close" | "navigate" | "back" | "pick" | "remote-pick" | "request" | "cancel" => {
                 "button"
             }
             "form" | "dialog" | "select" | "option" => kind,
@@ -127,7 +127,7 @@ impl Render<'_> {
             .unwrap_or("default");
         let extra = match kind {
             "input" => " s-field",
-            "submit" | "open" | "close" | "navigate" | "back" | "pick" | "request" | "cancel" => {
+            "submit" | "open" | "close" | "navigate" | "back" | "pick" | "remote-pick" | "request" | "cancel" => {
                 " s-button"
             }
             _ => "",
@@ -223,7 +223,7 @@ impl Render<'_> {
             write!(out, " {key}=\"{}\"", html(value)).unwrap();
         };
         match kind {
-            "button" | "open" | "close" | "back" | "navigate" | "submit" | "pick" | "request"
+            "button" | "open" | "close" | "back" | "navigate" | "submit" | "pick" | "remote-pick" | "request"
             | "cancel" => {
                 attr(
                     out,
@@ -238,6 +238,13 @@ impl Render<'_> {
                     "request" => attr(out, "data-request", p("service")),
                     "cancel" => attr(out, "data-cancel-request", p("service")),
                     "pick" => attr(out, "data-pick", "true"),
+                    "remote-pick" => {
+                        attr(out, "data-remote-pick", p("bindings"));
+                        if let Some(action) = props.get("action") {
+                            attr(out, "data-remote-pick-action", action);
+                        }
+                    }
+
                     "navigate" => {
                         attr(out, "data-navigate", p("to"));
                         if let Some(action) = props.get("action") {

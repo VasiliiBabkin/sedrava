@@ -47,6 +47,7 @@ pub(super) fn widget(kind: &str) -> Option<Widget> {
         "field" => (false, "field", &["field"], &[]),
         "row-when" => (true, "field", &["field"], &[]),
         "pick" => (false, "text", &["text"], &[]),
+        "remote-pick" => (false, "text", &["text", "bindings"], &["action"]),
         "button" => (false, "text", &["text", "action"], &[]),
         "form" => (true, "", &["action"], &[]),
         "submit" => (false, "text", &["text"], &[]),
@@ -84,7 +85,7 @@ impl Widget {
                 Token::Text(v) | Token::Word(v) => Some(serde_json::to_string(v).unwrap()),
                 _ => None,
             },
-            "text" | "empty" | "fields" => string,
+            "text" | "empty" | "fields" | "bindings" => string,
             "kind" => {
                 string.filter(|s| matches!(s.as_str(), "text" | "textarea" | "email" | "url"))
             }
@@ -378,6 +379,31 @@ fn validate_controls(
         } else if matches!(kind, "field" | "row-when" | "pick") {
             return Err(node.line.error("Row control requires an each template"));
         }
+        if kind == "remote-pick" {
+            let fields = row_fields.filter(|_| remote_row).ok_or_else(||
+                node.line.error("remote-pick requires an HTTP row template"))?;
+            // A32 conservatively forbids persistent state in apps using remote selection.
+            // This avoids copying protected fields into persistent state through actions.
+            if !program.persistent.is_empty() {
+                return Err(node.line.error("remote-pick requires a nonpersistent WebApp"));
+            }
+            let mut targets = BTreeSet::new();
+            let mut count = 0;
+            for binding in node.props["bindings"].split_ascii_whitespace() {
+                let (field, target) = binding.split_once(':').ok_or_else(||
+                    node.line.error("remote-pick requires FIELD:STATE bindings"))?;
+                count += 1;
+                if count > 8 || !syntax::identifier(field) || !syntax::identifier(target)
+                    || !targets.insert(target) || !program.states.contains_key(target)
+                    || !fields.get(field).is_some_and(|k| program.types.get(target)==Some(k))
+                {
+                    return Err(node.line.error("Invalid or duplicate typed remote-pick binding"));
+                }
+            }
+            if count == 0 {
+                return Err(node.line.error("remote-pick requires at least one binding"));
+            }
+        }
         let service = node
             .props
             .get("service")
@@ -387,6 +413,14 @@ fn validate_controls(
                     .ok_or_else(|| node.line.error(format!("Unknown HTTP service {key}")))
             })
             .transpose()?;
+        if kind == "remote" {
+            fn contains_pick(nodes: &[Node]) -> bool {
+                nodes.iter().any(|n| n.kind == "remote-pick" || contains_pick(&n.children))
+            }
+            if contains_pick(&node.children) && !service.unwrap().allows_remote_pick() {
+                return Err(node.line.error("remote-pick requires authenticated SQL row service without idempotency"));
+            }
+        }
         if kind == "remote" {
             if node
                 .props

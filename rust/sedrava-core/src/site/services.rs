@@ -33,6 +33,9 @@ pub(super) struct Service {
 }
 
 impl Service {
+    pub fn allows_remote_pick(&self) -> bool {
+        self.session && self.sql_columns.is_some() && !self.idempotency
+    }
     pub fn max_rows(&self) -> usize {
         if self.many {
             self.max_items as usize
@@ -347,6 +350,20 @@ mod tests {
             let source = format!("service rows:\n    origin self\n    path \"/rows\"\n{parameters}    response one:\n        id int32\n");
             assert!(service(&source).is_err(), "{parameters}");
         }
+    }
+
+    #[test]
+    fn remote_pick_type_and_scope_contract() {
+        let prefix = "webapp \"Pick\"\nstate selected = \"\"\nstate n = 0\nstate yes = false\nderive computed = selected\nservice rows:\n    origin self\n    path \"/rows\"\n    auth session\n    response sql-rows:\n        id text\n        number int32\n        enabled bool\nview main:\n    heading \"Test\"\n    session \"Key\"\n    remote rows:\n";
+        let build = |source: &str| super::super::webapp::generate(source, None);
+        assert!(build(&format!("{prefix}        remote-pick \"Select\" bindings \"id:selected number:n enabled:yes\"\n")).is_ok());
+        for bindings in ["id:n", "missing:selected", "id:computed", "id:selected id:selected", "id:missing", "id:selected:number", ""] {
+            assert!(build(&format!("{prefix}        remote-pick \"Select\" bindings \"{bindings}\"\n")).is_err(), "{bindings}");
+        }
+        let good = format!("{prefix}        remote-pick \"Select\" bindings \"id:selected\"\n");
+        assert!(build(&good.replace("derive computed", "persist selected\nderive computed")).is_err());
+        assert!(build(&good.replace("        remote-pick", "    remote-pick")).is_err());
+        assert!(build(&good.replace("    auth session\n", "").replace("    session \"Key\"\n", "")).is_err());
     }
 
     #[test]

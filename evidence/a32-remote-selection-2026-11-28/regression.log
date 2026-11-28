@@ -1,0 +1,29 @@
+PASS native-app: check, tests and two state transitions without Python
+PASS native-alpha-only: single Sedrava action with internal bounded while and six correct tokens
+PASS negative-parse: invalid bounded loop rejected before execution
+PASS native-site: two deterministic Site builds; refusing overwrite
+PASS native-webapp: two deterministic WebApp builds with JS and HTML
+PASS android-source: Android Kotlin project emitted, NOT an APK or device test
+PASS native-server: loopback server DSL static check; no network listener started
+PASS 7 scoped native alpha acceptance gates
+PASS A16: four real .sdr SQL host programs, native persisted CRUD, typed bindings, injection-as-data, explicit policy and durable replay
+PASS A17: 14 HTTP requests, static SQL, typed parameters, aggregate response, scoped replay/restart, capacity, unchanged journal on refusal
+PASS A18: 11 HTTP requests, missing/wrong credential denied, role authorization, principal-scoped replay, private/duplicate credential guards, restart and unchanged journal
+PASS A19 demo: 19 authenticated HTTP requests, catalog, cached index invalidation, orders, JOIN, payment flag, revenue, HAVING and restart
+PASS A20: 9 authenticated HTTP requests, atomic product+order, FK rejection, no partial writes, typed input and restart replay
+PASS A21: 10 authenticated HTTP requests, sequential before/after reads, paid-order refusal, atomic rollback and historical replay
+PASS A22 DOM + real HTTP: read/write auth, XSS-safe text, lost-response replay, add/correct/pay, atomic rollback, refresh/logout, no browser storage
+PASS A22 HTTP: exact static assets, CSP, loopback Host, route guard, auth required, symlink refusal, real database restart and verification
+PASS A23: 30 real HTTP requests, guards, Unicode limits, invalid declaration, CLI denial, unchanged journal, retry key reuse, atomic and sequential writes
+PASS A23b DOM: 5 pages, independent cursors, backward navigation, last-page guard, product reference outside current page, reset/logout
+PASS A23b: 129 direct HTTP requests, 105 products and 106 orders, ordered five-page traversal, lookahead, invalid cursor, no-write reads, restart
+PASS A23c DOM: edit, confirm/cancel, paid-order guard, lost delete response replay after refresh, logout
+PASS A23c: 33 direct HTTP requests, 24/25 route cap, value comparison, role checks, FK restrict, paid-order refusal, durable receipt, tombstone, restart
+PASS A23d DOM: login, temporary token only, lost write response, revoked session, same-principal reauthentication and replay, logout
+PASS A23d: 41 direct HTTP requests, mode validation, session-only auth, role, per-user capacity, revocation, TTL, restart, principal-scoped receipts
+PASS A23e generated DOM: typed SQL rows, role checks, session-only requests, XSS-safe rendering, malformed envelope, same-principal durable replay, no browser storage
+PASS A23e: native .sdr build, 7 compiler rejections, generated asset delivery, real session API, database verification
+PASS A23e generated DOM: typed SQL rows, role checks, session-only requests, XSS-safe rendering, malformed envelope, same-principal durable replay, no browser storage
+PASS A24: 16 direct HTTP requests, 5 migration versions, pending gate, port conflict without write, explicit upgrade, data/FK, repeat with byte-identical journal, downgrade/modified manifest refusal
+PASS A23e generated DOM: typed SQL rows, role checks, session-only requests, XSS-safe rendering, malformed envelope, same-principal durable replay, no browser storage
+PASS A25: scaffold, no-overwrite, deterministic build, immutable package, manifest/symlink/data guards, migrations, serve from bundle, 7 direct HTTP requests, real generated DOM

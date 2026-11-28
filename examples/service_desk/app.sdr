@@ -280,7 +280,7 @@ view main:
             heading "Сервисный журнал"
             paragraph "Объекты · оборудование · заявки · выполненные работы" variant lead
             session "Ключ доступа"
-            paragraph "Локальный режим. Для связи записей используйте ID из списков. Заполняйте даты вручную (ГГГГ-ММ-ДД); при ошибке повторите с прежними полями." variant muted
+            paragraph "Локальный режим. Выбирайте связанные записи кнопками в списках. ID можно ввести вручную. Заполняйте даты вручную (ГГГГ-ММ-ДД); при ошибке повторите с прежними полями." variant muted
             grid columns 3 md-columns 1 gap 8:
                 button "Сводка и заявки" action go_overview variant secondary
                 button "Заказчики и объекты" action go_directory variant secondary
@@ -323,6 +323,8 @@ view main:
                             row gap 8:
                                 paragraph "Текущая версия события:" variant muted
                                 field last_event
+                            remote-pick "Работа по заявке" bindings "id:event_ticket last_event:expected_event" action go_workflow
+                            remote-pick "История заявки" bindings "id:history_ticket" action go_history
                         heading "Заявки по оборудованию" level 3
                         input ticket_asset_filter label "ID оборудования" kind text
                         input asset_ticket_after label "После ID" kind text
@@ -346,6 +348,8 @@ view main:
                             row gap 8:
                                 paragraph "Текущая версия события:" variant muted
                                 field last_event
+                            remote-pick "Работа по заявке" bindings "id:event_ticket last_event:expected_event" action go_workflow
+                            remote-pick "История заявки" bindings "id:history_ticket" action go_history
             when show_directory:
                 card:
                     column gap 12:
@@ -362,6 +366,8 @@ view main:
                             row gap 8:
                                 paragraph "Контакт:" variant muted
                                 field contact
+                            remote-pick "Выбрать заказчика" bindings "id:client_filter"
+                            remote-pick "Создать объект заказчика" bindings "id:site_client"
                         heading "Новый заказчик" level 3
                         input client_new label "ID заказчика" kind text
                         input client_name label "Имя / организация" kind text
@@ -391,6 +397,8 @@ view main:
                             row gap 8:
                                 paragraph "Адрес:" variant muted
                                 field address
+                            remote-pick "Оборудование объекта" bindings "id:site_filter" action go_equipment
+                            remote-pick "Добавить оборудование объекта" bindings "id:asset_site" action go_equipment
                         heading "Новый объект" level 3
                         input site_new label "ID объекта" kind text
                         input site_client label "ID заказчика" kind text
@@ -424,6 +432,8 @@ view main:
                             row gap 8:
                                 paragraph "Серийный номер:" variant muted
                                 field serial
+                            remote-pick "Зарегистрировать заявку" bindings "id:ticket_asset" action go_register
+                            remote-pick "Заявки оборудования" bindings "id:ticket_asset_filter" action go_overview
                         heading "Добавить оборудование" level 3
                         input asset_new label "ID оборудования" kind text
                         input asset_site label "ID объекта" kind text
@@ -464,7 +474,7 @@ view main:
                 card:
                     column gap 12:
                         heading "05 · Работа и статус" level 2
-                        paragraph "Скопируйте last_event из текущей заявки. Для каждого события нужен новый ID. После сохранения обновите список заявок." variant muted
+                        paragraph "Выберите заявку в сводке: ID и last_event заполняются автоматически. Для каждого события нужен новый ID. После сохранения обновите список заявок." variant muted
                         input event_new label "ID нового события" kind text
                         input event_ticket label "ID заявки" kind text
                         input expected_event label "Текущий last_event" kind text

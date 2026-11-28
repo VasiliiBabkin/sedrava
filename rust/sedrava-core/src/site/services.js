@@ -13,7 +13,15 @@ function clearSession(discardPending=false) {
     for(const [name,service] of Object.entries(services)) {
         if(serviceConfigs[name].session) service.resetAuth(discardPending);
     }
-    renderRemote();
+    // Explicit logout clears all volatile state of remote-pick apps. On a 401
+    // preserve pending mutation parameters for same-principal retry, otherwise reset.
+    if (document.querySelector('[data-remote] template') &&
+        [...document.querySelectorAll('[data-remote] template')].some(t=>t.content.querySelector('[data-remote-pick]')) &&
+        (discardPending || !Object.values(services).some(s=>s.pending))) {
+        state={...initialState};
+        for (const input of inputs) { input.value=String(state[input.dataset.input]); setInvalid(input,false); }
+        render();
+    } else renderRemote();
 }
 async function sessionCall(path,authorization) {
     if(!["http:","https:"].includes(location.protocol)) throw Error("HTTP origin required");
@@ -149,6 +157,13 @@ async function readServiceResponse(response, config) {
     return checkRemote(strictJSON(text), config);
 }
 
+function serviceSignature(name, values) {
+    const config=serviceConfigs[name];
+    const path=config.path.replace(/:([A-Za-z][A-Za-z0-9_]*)/g,(_,key)=>String(values[key]));
+    const body=serviceBodies[name]?JSON.stringify(serviceBodies[name](values)):undefined;
+    return JSON.stringify([path,body]);
+}
+
 function renderRemote(values = resolved(state)) {
     for (const panel of document.querySelectorAll('[data-remote]')) {
         const {remote: name, remoteSearch, remoteTitle} = panel.dataset;
@@ -170,6 +185,31 @@ function renderRemote(values = resolved(state)) {
             if (template) {
                 card.append(template.content.cloneNode(true));
                 fillRow(card, row, values);
+                for (const button of card.querySelectorAll('[data-remote-pick]')) {
+                    const data=service.data, sequence=service.sequence;
+                    const available=()=>{try{return !!session && !sessionBusy && service.status==='success' &&
+                        service.data===data && service.sequence===sequence &&
+                        service.resultSignature===serviceSignature(name,resolved(state)) &&
+                        !invalidInput();}catch(_){return false;}};
+                    button.disabled=!available();
+                    button.onclick=()=>{
+                        if (!button.isConnected || button.closest('[hidden]') || !available()) {
+                            showError('Remote selection expired; reload the list');
+                            return;
+                        }
+                        try {
+                            const next={...state};
+                            for (const binding of button.dataset.remotePick.split(/\s+/)) {
+                                const [field,target]=binding.split(':');
+                                next[target]=row[field];
+                            }
+                            if (!validate(next)) throw Error('Selection rejected');
+                            const action=button.dataset.remotePickAction;
+                            if (!commit(action?perform(action,next):next)) throw Error('Selection rejected');
+                        } catch(error) { showError('Remote selection rejected: '+error.message); }
+                    };
+                }
+
             } else {
                 card.className = 's-card';
                 for (const [key, value] of Object.entries(row)) {
@@ -196,7 +236,7 @@ function consumeRequestBudget() {
 function createService(name, config) {
     const service = {
         status: 'idle', data: null, error: '', sequence: 0, controller: null,
-        manuallyCancelled: false, pending: null,
+        manuallyCancelled: false, pending: null, resultSignature: null,
     };
     let cacheKey = '';
     let cacheRejected = false;
@@ -214,6 +254,7 @@ function createService(name, config) {
         service.path = path;
         service.status = 'idle';
         service.data = null;
+        service.resultSignature = null;
         service.error = '';
         service.manuallyCancelled = false;
         cacheRejected = false;
@@ -233,7 +274,7 @@ function createService(name, config) {
 
     function resetAuth(discardPending) {
         invalidateRequest();
-        service.data=null;service.status='idle';service.error='';
+        service.data=null;service.resultSignature=null;service.status='idle';service.error='';
         if(discardPending) service.pending=null;
     }
     function cancel(manual = false) {
@@ -318,6 +359,7 @@ function createService(name, config) {
             if (sequence !== service.sequence) return;
             if(config.idempotency) service.pending=null;
             service.data = data;
+            service.resultSignature=serviceSignature(name,values);
             service.status = 'success';
             service.error = cacheRejected ? 'Saved API data rejected; original retained' : '';
             saveCache(data);
