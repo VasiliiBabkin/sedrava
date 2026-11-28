@@ -2,13 +2,13 @@
 
 **Описал — получил.**
 
-Sedrava — декларативный язык программирования. Основная и единственная развиваемая реализация — Rust. Текущая линия **0.12.0-alpha.2**: экспериментальная, не для промышленной эксплуатации.
+Sedrava — декларативный язык программирования. Основная и единственная развиваемая реализация — Rust. Текущая линия **0.12.0-alpha.3**: экспериментальная, не для промышленной эксплуатации.
 
-[Загрузить Linux x86-64](https://sedrava.virtreal.ru/downloads/0.12.0-alpha.2/) · [Релиз GitHub](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.12.0-alpha.2) · [Официальный сайт](https://sedrava.virtreal.ru/ru/) · [English](README.en.md).
+[Загрузить Linux x86-64](https://sedrava.virtreal.ru/downloads/0.12.0-alpha.3/) · [Релиз GitHub](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.12.0-alpha.3) · [Официальный сайт](https://sedrava.virtreal.ru/ru/) · [English](README.en.md).
 
 ## Установка и первая программа
 
-Готовый бинарник **sedrava** работает без установки Python или Rust. На Linux x86-64 GNU проверен Ubuntu 24.04. Установщик проверяет SHA-256 и не перезаписывает существующий файл. Windows/macOS не проверены.
+Готовый бинарник **sedrava** работает без установки Python или Rust. На Linux x86-64 GNU проверен Ubuntu 24.04. Единый архив содержит язык, NativeLog CLI и отдельный SQLite CLI; установщик проверяет SHA-256 и не перезаписывает существующий каталог. Windows/macOS не проверены.
 
 Создайте UTF-8 файл hello.sdr:
 
@@ -54,12 +54,12 @@ cargo test --manifest-path rust/Cargo.toml --locked --all-targets
 
 Не все конструкции поддерживаются всеми целевыми генераторами. Полная матрица браузеров/устройств, Windows/macOS, совместимость старых проектов и промышленная безопасность не установлены.
 
-[Быстрый старт](QUICKSTART.md) · [Распространение](DISTRIBUTION_NATIVE.ru.md) · [Заметки к выпуску](RELEASE_NOTES_0_12_0_ALPHA2.md) · [Дорожная карта](ROADMAP.md) · [Примеры](../examples/README.md) · [Измерения](BENCHMARK_2026_11_24.ru.md) · [История](HISTORY.md).
+[Быстрый старт](QUICKSTART.md) · [Распространение](PLATFORM_RELEASE_A30.ru.md) · [Заметки к выпуску](RELEASE_NOTES_0_12_0_ALPHA3.md) · [Дорожная карта](ROADMAP.md) · [Примеры](../examples/README.md) · [Измерения](BENCHMARK_2026_11_24.ru.md) · [История](HISTORY.md).
 
 Посвящение: [Геннадию Ивановичу Смирных](../DEDICATION.md). Лицензия Apache-2.0.
 
-**Кандидат A28 (27 ноября 2026).** Интеграция A26 прошла обе проверки Forgejo; автономный комплект Linux x86-64 A28 и его установка проверены. Публичные alpha-архивы не изменены. SQL использует NativeLog; COW B32–B36 не принят как основной движок. [Дистрибутив](https://github.com/VasiliiBabkin/sedrava/blob/feat/a28-distribution/docs/PLATFORM_DISTRIBUTION_A28.ru.md) · [Отчёт](https://github.com/VasiliiBabkin/sedrava/blob/integration/a26-platform/docs/INTEGRATION_A26.ru.md).
+**Кандидат A28 (27 ноября 2026).** Интеграция A26 прошла обе проверки Forgejo; автономный комплект Linux x86-64 A28 и его установка проверены. Прежние alpha-архивы сохранены; A30 — следующий согласованный выпуск. SQL использует NativeLog; COW B32–B36 не принят как основной движок. [Дистрибутив](https://github.com/VasiliiBabkin/sedrava/blob/feat/a28-distribution/docs/PLATFORM_DISTRIBUTION_A28.ru.md) · [Отчёт](https://github.com/VasiliiBabkin/sedrava/blob/integration/a26-platform/docs/INTEGRATION_A26.ru.md).
 
-## Платформа A28 (кандидат исходников)
+## Единая платформа A30
 
-[Проектный CLI](PROJECT_CLI_A25.ru.md) · [Миграции](SCHEMA_MIGRATIONS_A24.ru.md) · [Установка](PLATFORM_DISTRIBUTION_A28.ru.md). Команды new/build/test/migrate/serve/package требуют кандидата A26, не прежнего опубликованного архива alpha.2.
+[Проектный CLI](PROJECT_CLI_A25.ru.md) · [Миграции](SCHEMA_MIGRATIONS_A24.ru.md) · [Установка](PLATFORM_DISTRIBUTION_A28.ru.md). Команды new/build/test/migrate/serve/package доступны в alpha.3.
