@@ -4,9 +4,9 @@
 
 [Декларация проекта и обязательный архитектурный шлюз](DECLARATION.ru.md). Основа всех дальнейших решений.
 
-Sedrava — декларативный язык программирования. Основная и единственная развиваемая реализация — Rust. Текущая линия **0.12.0-alpha.3**: экспериментальная, не для промышленной эксплуатации.
+Sedrava — декларативный язык программирования. Основная и единственная развиваемая реализация — Rust. Текущая линия **0.12.0-alpha.4**: экспериментальная, не для промышленной эксплуатации.
 
-[Загрузить Linux x86-64](https://sedrava.virtreal.ru/downloads/0.12.0-alpha.3/) · [Релиз GitHub](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.12.0-alpha.3) · [Официальный сайт](https://sedrava.virtreal.ru/ru/) · [English](README.en.md).
+[Загрузить Linux x86-64](https://sedrava.virtreal.ru/downloads/0.12.0-alpha.4/) · [Релиз GitHub](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.12.0-alpha.4) · [Официальный сайт](https://sedrava.virtreal.ru/ru/) · [English](README.en.md).
 
 ## Установка и первая программа
 
@@ -50,18 +50,20 @@ cargo test --manifest-path rust/Cargo.toml --locked --all-targets
 
 - Типизированное состояние, действия, инварианты, записи, ограниченные списки, функции, навигация, Unicode, импорты и локальные пакеты.
 - Генерация автономного Web, Site, WebApp и поддерживаемых Android-приложений.
-- Ограниченный trusted Host, локальный HTTP, типизированный SQL API A21 с ролями, квитанциями и последовательными транзакциями; кандидат A26 добавляет сессии, нативный WebApp, миграции и проектный CLI.
+- Ограниченный trusted Host, локальный HTTP, типизированный SQL API A21 с ролями, квитанциями и последовательными транзакциями; текущая линия включает сессии, нативный WebApp, миграции и проектный CLI.
 - [SedravaSQL](https://sql.virtreal.ru/): NativeLog SQL; COW B32–B36 остаётся исследованием.
 - Self-host A5.11b — отдельный эксперимент собственного компилятора, не основной компилятор.
 
 Не все конструкции поддерживаются всеми целевыми генераторами. Полная матрица браузеров/устройств, Windows/macOS, совместимость старых проектов и промышленная безопасность не установлены.
 
-[Быстрый старт](QUICKSTART.md) · [Распространение](PLATFORM_RELEASE_A30.ru.md) · [Заметки к выпуску](RELEASE_NOTES_0_12_0_ALPHA3.md) · [Дорожная карта](ROADMAP.md) · [Примеры](../examples/README.md) · [Измерения](BENCHMARK_2026_11_24.ru.md) · [История](HISTORY.md).
+[Быстрый старт](QUICKSTART.md) · [Распространение](PLATFORM_RELEASE_A39.ru.md) · [Заметки к выпуску](RELEASE_NOTES_0_12_0_ALPHA4.md) · [Дорожная карта](ROADMAP.md) · [Примеры](../examples/README.md) · [Измерения](BENCHMARK_2026_11_24.ru.md) · [История](HISTORY.md).
 
 Посвящение: [Геннадию Ивановичу Смирных](../DEDICATION.md). Лицензия Apache-2.0.
 
 **Выпуск A30 (28 ноября 2026).** Sedrava 0.12.0-alpha.3, SedravaSQL 0.1.0-alpha.2 и NativeLog 0.0.2 опубликованы. Приёмка VDS: 85 Rust, 319 HTTP, 21+73 SQL, автономная установка. Ранее A26 прошёл Forgejo CI. COW остаётся исследованием; не для production.
 
-## Единая платформа A30
+## Единая платформа A39
 
-[Проектный CLI](PROJECT_CLI_A25.ru.md) · [Миграции](SCHEMA_MIGRATIONS_A24.ru.md) · [Установка](PLATFORM_RELEASE_A30.ru.md). Команды new/build/test/migrate/serve/package доступны в alpha.3.
+[Проектный CLI](PROJECT_CLI_A25.ru.md) · [Миграции](SCHEMA_MIGRATIONS_A24.ru.md) · [Установка](PLATFORM_RELEASE_A39.ru.md). Команды new/build/test/migrate/serve/package доступны в alpha.4.
+
+**Format 2 / формат 2:** [A39 installation and domain example](PLATFORM_RELEASE_A39.ru.md) · [A37 model](SERVICE_DOMAIN_A37.ru.md) · [A38 qualification](QUALIFICATION_A38.ru.md). Experimental A33–A37 databases are incompatible with A38 semantic migration names; use new private test data.

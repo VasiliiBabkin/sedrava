@@ -1,0 +1,7 @@
+# Sedrava 0.12.0-alpha.4 — declarative domain applications
+
+Experimental Linux x86-64 GNU alpha. A31–A38 introduce the domain model (project format 2): entities and relationships, generated schema/API/UI, atomic workflow transitions and history, automatic refresh dependencies, typed filtered views, grouped counts, event dates and numeric totals. The service journal example has 35 lines of domain.sdr. The A38 qualification includes real Chromium and independent Forgejo HTTP acceptance.
+
+**Compatibility:** published format 1 projects retain the existing migration mechanism. Format 2 databases created by experimental A33–A37 are not accepted by the new semantic migration gate. Keep those databases and their original compiler; use a fresh private directory for this example. No migration of existing format 2 data is implemented. Rebuild packages using their matching compiler. SedravaSQL 0.1.0-alpha.2 / NativeLog 0.0.2 unchanged.
+
+**Limits:** local loopback, explicit read/write credentials, single writer, bounded query budgets; manual IDs, date and cursor entry, no server audit timestamp or author, no general update/delete in format 2, no public deployment or production guarantee. The new high-level DSL targets local WebApp projects, not Android. No Python or Rust runtime installation is required. See PLATFORM_RELEASE_A39.ru.md and QUALIFICATION_A38.ru.md. The release evidence records exact versioned qualification; prior A38 tests alone do not certify a different binary.

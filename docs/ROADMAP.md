@@ -2,7 +2,7 @@
 
 **Governing document:** [Sedrava declaration / Architecture Gate](DECLARATION.ru.md). The post-A32 priority is a high-level declarative domain model, a single source of truth, generated data/API/UI and validation on the A31 service desk. The milestones below preserve earlier planning context; they do not override this direction or assert new syntax is implemented.
 
-Current published line: Rust 0.12.0-alpha.3, the primary implementation. Alpha is not a claim of production readiness.
+Current published line: Rust 0.12.0-alpha.4, the primary implementation. Alpha is not a claim of production readiness.
 
 | Milestone | Status |
 | --- | --- |

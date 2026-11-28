@@ -6,9 +6,9 @@
 
 [Normative project declaration and Architecture Gate (RU)](docs/DECLARATION.ru.md). Read before proposing or implementing new features.
 
-Sedrava is a declarative programming language with a Rust compiler and runtime. The current release line is **0.12.0-alpha.3**. It is experimental, not a production-ready release.
+Sedrava is a declarative programming language with a Rust compiler and runtime. The current release line is **0.12.0-alpha.4**. It is experimental, not a production-ready release.
 
-[Download Linux x86-64](https://sedrava.virtreal.ru/downloads/0.12.0-alpha.3/) · [GitHub release](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.12.0-alpha.3) · [Official documentation](https://sedrava.virtreal.ru/) · [Русский](docs/README.ru.md)
+[Download Linux x86-64](https://sedrava.virtreal.ru/downloads/0.12.0-alpha.4/) · [GitHub release](https://github.com/VasiliiBabkin/sedrava/releases/tag/v0.12.0-alpha.4) · [Official documentation](https://sedrava.virtreal.ru/) · [Русский](docs/README.ru.md)
 
 ## Get started
 
@@ -36,15 +36,15 @@ cargo build --manifest-path rust/Cargo.toml --locked --release --bin sedrava
 | Web | Standalone HTML, Site, interactive WebApp; verified DOM subset |
 | Android | Kotlin/Compose sources; explicit application ID, tested debug APK build; limited device acceptance |
 | Host | Trusted bounded local file effects |
-| Server | Published alpha and A21 baseline; A26 candidate adds sessions, generated WebApp, migration gates and project binding |
-| Storage | [SedravaSQL](https://sql.virtreal.ru/): NativeLog; A24 additive migrations in the A26 candidate |
+| Server | Local sessions, generated WebApp, migration gates, project binding, format 2 domain model |
+| Storage | [SedravaSQL](https://sql.virtreal.ru/): NativeLog; A24 additive migrations; A38 semantic contract |
 | Self-host | Experimental compiler A5.11b written in Sedrava, not the primary compiler |
 
 One source can target different runtimes when its constructs are supported by the chosen generator. Unsupported constructs fail rather than silently switching implementation. Public deployment, complete platform coverage and production security are not established.
 
 ## Learn and develop
 
-[Quickstart](docs/QUICKSTART.md) · [Distribution](docs/PLATFORM_RELEASE_A30.ru.md) · [Release notes](docs/RELEASE_NOTES_0_12_0_ALPHA3.md) · [Roadmap](docs/ROADMAP.md) · [Language examples](examples/README.md) · [Benchmarks](docs/BENCHMARK_2026_11_24.ru.md) · [Security](docs/SECURITY.md).
+[Quickstart](docs/QUICKSTART.md) · [Distribution](docs/PLATFORM_RELEASE_A39.ru.md) · [Release notes](docs/RELEASE_NOTES_0_12_0_ALPHA4.md) · [Roadmap](docs/ROADMAP.md) · [Language examples](examples/README.md) · [Benchmarks](docs/BENCHMARK_2026_11_24.ru.md) · [Security](docs/SECURITY.md).
 
 For maintainers: run cargo test --manifest-path rust/Cargo.toml --locked --all-targets. Python scripts in scripts/ are test/packaging helpers only; the old implementation and package publishing are not part of the current toolchain. For past releases and comparison oracles see [History](docs/HISTORY.md).
 
@@ -54,6 +54,8 @@ Apache-2.0 license.
 
 **A30 release (28 November 2026).** Sedrava 0.12.0-alpha.3, SedravaSQL 0.1.0-alpha.2 and NativeLog 0.0.2 published. VDS qualification: 85 Rust, 319 HTTP, 21+73 SQL tests and offline installation. Prior A26 passed Forgejo CI. COW remains research; not production-ready.
 
-## A30 integrated platform
+## A39 integrated platform
 
-[Project CLI](docs/PROJECT_CLI_A25.ru.md) · [Migration gate](docs/SCHEMA_MIGRATIONS_A24.ru.md) · [Offline distribution](docs/PLATFORM_RELEASE_A30.ru.md). Commands new/build/test/migrate/serve/package are available in alpha.3.
+[Project CLI](docs/PROJECT_CLI_A25.ru.md) · [Migration gate](docs/SCHEMA_MIGRATIONS_A24.ru.md) · [Offline distribution](docs/PLATFORM_RELEASE_A39.ru.md). Commands new/build/test/migrate/serve/package are available in alpha.4.
+
+**Format 2 / формат 2:** [A39 installation and domain example](docs/PLATFORM_RELEASE_A39.ru.md) · [A37 model](docs/SERVICE_DOMAIN_A37.ru.md) · [A38 qualification](docs/QUALIFICATION_A38.ru.md). Experimental A33–A37 databases are incompatible with A38 semantic migration names; use new private test data.
