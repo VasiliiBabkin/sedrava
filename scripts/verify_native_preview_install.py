@@ -55,10 +55,10 @@ def main():
                  "--binary",fake,"--output",reject],expect=False)
         assert not reject.exists() or not list(reject.iterdir())
         assert first["binary_sha256"]==sha(EXEC)
-        assert first["version"]=="0.12.0-alpha.2"
+        assert first["version"]=="0.12.0-alpha.3"
         assert first["channel"]=="alpha"
-        assert "0.12.0-alpha.2" in archive.name
-        assert "0.12.0-alpha.2" in execute([EXEC,"--version"]).stdout
+        assert "0.12.0-alpha.3" in archive.name
+        assert "0.12.0-alpha.3" in execute([EXEC,"--version"]).stdout
 
         # Strict PATH: no Python, pip, rustc or cargo installed in tool bin.
         tools=tmp/"tools"

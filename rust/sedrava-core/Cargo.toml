@@ -1,6 +1,6 @@
 [package]
 name = "sedrava-core"
-version = "0.12.0-alpha.2"
+version = "0.12.0-alpha.3"
 edition = "2021"
 rust-version = "1.85"
 description = "Sedrava programming language compiler and runtime"
@@ -16,7 +16,7 @@ regex = "1"
 roxmltree = "0.21"
 sha2 = "0.10"
 getrandom = "0.4"
-sedravasql = { git = "https://github.com/VasiliiBabkin/sedravasql.git", rev = "60a7d0488a23135fa064b7cf2496f93a78b519bd" }
+sedravasql = { git = "https://github.com/VasiliiBabkin/sedravasql.git", rev = "b36a628c95598a3e8e04b40ebf9c86cdc20e0604" }
 toml = "0.8"
 url = "=2.5.2"
 

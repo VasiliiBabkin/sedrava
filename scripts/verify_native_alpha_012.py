@@ -16,7 +16,7 @@ import re
 import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "0.12.0-alpha.2"
+VERSION = "0.12.0-alpha.3"
 
 
 def invoke(binary: Path, *args: object, ok: bool = True, timeout: int = 30) -> subprocess.CompletedProcess[str]:
