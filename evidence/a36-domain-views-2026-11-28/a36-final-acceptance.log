@@ -1,0 +1,2 @@
+PASS A36 generated views DOM 19 real requests; filtered selection, automatic reports, no unrelated refresh, filter invalidation and logout
+PASS A36 86 direct HTTP; typed filters, paged views, full grouped counts, roles, read-only journal, restart and immutable package

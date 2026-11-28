@@ -1,0 +1,110 @@
+   Compiling sedrava-core v0.12.0-alpha.3 (/var/www/popizdim_tf7_usr/data/.sedrava-dev/a36-work/rust/sedrava-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 07s
+     Running unittests src/lib.rs (/var/www/popizdim_tf7_usr/data/.sedrava-sqlite-a5.auiH6QDN/sedrava/rust/target/debug/build/sedrava-core/1790ed982bf3458e/out/sedrava_core-1790ed982bf3458e)
+
+running 91 tests
+test android::tests::native_typed_error_android_generates_checked_kotlin ... ok
+test android::tests::rejects_unsafe_application_ids ... ok
+test collections::tests::identities_never_reused ... ok
+test android::tests::generates_split_compose_project_for_app_contract ... ok
+test conformance::native_navigation_matches_existing_app ... ok
+test conformance::parses_existing_counter_and_executes_tests ... ok
+test conformance::parses_existing_task_manager_with_records_and_lists ... ok
+test conformance::navigation_and_lazy_queries ... ok
+test conformance::parses_reference_09_and_executes_tests ... ok
+test conformance::parses_unicode_profile_and_executes_tests ... ok
+test conformance::record_collection_semantics_match_existing_fixtures ... ok
+test conformance::rejects_navigation_only_widgets_without_navigation ... ok
+test database::guard_tests::invalid_declarations_fail_at_check ... ok
+test database::guard_tests::typed_guards_and_unicode ... ok
+test effects::tests::normalization_and_target_upper_bounds ... ok
+test effects::tests::pure_annotation_manifest_is_canonical ... ok
+test effects::tests::transitive_closure_contracts_and_rejected_edges ... ok
+test expr::tests::operator_precedence_and_min_integer ... ok
+test conformance::pure_functions_standard_library_and_queries ... ok
+test expr::tests::rejects_excessive_recursive_nesting ... ok
+test expr::tests::rejects_unsafe_syntax ... ok
+test expr::tests::string_escaping_and_unicode ... ok
+test host_json::tests::json_mutations_and_keys ... ok
+test host_json::tests::strict_documents_and_limits ... ok
+test ir::tests::stable_schema_and_top_level_spans ... ok
+test ir_candidate::tests::candidate_is_deterministic_and_explicitly_typed ... ok
+test modules::aliases::tests::local_calls_rewrite_together ... ok
+test modules::aliases::tests::namespace_fields_are_not_hijacked ... ok
+test modules::aliases::tests::only_known_members_lowered ... ok
+test modules::aliases::tests::quoted_literals_and_field_labels_survive ... ok
+test ir_candidate::tests::unsupported_constructs_fail_closed ... ok
+test modules::tests::cycle_and_parent_traversal_are_rejected ... ok
+test modules::tests::imported_pure_function_is_concatenated ... ok
+test modules::tests::imported_errors_require_explicit_stable_id ... ok
+test modules::tests::modules_may_not_declare_state_or_actions ... ok
+test modules::tests::relative_import_validation ... ok
+test modules::tests::symlink_imports_are_rejected ... ok
+test navigation::tests::back_keeps_root_visible ... ok
+test packages::tests::package_symlinks_rejected ... ok
+test parser::tests::accepts_scalar_counter ... ok
+test parser::tests::unsupported_features_and_bad_types_fail_loudly ... ok
+test packages::tests::offline_reviewed_lock_is_deterministic_and_tamper_evident ... ok
+test project::domain::tests::strict_rejections ... ok
+test project::domain::tests::deterministic_lowering_and_append_only_prefix ... ok
+test project::domain::tests::views_contract ... ok
+test runtime::tests::atomic_invariant_rejection_keeps_previous_state ... ok
+test runtime::tests::bounded_while_executes_exactly_and_publishes_only_when_finished ... ok
+test runtime::tests::bounded_while_nonterminating_or_bad_input_keeps_original_state ... ok
+test runtime::tests::derived_and_local_value_semantics ... ok
+test runtime::tests::nesting_and_if_branch ... ok
+test runtime::tests::require_failure_keeps_state_unchanged ... ok
+test server::http::tests::reads_complete_small_body ... ok
+test server::http::tests::rejects_ambiguous_http_framing ... ok
+test server::journal::tests::record_hash_chain_binds_state_receipt_and_previous ... ok
+test server::kv_write::tests::only_literal_one_key_and_one_text_input ... ok
+test server::state::tests::a7_db_revision_is_typed_and_literal_only ... ok
+test server::state::tests::bounded_int_and_quoted_plus ... ok
+test server::storage::tests::malformed_and_duplicate_snapshots_refused ... ok
+test server::tests::parse_and_respond_with_checked_types ... ok
+test server::tests::rejects_routes_with_ambiguous_or_effectful_forms ... ok
+test server::tests::response_literals_escape_colons_commas_and_quotes ... ok
+test project::domain::tests::workflow_contract ... ok
+test server::transaction::tests::idempotency_fingerprint_includes_method_path_payload_and_revision ... ok
+test server::transaction::tests::bounded_ledger_never_evicts_and_rejects_duplicate_ids ... ok
+test site::services::tests::accepts_typed_derived_targets_and_fixed_limits ... ok
+test site::services::tests::rejects_implicit_methods_inconsistent_body_policy_and_limits ... ok
+test site::services::tests::rejects_remote_templates_that_exceed_render_budget ... ok
+test site::services::tests::rejects_unsafe_targets_and_mistyped_bindings ... ok
+test site::services::tests::refresh_contract ... ok
+test site::tests::component_expansion_preserves_slot_depth_and_escapes_arguments ... ok
+test site::tests::emits_escaped_semantic_html_and_relative_routes ... ok
+test site::services::tests::remote_pick_type_and_scope_contract ... ok
+test snapshot::tests::bounded_unicode_snapshot_roundtrips ... ok
+test snapshot::tests::failed_restore_cannot_mutate_program_defaults ... ok
+test snapshot::tests::portable_save_restore_with_records ... ok
+test snapshot::tests::schema_signature_matches_python_011 ... ok
+test snapshot::tests::strict_json_rejects_mutations_and_duplicates ... ok
+test stdlib::tests::civil_dates_roundtrip ... ok
+test stdlib::tests::string_functions ... ok
+test stdlib::tests::unicode_text_at_is_scalar_indexed_and_checked ... ok
+test typed_errors::tests::field_payload_is_exact_and_error_ids_nominal ... ok
+test typed_errors::tests::nominal_scalar_result ... ok
+test typed_errors::tests::open_requires_default_and_closed_rejects_unreachable_default ... ok
+test typed_errors::tests::typed_result_and_match_atomic_state ... ok
+test web::tests::explicit_rejection_for_unsupported_web_features ... ok
+test web::tests::generates_a_real_scalar_counter ... ok
+test site::tests::rejects_unsafe_or_unresolved_site_markup ... ok
+test web::tests::output_escapes_html_and_script_tags ... ok
+test web_ir::tests::web_preview_reads_serializable_ir_without_ast ... ok
+test web_ir::tests::web_preview_rejects_wrong_contract ... ok
+test web::tests::native_web_supports_typed_app_examples ... ok
+
+test result: ok. 91 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+
+     Running unittests src/main.rs (/var/www/popizdim_tf7_usr/data/.sedrava-sqlite-a5.auiH6QDN/sedrava/rust/target/debug/build/sedrava-core/29ad16555f7748fa/out/sedrava-29ad16555f7748fa)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/sedrava-native.rs (/var/www/popizdim_tf7_usr/data/.sedrava-sqlite-a5.auiH6QDN/sedrava/rust/target/debug/build/sedrava-core/2572c75983e3421e/out/sedrava_native-2572c75983e3421e)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

@@ -1,4 +1,5 @@
 //! A33: bounded declarative directory applications lowered to existing project DSLs.
+mod views;
 mod workflow;
 use crate::model::{Error, Result};
 use serde_json::json;
@@ -187,9 +188,11 @@ pub(super) fn lower(src: &str) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>)> {
     if src.len() > 16384 {
         return Err(error(1, "source budget"));
     }
+    let (src, view_src) = views::split(src);
     let schema = src.split_once("\nworkflow ").map(|(s, _)| s).unwrap_or(src);
     let (title, entities) = parse(schema)?;
     let workflow = workflow::Workflow::parse(src, &entities)?;
+    let views = views::View::parse(view_src, &entities, workflow.as_ref())?;
     let mut app = format!(
         "webapp \"{title}\"\nstate section = \"{}\"\n",
         entities[0].name
@@ -210,11 +213,17 @@ pub(super) fn lower(src: &str) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>)> {
     if let Some(w) = &workflow {
         w.states(&mut app);
     }
+    for v in &views {
+        v.states(&mut app);
+    }
     for e in &entities {
         writeln!(app, "derive show_{} = section == \"{}\"", e.name, e.name).unwrap();
     }
     for e in &entities {
         writeln!(app, "action go_{}:\n    section = \"{}\"", e.name, e.name).unwrap();
+    }
+    for v in &views {
+        v.action(&mut app);
     }
     for e in &entities {
         let t = table(e);
@@ -282,11 +291,12 @@ pub(super) fn lower(src: &str) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>)> {
         if wf.is_some() {
             app.push_str("        w_status text\n        w_revision text\n");
         }
-        let refresh = if wf.is_some() {
+        let mut refresh = if wf.is_some() {
             format!("list_{n} wf_history")
         } else {
             format!("list_{n}")
         };
+        refresh.push_str(&views::View::for_entity(&views, n));
         writeln!(app,"service create_{n}:\n    origin self\n    path \"/domain-{n}-create\"\n    method POST\n    auth session\n    idempotency true\n    refresh {refresh}\n    body-field id id_{n}").unwrap();
         for f in &e.fields {
             writeln!(app, "    body-field {} {}", col(f), state(e, f)).unwrap();
@@ -295,7 +305,19 @@ pub(super) fn lower(src: &str) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>)> {
     }
     if let Some(w) = &workflow {
         w.schema(&mut steps);
-        w.services(&mut app, &mut api);
+        w.services(
+            &mut app,
+            &mut api,
+            &views::View::for_entity(&views, &w.target),
+        );
+    }
+    for v in &views {
+        v.emit(
+            &mut app,
+            &mut api,
+            entities.iter().find(|e| e.name == v.target()).unwrap(),
+            workflow.as_ref(),
+        );
     }
     writeln!(app,"view main:\n    container max 1180 padding 24:\n        column gap 20:\n            heading \"{title}\"\n            session \"Ключ доступа\"\n            paragraph \"Локальное приложение. Откройте список; после записи открытые списки обновляются автоматически. Для следующей страницы укажите последний ID.\"\n            grid columns 3 md-columns 1 gap 8:").unwrap();
     for e in &entities {
@@ -322,6 +344,9 @@ pub(super) fn lower(src: &str) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>)> {
                 }
             }
         }
+        for v in &views {
+            v.parent_pick(&mut app, n);
+        }
         writeln!(app,"                        heading \"Новая запись\" level 3\n                        input id_{n} label \"ID\" kind text").unwrap();
         for f in &e.fields {
             let widget = if matches!(f.ty, Ty::Bool) {
@@ -340,6 +365,9 @@ pub(super) fn lower(src: &str) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>)> {
         writeln!(app,"                        request \"Сохранить\" service create_{n}\n                        remote create_{n}:\n                            field affected\n                            field sequence\n                            field replayed").unwrap();
         if let Some(w) = workflow.as_ref().filter(|w| w.target == e.name) {
             w.panel(&mut app);
+        }
+        for v in views.iter().filter(|v| v.target() == n) {
+            v.panel(&mut app, e, workflow.as_ref());
         }
     }
     let mut migrations = serde_json::to_vec_pretty(&json!({"version":1,"steps":steps}))
@@ -392,6 +420,34 @@ mod tests {
         ] {
             assert!(lower(&bad).is_err(), "{bad}");
         }
+    }
+
+    #[test]
+    fn views_contract() {
+        let base=GOOD.to_owned()+"view sites \"Sites of client\" from site filter client\nview floors \"Floors\" from site filter floors\nreport floorcount \"Floor count\" from site group floors count\nreport activecount \"Active count\" from site group active count\n";
+        let a = lower(&base).unwrap();
+        assert_eq!(a, lower(&base).unwrap());
+        assert_eq!(a.2, lower(GOOD).unwrap().2);
+        let ui = std::str::from_utf8(&a.0).unwrap();
+        let api = std::str::from_utf8(&a.1).unwrap();
+        assert!(ui.contains(
+            "refresh list_site vread_sites vread_floors vread_floorcount vread_activecount"
+        ));
+        assert!(ui.contains("bindings \"id:vf_sites\" action filter_sites"));
+        assert!(api.contains("GROUP BY f_floors ORDER BY f_floors LIMIT 21"));
+        assert!(api.contains("require value range 1 20"));
+        assert!(crate::site::webapp::generate(ui, None).is_ok());
+        assert!(crate::server::sql_api::parse(api).is_ok());
+        for bad in [
+            base.replace("filter client","filter unknown"),
+            base.replace("group floors count","group client count"),
+            base.replace("int 1 20","int 1 21"),
+            base.replace("report activecount","report floorcount"),
+            base.replace("from site filter","from missing filter"),
+            base.clone()+"view fifth \"Fifth\" from site filter active\n",
+            GOOD.to_owned()+"view unknown \"Unknown\" from site where status = open\n",
+            GOOD.replace("floors:","status:")+"workflow site:\n    initial open\n    transition close \"Close\" from open to closed\nreport statuses \"Statuses\" from site group status count\n",
+        ]{assert!(lower(&bad).is_err(),"{bad}");}
     }
 
     #[test]

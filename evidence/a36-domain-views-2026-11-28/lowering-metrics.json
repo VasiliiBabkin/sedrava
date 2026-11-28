@@ -1,0 +1,49 @@
+{
+  "without_views": {
+    "domain.sdr": {
+      "lines": 27,
+      "bytes": 999,
+      "sha256": "e3d05db8a3681122a39973c31e4a184f0311f896ea2a4b64fd87efecb26f12ee"
+    },
+    "app.sdr": {
+      "lines": 374,
+      "bytes": 14235,
+      "sha256": "cc98d158ed232504240ab58a4c03ec1e6f18fcc31e2c023cf249eae253dba2cd"
+    },
+    "api.sdr": {
+      "lines": 99,
+      "bytes": 4277,
+      "sha256": "6ddf235eb7b15e0036f1f6f8640567edee2b948b7a40a7efa9e21b49e80f61ba"
+    },
+    "migrations.json": {
+      "lines": 70,
+      "bytes": 2044,
+      "sha256": "7baed6a2e39887a0bce04e9055c3ee010162ee99783b539eabf8dabca7e71182"
+    }
+  },
+  "with_views": {
+    "domain.sdr": {
+      "lines": 32,
+      "bytes": 1328,
+      "sha256": "c5064056a29d5e0d47911efb518eca2b0c1b99b0ddef2da1a0b304fd11fe4671"
+    },
+    "app.sdr": {
+      "lines": 497,
+      "bytes": 19480,
+      "sha256": "c1b091caa3846f0bdaef737b5b025803a7f823ab4bf9bf57f69f010c52910065"
+    },
+    "api.sdr": {
+      "lines": 117,
+      "bytes": 5146,
+      "sha256": "42c77421127115d6338f8c01fc4bab4381eb595f64200f72141e9e0cc29c729a"
+    },
+    "migrations.json": {
+      "lines": 70,
+      "bytes": 2044,
+      "sha256": "7baed6a2e39887a0bce04e9055c3ee010162ee99783b539eabf8dabca7e71182"
+    }
+  },
+  "migrations_byte_identical": true,
+  "added_view_declarations": 4,
+  "generated_app_and_api_added_lines": 141
+}
