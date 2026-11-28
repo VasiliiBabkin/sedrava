@@ -1,4 +1,5 @@
 //! A33: bounded declarative directory applications lowered to existing project DSLs.
+mod workflow;
 use crate::model::{Error, Result};
 use serde_json::json;
 use std::{collections::BTreeSet, fmt::Write};
@@ -183,7 +184,12 @@ fn table(e: &Entity) -> String {
     format!("d_{}", e.name)
 }
 pub(super) fn lower(src: &str) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>)> {
-    let (title, entities) = parse(src)?;
+    if src.len() > 16384 {
+        return Err(error(1, "source budget"));
+    }
+    let schema = src.split_once("\nworkflow ").map(|(s, _)| s).unwrap_or(src);
+    let (title, entities) = parse(schema)?;
+    let workflow = workflow::Workflow::parse(src, &entities)?;
     let mut app = format!(
         "webapp \"{title}\"\nstate section = \"{}\"\n",
         entities[0].name
@@ -201,6 +207,9 @@ pub(super) fn lower(src: &str) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>)> {
             writeln!(app, "state {} = {}", state(e, f), default(&f.ty)).unwrap();
         }
     }
+    if let Some(w) = &workflow {
+        w.states(&mut app);
+    }
     for e in &entities {
         writeln!(app, "derive show_{} = section == \"{}\"", e.name, e.name).unwrap();
     }
@@ -212,12 +221,16 @@ pub(super) fn lower(src: &str) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>)> {
         let n = &e.name;
         let mut columns = vec!["id".to_owned()];
         columns.extend(e.fields.iter().map(col));
+        let wf = workflow.as_ref().filter(|w| w.target == e.name);
         let mut ddl = vec!["id TEXT PRIMARY KEY".to_owned()];
         ddl.extend(
             e.fields
                 .iter()
                 .map(|f| format!("{} {}", col(f), sql_type(&f.ty))),
         );
+        if wf.is_some() {
+            ddl.extend(["w_status TEXT".into(), "w_revision TEXT".into()]);
+        }
         steps.push(json!({"version":steps.len()+1,"name":format!("table_{n}"),"sql":format!("CREATE TABLE {t} ({});",ddl.join(", "))}));
         // Declaration order is migration order; append-only entities preserve the prefix.
         for f in &e.fields {
@@ -227,7 +240,7 @@ pub(super) fn lower(src: &str) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>)> {
                 steps.push(json!({"version":steps.len()+1,"name":format!("fk_{n}_{}",f.name),"sql":format!("ALTER TABLE {t} ADD FOREIGN KEY ({c}) REFERENCES d_{parent}(id);")}));
             }
         }
-        writeln!(api,"route POST \"/domain-{n}-list\":\n    param after: text\n    require after length 0 128\n    query \"SELECT {} FROM {t} WHERE id>? ORDER BY id LIMIT 20\"",columns.join(",")).unwrap();
+        writeln!(api,"route POST \"/domain-{n}-list\":\n    param after: text\n    require after length 0 128\n    query \"SELECT {} FROM {t} WHERE id>? ORDER BY id LIMIT 20\"",if wf.is_some(){format!("{},w_status,w_revision",columns.join(","))}else{columns.join(",")}).unwrap();
         writeln!(
             api,
             "route POST \"/domain-{n}-create\":\n    param id: text"
@@ -251,22 +264,33 @@ pub(super) fn lower(src: &str) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>)> {
                 Ty::Bool => {}
             }
         }
-        writeln!(
-            api,
-            "    execute \"INSERT INTO {t} ({}) VALUES ({})\"",
-            columns.join(","),
-            vec!["?"; columns.len()].join(",")
-        )
-        .unwrap();
+        if let Some(w) = wf {
+            w.create(&mut api, &columns);
+        } else {
+            writeln!(
+                api,
+                "    execute \"INSERT INTO {t} ({}) VALUES ({})\"",
+                columns.join(","),
+                vec!["?"; columns.len()].join(",")
+            )
+            .unwrap();
+        }
         writeln!(app,"service list_{n}:\n    origin self\n    path \"/domain-{n}-list\"\n    method POST\n    auth session\n    body-field after after_{n}\n    max-items 20\n    response sql-rows:\n        id text").unwrap();
         for f in &e.fields {
             writeln!(app, "        {} {}", col(f), wire_type(&f.ty)).unwrap();
+        }
+        if wf.is_some() {
+            app.push_str("        w_status text\n        w_revision text\n");
         }
         writeln!(app,"service create_{n}:\n    origin self\n    path \"/domain-{n}-create\"\n    method POST\n    auth session\n    idempotency true\n    body-field id id_{n}").unwrap();
         for f in &e.fields {
             writeln!(app, "    body-field {} {}", col(f), state(e, f)).unwrap();
         }
         app.push_str("    response one:\n        kind text\n        affected int32\n        sequence int32\n        replayed bool\n");
+    }
+    if let Some(w) = &workflow {
+        w.schema(&mut steps);
+        w.services(&mut app, &mut api);
     }
     writeln!(app,"view main:\n    container max 1180 padding 24:\n        column gap 20:\n            heading \"{title}\"\n            session \"Ключ доступа\"\n            paragraph \"Локальное приложение. Выберите раздел, загрузите список. Для следующей страницы укажите последний ID.\"\n            grid columns 3 md-columns 1 gap 8:").unwrap();
     for e in &entities {
@@ -282,6 +306,9 @@ pub(super) fn lower(src: &str) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>)> {
         writeln!(app,"            when show_{n}:\n                card:\n                    column gap 12:\n                        heading \"{}\" level 2\n                        input after_{n} label \"После ID\" kind text\n                        request \"Загрузить список\" service list_{n}\n                        remote list_{n}:\n                            row gap 8:\n                                paragraph \"ID:\"\n                                field id",e.label).unwrap();
         for f in &e.fields {
             writeln!(app,"                            row gap 8:\n                                paragraph \"{}:\"\n                                field {}",f.label,col(f)).unwrap();
+        }
+        if let Some(w) = workflow.as_ref().filter(|w| w.target == e.name) {
+            w.pick(&mut app);
         }
         for child in &entities {
             for f in &child.fields {
@@ -306,6 +333,9 @@ pub(super) fn lower(src: &str) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>)> {
             .unwrap();
         }
         writeln!(app,"                        request \"Сохранить\" service create_{n}\n                        remote create_{n}:\n                            field affected\n                            field sequence\n                            field replayed").unwrap();
+        if let Some(w) = workflow.as_ref().filter(|w| w.target == e.name) {
+            w.panel(&mut app);
+        }
     }
     let mut migrations = serde_json::to_vec_pretty(&json!({"version":1,"steps":steps}))
         .map_err(|_| error(1, "migration encoding"))?;
@@ -336,6 +366,29 @@ mod tests {
         assert!(crate::site::webapp::generate(std::str::from_utf8(&a.0).unwrap(), None).is_ok());
         assert!(crate::server::sql_api::parse(std::str::from_utf8(&a.1).unwrap()).is_ok());
     }
+    #[test]
+    fn workflow_contract() {
+        let base=GOOD.to_owned()+"workflow site:\n    initial open\n    transition close \"Close\" from open to closed\n    transition reopen \"Reopen\" from closed to open\n";
+        let a = lower(&base).unwrap();
+        assert_eq!(a, lower(&base).unwrap());
+        let api = std::str::from_utf8(&a.1).unwrap();
+        assert!(api.contains("transaction "));
+        assert!(!api.contains("route POST \"/workflow-history-create\""));
+        assert!(crate::server::sql_api::parse(api).is_ok());
+        assert!(crate::site::webapp::generate(std::str::from_utf8(&a.0).unwrap(), None).is_ok());
+        for bad in [
+            base.replace("workflow site:", "workflow missing:"),
+            base.replace("transition close", "transition history"),
+            base.replace("transition close", "transition created"),
+            base.replace("transition reopen", "transition close"),
+            base.replace("initial open", "initial unreachable"),
+            base.replace("to closed", "to closed;"),
+            base.clone() + "workflow site:\n    initial open\n",
+        ] {
+            assert!(lower(&bad).is_err(), "{bad}");
+        }
+    }
+
     #[test]
     fn strict_rejections() {
         for s in [
