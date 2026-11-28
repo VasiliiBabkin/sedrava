@@ -1,0 +1,129 @@
+database-api ServiceDesk
+route POST "/clients":
+    param after: text
+    require after length 0 128
+    query "SELECT id,name,contact FROM Clients WHERE id>? ORDER BY id LIMIT 20"
+route POST "/add-client":
+    param id: text
+    param name: text
+    param contact: text
+    require id key
+    require name length 1 128
+    require name nonblank
+    require contact length 0 128
+    execute "INSERT INTO Clients (id,name,contact) VALUES (?,?,?)"
+route POST "/sites":
+    param client_id: text
+    param after: text
+    require client_id key
+    require after length 0 128
+    query "SELECT id,name,address FROM Sites WHERE client_id=? AND id>? ORDER BY id LIMIT 20"
+route POST "/add-site":
+    param id: text
+    param client_id: text
+    param name: text
+    param address: text
+    require id key
+    require client_id key
+    require name length 1 128
+    require name nonblank
+    require address length 1 256
+    require address nonblank
+    execute "INSERT INTO Sites (id,client_id,name,address) VALUES (?,?,?,?)"
+route POST "/assets":
+    param site_id: text
+    param after: text
+    require site_id key
+    require after length 0 128
+    query "SELECT id,name,serial FROM Assets WHERE site_id=? AND id>? ORDER BY id LIMIT 20"
+route POST "/add-asset":
+    param id: text
+    param site_id: text
+    param name: text
+    param serial: text
+    require id key
+    require site_id key
+    require name length 1 128
+    require name nonblank
+    require serial length 0 128
+    execute "INSERT INTO Assets (id,site_id,name,serial) VALUES (?,?,?,?)"
+route POST "/tickets":
+    param closed: bool
+    param after: text
+    require after length 0 128
+    query "SELECT id,asset_id,issue,priority,closed,last_event FROM Tickets WHERE closed=? AND id>? ORDER BY id LIMIT 20"
+route POST "/asset-tickets":
+    param asset_id: text
+    param after: text
+    require asset_id key
+    require after length 0 128
+    query "SELECT id,asset_id,issue,priority,closed,last_event FROM Tickets WHERE asset_id=? AND id>? ORDER BY id LIMIT 20"
+route POST "/add-ticket":
+    param id: text
+    param asset_id: text
+    param issue: text
+    param priority: int
+    param work_day: text
+    require id key
+    require asset_id key
+    require issue length 1 256
+    require issue nonblank
+    require priority range 1 3
+    require work_day length 10 10
+    transaction [{"sql":"INSERT INTO Tickets (id,asset_id,issue,priority,closed,last_event) VALUES (?,?,?,?,false,?)","using":["id","asset_id","issue","priority","id"]},{"sql":"INSERT INTO Events (id,ticket_id,kind,work_day,note,minutes,cost) VALUES (?,?,'created',?,?,0,0)","using":["id","id","work_day","issue"]}]
+route POST "/events":
+    param ticket_id: text
+    param after: text
+    require ticket_id key
+    require after length 0 128
+    query "SELECT id,kind,work_day,note,minutes,cost FROM Events WHERE ticket_id=? AND id>? ORDER BY id LIMIT 20"
+route POST "/ticket-totals":
+    param ticket_id: text
+    require ticket_id key
+    query "SELECT ticket_id,COUNT(*) AS events,SUM(minutes) AS total_minutes,SUM(cost) AS total_cost FROM Events WHERE ticket_id=? GROUP BY ticket_id"
+route POST "/dashboard":
+    param closed: bool
+    query "SELECT closed,COUNT(*) AS total FROM Tickets WHERE closed=? GROUP BY closed"
+route POST "/add-work":
+    param id: text
+    param ticket_id: text
+    param expected_event: text
+    param work_day: text
+    param note: text
+    param minutes: int
+    param cost: int
+    require id key
+    require ticket_id key
+    require expected_event key
+    require work_day length 10 10
+    require note length 1 256
+    require note nonblank
+    require minutes range 1 1440
+    require cost range 0 100000
+    transaction [{"sql":"UPDATE Tickets SET last_event=?,closed=false WHERE id=? AND last_event=? AND closed=false","using":["id","ticket_id","expected_event"]},{"sql":"INSERT INTO Events (id,ticket_id,kind,work_day,note,minutes,cost) VALUES (?,?,'work',?,?,?,?)","using":["id","ticket_id","work_day","note","minutes","cost"]}]
+route POST "/close-ticket":
+    param id: text
+    param ticket_id: text
+    param expected_event: text
+    param work_day: text
+    param note: text
+    require id key
+    require ticket_id key
+    require expected_event key
+    require work_day length 10 10
+    require note length 1 256
+    require note nonblank
+    transaction [{"sql":"UPDATE Tickets SET last_event=?,closed=true WHERE id=? AND last_event=? AND closed=false","using":["id","ticket_id","expected_event"]},{"sql":"INSERT INTO Events (id,ticket_id,kind,work_day,note,minutes,cost) VALUES (?,?,'closed',?,?,0,0)","using":["id","ticket_id","work_day","note"]}]
+route POST "/reopen-ticket":
+    param id: text
+    param ticket_id: text
+    param expected_event: text
+    param work_day: text
+    param note: text
+    require id key
+    require ticket_id key
+    require expected_event key
+    require work_day length 10 10
+    require note length 1 256
+    require note nonblank
+    transaction [{"sql":"UPDATE Tickets SET last_event=?,closed=false WHERE id=? AND last_event=? AND closed=true","using":["id","ticket_id","expected_event"]},{"sql":"INSERT INTO Events (id,ticket_id,kind,work_day,note,minutes,cost) VALUES (?,?,'reopened',?,?,0,0)","using":["id","ticket_id","work_day","note"]}]

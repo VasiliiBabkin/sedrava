@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "steps": [
+    {
+      "version": 1,
+      "name": "clients",
+      "sql": "CREATE TABLE Clients (id TEXT PRIMARY KEY, name TEXT, contact TEXT);"
+    },
+    {
+      "version": 2,
+      "name": "sites",
+      "sql": "CREATE TABLE Sites (id TEXT PRIMARY KEY, client_id TEXT, name TEXT, address TEXT);"
+    },
+    {
+      "version": 3,
+      "name": "assets",
+      "sql": "CREATE TABLE Assets (id TEXT PRIMARY KEY, site_id TEXT, name TEXT, serial TEXT);"
+    },
+    {
+      "version": 4,
+      "name": "tickets",
+      "sql": "CREATE TABLE Tickets (id TEXT PRIMARY KEY, asset_id TEXT, issue TEXT, priority INT, closed BOOL, last_event TEXT);"
+    },
+    {
+      "version": 5,
+      "name": "events",
+      "sql": "CREATE TABLE Events (id TEXT PRIMARY KEY, ticket_id TEXT, kind TEXT, work_day TEXT, note TEXT, minutes INT, cost INT);"
+    },
+    {
+      "version": 6,
+      "name": "sites_client",
+      "sql": "CREATE INDEX sites_client ON Sites(client_id);"
+    },
+    {
+      "version": 7,
+      "name": "assets_site",
+      "sql": "CREATE INDEX assets_site ON Assets(site_id);"
+    },
+    {
+      "version": 8,
+      "name": "tickets_asset",
+      "sql": "CREATE INDEX tickets_asset ON Tickets(asset_id);"
+    },
+    {
+      "version": 9,
+      "name": "tickets_closed",
+      "sql": "CREATE INDEX tickets_closed ON Tickets(closed);"
+    },
+    {
+      "version": 10,
+      "name": "events_ticket",
+      "sql": "CREATE INDEX events_ticket ON Events(ticket_id);"
+    },
+    {
+      "version": 11,
+      "name": "sites_fk",
+      "sql": "ALTER TABLE Sites ADD FOREIGN KEY (client_id) REFERENCES Clients(id);"
+    },
+    {
+      "version": 12,
+      "name": "assets_fk",
+      "sql": "ALTER TABLE Assets ADD FOREIGN KEY (site_id) REFERENCES Sites(id);"
+    },
+    {
+      "version": 13,
+      "name": "tickets_fk",
+      "sql": "ALTER TABLE Tickets ADD FOREIGN KEY (asset_id) REFERENCES Assets(id);"
+    },
+    {
+      "version": 14,
+      "name": "events_fk",
+      "sql": "ALTER TABLE Events ADD FOREIGN KEY (ticket_id) REFERENCES Tickets(id);"
+    }
+  ]
+}

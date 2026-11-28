@@ -1,0 +1,547 @@
+webapp "Сервисный журнал · ЛадоКод"
+theme light:
+    background "#edf2f7"
+    surface "#ffffff"
+    foreground "#16283a"
+    accent "#176c79"
+    gold "#946000"
+    muted "#506275"
+    border "#ccd9e3"
+theme-state theme_mode
+state theme_mode = "light"
+state active_section = "overview"
+state client_after = ""
+state client_new = ""
+state client_name = ""
+state client_contact = ""
+state client_filter = ""
+state site_after = ""
+state site_new = ""
+state site_client = ""
+state site_name = ""
+state site_address = ""
+state site_filter = ""
+state asset_after = ""
+state asset_new = ""
+state asset_site = ""
+state asset_name = ""
+state asset_serial = ""
+state closed_filter = false
+state ticket_after = ""
+state ticket_asset_filter = ""
+state asset_ticket_after = ""
+state ticket_new = ""
+state ticket_asset = ""
+state ticket_issue = ""
+state ticket_priority = 2
+state ticket_day = ""
+state history_ticket = ""
+state event_after = ""
+state event_new = ""
+state event_ticket = ""
+state expected_event = ""
+state work_day = ""
+state work_note = ""
+state work_minutes = 30
+state work_cost = 0
+derive show_overview = active_section == "overview"
+derive show_directory = active_section == "directory"
+derive show_equipment = active_section == "equipment"
+derive show_register = active_section == "register"
+derive show_workflow = active_section == "workflow"
+derive show_history = active_section == "history"
+action go_overview:
+    active_section = "overview"
+action go_directory:
+    active_section = "directory"
+action go_equipment:
+    active_section = "equipment"
+action go_register:
+    active_section = "register"
+action go_workflow:
+    active_section = "workflow"
+action go_history:
+    active_section = "history"
+service clients:
+    origin self
+    path "/clients"
+    method POST
+    auth session
+    body-field after client_after
+    max-items 20
+    response sql-rows:
+        id text
+        name text
+        contact text
+service add_client:
+    origin self
+    path "/add-client"
+    method POST
+    auth session
+    idempotency true
+    body-field id client_new
+    body-field name client_name
+    body-field contact client_contact
+    response one:
+        kind text
+        affected int32
+        sequence int32
+        replayed bool
+service sites:
+    origin self
+    path "/sites"
+    method POST
+    auth session
+    body-field client_id client_filter
+    body-field after site_after
+    max-items 20
+    response sql-rows:
+        id text
+        name text
+        address text
+service add_site:
+    origin self
+    path "/add-site"
+    method POST
+    auth session
+    idempotency true
+    body-field id site_new
+    body-field client_id site_client
+    body-field name site_name
+    body-field address site_address
+    response one:
+        kind text
+        affected int32
+        sequence int32
+        replayed bool
+service assets:
+    origin self
+    path "/assets"
+    method POST
+    auth session
+    body-field site_id site_filter
+    body-field after asset_after
+    max-items 20
+    response sql-rows:
+        id text
+        name text
+        serial text
+service add_asset:
+    origin self
+    path "/add-asset"
+    method POST
+    auth session
+    idempotency true
+    body-field id asset_new
+    body-field site_id asset_site
+    body-field name asset_name
+    body-field serial asset_serial
+    response one:
+        kind text
+        affected int32
+        sequence int32
+        replayed bool
+service tickets:
+    origin self
+    path "/tickets"
+    method POST
+    auth session
+    body-field closed closed_filter
+    body-field after ticket_after
+    max-items 20
+    response sql-rows:
+        id text
+        asset_id text
+        issue text
+        priority int32
+        closed bool
+        last_event text
+service asset_tickets:
+    origin self
+    path "/asset-tickets"
+    method POST
+    auth session
+    body-field asset_id ticket_asset_filter
+    body-field after asset_ticket_after
+    max-items 20
+    response sql-rows:
+        id text
+        asset_id text
+        issue text
+        priority int32
+        closed bool
+        last_event text
+service add_ticket:
+    origin self
+    path "/add-ticket"
+    method POST
+    auth session
+    idempotency true
+    body-field id ticket_new
+    body-field asset_id ticket_asset
+    body-field issue ticket_issue
+    body-field priority ticket_priority
+    body-field work_day ticket_day
+    response one:
+        kind text
+        affected int32
+        sequence int32
+        replayed bool
+service events:
+    origin self
+    path "/events"
+    method POST
+    auth session
+    body-field ticket_id history_ticket
+    body-field after event_after
+    max-items 20
+    response sql-rows:
+        id text
+        kind text
+        work_day text
+        note text
+        minutes int32
+        cost int32
+service ticket_totals:
+    origin self
+    path "/ticket-totals"
+    method POST
+    auth session
+    body-field ticket_id history_ticket
+    max-items 1
+    response sql-rows:
+        ticket_id text
+        events int32
+        total_minutes int32
+        total_cost int32
+service dashboard:
+    origin self
+    path "/dashboard"
+    method POST
+    auth session
+    body-field closed closed_filter
+    max-items 1
+    response sql-rows:
+        closed bool
+        total int32
+service add_work:
+    origin self
+    path "/add-work"
+    method POST
+    auth session
+    idempotency true
+    body-field id event_new
+    body-field ticket_id event_ticket
+    body-field expected_event expected_event
+    body-field work_day work_day
+    body-field note work_note
+    body-field minutes work_minutes
+    body-field cost work_cost
+    response one:
+        kind text
+        affected int32
+        sequence int32
+        replayed bool
+service close_ticket:
+    origin self
+    path "/close-ticket"
+    method POST
+    auth session
+    idempotency true
+    body-field id event_new
+    body-field ticket_id event_ticket
+    body-field expected_event expected_event
+    body-field work_day work_day
+    body-field note work_note
+    response one:
+        kind text
+        affected int32
+        sequence int32
+        replayed bool
+service reopen_ticket:
+    origin self
+    path "/reopen-ticket"
+    method POST
+    auth session
+    idempotency true
+    body-field id event_new
+    body-field ticket_id event_ticket
+    body-field expected_event expected_event
+    body-field work_day work_day
+    body-field note work_note
+    response one:
+        kind text
+        affected int32
+        sequence int32
+        replayed bool
+view main:
+    container max 1200 padding 24:
+        column gap 24:
+            heading "Сервисный журнал"
+            paragraph "Объекты · оборудование · заявки · выполненные работы" variant lead
+            session "Ключ доступа"
+            paragraph "Локальный режим. Для связи записей используйте ID из списков. Заполняйте даты вручную (ГГГГ-ММ-ДД); при ошибке повторите с прежними полями." variant muted
+            grid columns 3 md-columns 1 gap 8:
+                button "Сводка и заявки" action go_overview variant secondary
+                button "Заказчики и объекты" action go_directory variant secondary
+                button "Оборудование" action go_equipment variant secondary
+                button "Создать заявку" action go_register variant secondary
+                button "Работа и статус" action go_workflow variant secondary
+                button "История и итоги" action go_history variant secondary
+            paragraph "Списки обновляются кнопками. Пустой результат означает отсутствие записей по выбранному фильтру." variant muted
+            when show_overview:
+                card:
+                    column gap 12:
+                        heading "01 · Сводка и заявки" level 2
+                        checkbox closed_filter label "Показывать закрытые заявки"
+                        request "Подсчитать заявки по статусу" service dashboard
+                        remote dashboard:
+                            row gap 8:
+                                paragraph "Закрыта (true/false):" variant muted
+                                field closed
+                            row gap 8:
+                                paragraph "Количество:" variant muted
+                                field total
+                        input ticket_after label "После ID (пусто — начало)" kind text
+                        request "Загрузить заявки (до 20)" service tickets
+                        remote tickets:
+                            row gap 8:
+                                paragraph "ID:" variant muted
+                                field id
+                            row gap 8:
+                                paragraph "ID оборудования:" variant muted
+                                field asset_id
+                            row gap 8:
+                                paragraph "Описание:" variant muted
+                                field issue
+                            row gap 8:
+                                paragraph "Приоритет:" variant muted
+                                field priority
+                            row gap 8:
+                                paragraph "Закрыта (true/false):" variant muted
+                                field closed
+                            row gap 8:
+                                paragraph "Текущая версия события:" variant muted
+                                field last_event
+                        heading "Заявки по оборудованию" level 3
+                        input ticket_asset_filter label "ID оборудования" kind text
+                        input asset_ticket_after label "После ID" kind text
+                        request "Найти заявки оборудования" service asset_tickets
+                        remote asset_tickets:
+                            row gap 8:
+                                paragraph "ID:" variant muted
+                                field id
+                            row gap 8:
+                                paragraph "ID оборудования:" variant muted
+                                field asset_id
+                            row gap 8:
+                                paragraph "Описание:" variant muted
+                                field issue
+                            row gap 8:
+                                paragraph "Приоритет:" variant muted
+                                field priority
+                            row gap 8:
+                                paragraph "Закрыта (true/false):" variant muted
+                                field closed
+                            row gap 8:
+                                paragraph "Текущая версия события:" variant muted
+                                field last_event
+            when show_directory:
+                card:
+                    column gap 12:
+                        heading "02 · Заказчики и объекты" level 2
+                        input client_after label "После ID заказчика" kind text
+                        request "Загрузить заказчиков" service clients
+                        remote clients:
+                            row gap 8:
+                                paragraph "ID:" variant muted
+                                field id
+                            row gap 8:
+                                paragraph "Название:" variant muted
+                                field name
+                            row gap 8:
+                                paragraph "Контакт:" variant muted
+                                field contact
+                        heading "Новый заказчик" level 3
+                        input client_new label "ID заказчика" kind text
+                        input client_name label "Имя / организация" kind text
+                        input client_contact label "Контакт (необязательно)" kind text
+                        request "Сохранить заказчика" service add_client
+                        remote add_client:
+                            row gap 8:
+                                paragraph "Записей изменено:" variant muted
+                                field affected
+                            row gap 8:
+                                paragraph "Номер записи журнала:" variant muted
+                                field sequence
+                            row gap 8:
+                                paragraph "Повтор прежней операции:" variant muted
+                                field replayed
+                        heading "Объекты заказчика" level 3
+                        input client_filter label "ID заказчика" kind text
+                        input site_after label "После ID объекта" kind text
+                        request "Загрузить объекты" service sites
+                        remote sites:
+                            row gap 8:
+                                paragraph "ID:" variant muted
+                                field id
+                            row gap 8:
+                                paragraph "Название:" variant muted
+                                field name
+                            row gap 8:
+                                paragraph "Адрес:" variant muted
+                                field address
+                        heading "Новый объект" level 3
+                        input site_new label "ID объекта" kind text
+                        input site_client label "ID заказчика" kind text
+                        input site_name label "Название объекта" kind text
+                        input site_address label "Адрес" kind text
+                        request "Сохранить объект" service add_site
+                        remote add_site:
+                            row gap 8:
+                                paragraph "Записей изменено:" variant muted
+                                field affected
+                            row gap 8:
+                                paragraph "Номер записи журнала:" variant muted
+                                field sequence
+                            row gap 8:
+                                paragraph "Повтор прежней операции:" variant muted
+                                field replayed
+            when show_equipment:
+                card:
+                    column gap 12:
+                        heading "03 · Оборудование" level 2
+                        input site_filter label "ID объекта" kind text
+                        input asset_after label "После ID оборудования" kind text
+                        request "Загрузить оборудование" service assets
+                        remote assets:
+                            row gap 8:
+                                paragraph "ID:" variant muted
+                                field id
+                            row gap 8:
+                                paragraph "Название:" variant muted
+                                field name
+                            row gap 8:
+                                paragraph "Серийный номер:" variant muted
+                                field serial
+                        heading "Добавить оборудование" level 3
+                        input asset_new label "ID оборудования" kind text
+                        input asset_site label "ID объекта" kind text
+                        input asset_name label "Тип / модель" kind text
+                        input asset_serial label "Серийный номер (необязательно)" kind text
+                        request "Сохранить оборудование" service add_asset
+                        remote add_asset:
+                            row gap 8:
+                                paragraph "Записей изменено:" variant muted
+                                field affected
+                            row gap 8:
+                                paragraph "Номер записи журнала:" variant muted
+                                field sequence
+                            row gap 8:
+                                paragraph "Повтор прежней операции:" variant muted
+                                field replayed
+            when show_register:
+                card:
+                    column gap 12:
+                        heading "04 · Создать заявку" level 2
+                        input ticket_new label "ID новой заявки" kind text
+                        input ticket_asset label "ID оборудования" kind text
+                        input ticket_issue label "Неисправность / задача" kind text
+                        input ticket_priority label "Приоритет 1 — низкий, 2 — обычный, 3 — высокий"
+                        input ticket_day label "Дата регистрации ГГГГ-ММ-ДД" kind text
+                        request "Зарегистрировать заявку" service add_ticket
+                        remote add_ticket:
+                            row gap 8:
+                                paragraph "Записей изменено:" variant muted
+                                field affected
+                            row gap 8:
+                                paragraph "Номер записи журнала:" variant muted
+                                field sequence
+                            row gap 8:
+                                paragraph "Повтор прежней операции:" variant muted
+                                field replayed
+            when show_workflow:
+                card:
+                    column gap 12:
+                        heading "05 · Работа и статус" level 2
+                        paragraph "Скопируйте last_event из текущей заявки. Для каждого события нужен новый ID. После сохранения обновите список заявок." variant muted
+                        input event_new label "ID нового события" kind text
+                        input event_ticket label "ID заявки" kind text
+                        input expected_event label "Текущий last_event" kind text
+                        input work_day label "Дата события ГГГГ-ММ-ДД" kind text
+                        input work_note label "Описание или причина" kind text
+                        input work_minutes label "Минуты работы"
+                        input work_cost label "Стоимость, целые рубли"
+                        request "Записать выполненную работу" service add_work
+                        remote add_work:
+                            row gap 8:
+                                paragraph "Записей изменено:" variant muted
+                                field affected
+                            row gap 8:
+                                paragraph "Номер записи журнала:" variant muted
+                                field sequence
+                            row gap 8:
+                                paragraph "Повтор прежней операции:" variant muted
+                                field replayed
+                        request "Закрыть заявку (без добавления стоимости)" service close_ticket
+                        remote close_ticket:
+                            row gap 8:
+                                paragraph "Записей изменено:" variant muted
+                                field affected
+                            row gap 8:
+                                paragraph "Номер записи журнала:" variant muted
+                                field sequence
+                            row gap 8:
+                                paragraph "Повтор прежней операции:" variant muted
+                                field replayed
+                        request "Открыть повторно (без добавления стоимости)" service reopen_ticket
+                        remote reopen_ticket:
+                            row gap 8:
+                                paragraph "Записей изменено:" variant muted
+                                field affected
+                            row gap 8:
+                                paragraph "Номер записи журнала:" variant muted
+                                field sequence
+                            row gap 8:
+                                paragraph "Повтор прежней операции:" variant muted
+                                field replayed
+            when show_history:
+                card:
+                    column gap 12:
+                        heading "06 · История и итоги" level 2
+                        input history_ticket label "ID заявки" kind text
+                        input event_after label "После ID события" kind text
+                        request "Загрузить историю (до 20)" service events
+                        remote events:
+                            row gap 8:
+                                paragraph "ID:" variant muted
+                                field id
+                            row gap 8:
+                                paragraph "Тип события:" variant muted
+                                field kind
+                            row gap 8:
+                                paragraph "Дата:" variant muted
+                                field work_day
+                            row gap 8:
+                                paragraph "Описание работы:" variant muted
+                                field note
+                            row gap 8:
+                                paragraph "Минуты:" variant muted
+                                field minutes
+                            row gap 8:
+                                paragraph "Рубли:" variant muted
+                                field cost
+                        request "Подсчитать минуты и стоимость" service ticket_totals
+                        remote ticket_totals:
+                            row gap 8:
+                                paragraph "ID заявки:" variant muted
+                                field ticket_id
+                            row gap 8:
+                                paragraph "События:" variant muted
+                                field events
+                            row gap 8:
+                                paragraph "Всего минут:" variant muted
+                                field total_minutes
+                            row gap 8:
+                                paragraph "Всего рублей:" variant muted
+                                field total_cost

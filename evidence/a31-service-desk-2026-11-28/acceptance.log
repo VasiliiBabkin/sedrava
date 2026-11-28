@@ -1,0 +1,6 @@
+d256e4b6c121fff82c31d55089468628b842a50f9b9c80ebeb2447f8b02285f0  /var/www/popizdim_tf7_usr/data/.sedrava-sqlite-a5.auiH6QDN/sedrava/rust/target/release/sedrava
+3df4d956ec09cd81ecbde7a7e7e6922a29fcf81a15f90c638e1412278d55efba  /var/www/popizdim_tf7_usr/data/.sedrava-sqlite-a5.auiH6QDN/sedravasql/target/release/sedravasql-native-preview
+sedrava 0.12.0-alpha.3 (Rust alpha)
+sedravasql-native-preview 0.0.2 (NativeLog alpha)
+PASS A31 generated DOM: 24 actual requests; six native sections, read-only rejection, all four creation forms, XSS-safe rendering, lost response replay, close/reopen, totals, logout and no browser storage
+PASS A31 68 direct HTTP requests; 14 migrations; 5 linked tables; atomic workflow and two-writer conflict; history 105 minutes / 4000 RUB; pagination, restart, package integrity
