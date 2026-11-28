@@ -1,0 +1,66 @@
+   Compiling sedravasql-native-engine v0.0.2 (/var/www/popizdim_tf7_usr/data/.sedrava-dev/a30-sql/native-engine)
+   Compiling sedravasql v0.1.0-alpha.2 (/var/www/popizdim_tf7_usr/data/.sedrava-dev/a30-sql)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 21.68s
+     Running unittests src/lib.rs (/var/www/popizdim_tf7_usr/data/.sedrava-sqlite-a5.auiH6QDN/sedravasql/target/debug/build/sedravasql/d2f3de88e20d44e0/out/sedravasql-d2f3de88e20d44e0)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (/var/www/popizdim_tf7_usr/data/.sedrava-sqlite-a5.auiH6QDN/sedravasql/target/debug/build/sedravasql/8ffbfd3e636a94f7/out/sedravasql-8ffbfd3e636a94f7)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/batch_conformance.rs (/var/www/popizdim_tf7_usr/data/.sedrava-sqlite-a5.auiH6QDN/sedravasql/target/debug/build/sedravasql/48122cf735442590/out/batch_conformance-48122cf735442590)
+
+running 6 tests
+test sqlite_batch_open_refuses_missing_audit_row_even_if_sqlite_integrity_is_ok ... ok
+test sqlite_batch_refuses_corrupted_receipt_counter_and_foreign_schema ... ok
+test sqlite_batch_tables_are_explicit_and_legacy_state_is_unchanged ... ok
+test sqlite_batch_uses_consistent_online_backup_api_without_changing_legacy_db ... ok
+test two_sqlite_batch_writers_are_serialized_and_cas_prevents_lost_updates ... ok
+test same_contract_both_engines_and_replay_survives_restart ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.41s
+
+     Running tests/managed_batch_b6.rs (/var/www/popizdim_tf7_usr/data/.sedrava-sqlite-a5.auiH6QDN/sedravasql/target/debug/build/sedravasql/54d9a0bdece28b98/out/managed_batch_b6-54d9a0bdece28b98)
+
+running 5 tests
+test independent_writers_cas_no_partial_updates ... ok
+test invalid_inputs_preserve_empty_db_and_original_legacy_methods ... ok
+test stale_any_key_rolls_back_every_key_and_receipt ... ok
+test malicious_receipt_edit_detected ... ok
+test three_key_transaction_persists_with_audit_and_replay ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+     Running tests/managed_snapshot_b7.rs (/var/www/popizdim_tf7_usr/data/.sedrava-sqlite-a5.auiH6QDN/sedravasql/target/debug/build/sedravasql/65f6cb8f5843fffa/out/managed_snapshot_b7-65f6cb8f5843fffa)
+
+running 3 tests
+test input_bounds_and_duplicate_keys_fail_before_sql_transaction ... ok
+test distinguishes_missing_from_tombstone_and_read_is_nonmutating ... ok
+test snapshot_uses_same_sqlite_read_transaction_for_two_keys ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.78s
+
+     Running tests/native_engine_compat.rs (/var/www/popizdim_tf7_usr/data/.sedrava-sqlite-a5.auiH6QDN/sedravasql/target/debug/build/sedravasql/a5301c5c47aeeb40/out/native_engine_compat-a5301c5c47aeeb40)
+
+running 1 test
+test sqlite_magic_does_not_open_as_native_log ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/transactions.rs (/var/www/popizdim_tf7_usr/data/.sedrava-sqlite-a5.auiH6QDN/sedravasql/target/debug/build/sedravasql/89ed98c981da66d7/out/transactions-89ed98c981da66d7)
+
+running 6 tests
+test sqlite_atomic_backup_is_reopenable_with_wal_enabled ... ok
+test sqlite_concurrent_writers_serialized_and_stale_preview_rejected ... ok
+test sqlite_db_file_rejects_public_modes_and_hardlinks ... ok
+test sqlite_foreign_schema_rejected_without_overwrite ... ok
+test durable_application_responses_survive_restart_and_do_not_evict_at_32 ... ok
+test sqlite_idempotency_cas_audit_preview_and_tombstones ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+

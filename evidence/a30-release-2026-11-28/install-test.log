@@ -1,0 +1,23 @@
+PASS A23e generated DOM: typed SQL rows, role checks, session-only requests, XSS-safe rendering, malformed envelope, same-principal durable replay, no browser storage
+PASS A25: scaffold, no-overwrite, deterministic build, immutable package, manifest/symlink/data guards, migrations, serve from bundle, 7 direct HTTP requests, real generated DOM
+PASS A23e generated DOM: typed SQL rows, role checks, session-only requests, XSS-safe rendering, malformed envelope, same-principal durable replay, no browser storage
+PASS A24: 16 direct HTTP requests, 5 migration versions, pending gate, port conflict without write, explicit upgrade, data/FK, repeat with byte-identical journal, downgrade/modified manifest refusal
+{
+  "namespace": "demo",
+  "key": "hello",
+  "value": "Hello",
+  "revision": 1
+}
+{
+  "integrity": "ok",
+  "schema_version": 1
+}
+sedrava 0.12.0-alpha.3 (Rust alpha)
+Created project offline-demo
+PASS project offline-demo: WebApp generation, API parsing, 5 migration versions, byte-identical repeat, native verification
+/tmp/a30-install-m26fgx5c/offline-demo/build/9b991a7c89abf867eda26b92a7c7df01f659f6772f0494a323cf00ba541a4edf
+Packaged offline-demo at /tmp/a30-install-m26fgx5c/package
+PASS package 9b991a7c89abf867eda26b92a7c7df01f659f6772f0494a323cf00ba541a4edf
+{"current_version":5,"target_version":5,"applied":[{"version":1,"name":"products","sha256":"49389aa9abe80270d7d2cd1c3f37ba8ffa939463c56fe5bfec6c51ee609defc7","sequence":2},{"version":2,"name":"orders","sha256":"93e93764a53924bda198934004503f99ea74560d80e860a63c3a32e9bf01df23","sequence":3},{"version":3,"name":"products_category","sha256":"4a13611b1193d166d2ffa8e8f83714ee7e389c721a62e78054e4c34c01cf2f27","sequence":4},{"version":4,"name":"orders_paid","sha256":"d0dde2432a5124f2091379ed006275a50dd15c2524b27001410ca64337ad95e7","sequence":5},{"version":5,"name":"orders_product_fk","sha256":"fd2289d18382637a71d6480e8e311f01bda53e1030a13dd7e22aadae52fdab9d","sequence":6}],"pending":[]}
+{"engine":"native-log-v1","verified":true,"sequence":6}
+PASS A30 offline install, 6 negative cases, three installed binaries, new/test/build/package/migrate/verify without Python or Rust on PATH

@@ -58,8 +58,8 @@ cargo test --manifest-path rust/Cargo.toml --locked --all-targets
 
 Посвящение: [Геннадию Ивановичу Смирных](../DEDICATION.md). Лицензия Apache-2.0.
 
-**Кандидат A28 (27 ноября 2026).** Интеграция A26 прошла обе проверки Forgejo; автономный комплект Linux x86-64 A28 и его установка проверены. Прежние alpha-архивы сохранены; A30 — следующий согласованный выпуск. SQL использует NativeLog; COW B32–B36 не принят как основной движок. [Дистрибутив](https://github.com/VasiliiBabkin/sedrava/blob/feat/a28-distribution/docs/PLATFORM_DISTRIBUTION_A28.ru.md) · [Отчёт](https://github.com/VasiliiBabkin/sedrava/blob/integration/a26-platform/docs/INTEGRATION_A26.ru.md).
+**Выпуск A30 (28 ноября 2026).** Sedrava 0.12.0-alpha.3, SedravaSQL 0.1.0-alpha.2 и NativeLog 0.0.2 опубликованы. Приёмка VDS: 85 Rust, 319 HTTP, 21+73 SQL, автономная установка. Ранее A26 прошёл Forgejo CI. COW остаётся исследованием; не для production.
 
 ## Единая платформа A30
 
-[Проектный CLI](PROJECT_CLI_A25.ru.md) · [Миграции](SCHEMA_MIGRATIONS_A24.ru.md) · [Установка](PLATFORM_DISTRIBUTION_A28.ru.md). Команды new/build/test/migrate/serve/package доступны в alpha.3.
+[Проектный CLI](PROJECT_CLI_A25.ru.md) · [Миграции](SCHEMA_MIGRATIONS_A24.ru.md) · [Установка](PLATFORM_RELEASE_A30.ru.md). Команды new/build/test/migrate/serve/package доступны в alpha.3.

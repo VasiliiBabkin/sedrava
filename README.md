@@ -50,8 +50,8 @@ For maintainers: run cargo test --manifest-path rust/Cargo.toml --locked --all-t
 
 Apache-2.0 license.
 
-**A28 development candidate (27 November 2026).** A26 integration passed both Forgejo jobs; A28 offline Linux x86-64 package and installation passed. Earlier alpha archives remain historical; A30 is the coordinated versioned successor. NativeLog remains the SQL backend; B32–B36 COW research is not adopted. See [platform distribution](https://github.com/VasiliiBabkin/sedrava/blob/feat/a28-distribution/docs/PLATFORM_DISTRIBUTION_A28.ru.md) and [integration evidence](https://github.com/VasiliiBabkin/sedrava/blob/integration/a26-platform/docs/INTEGRATION_A26.ru.md).
+**A30 release (28 November 2026).** Sedrava 0.12.0-alpha.3, SedravaSQL 0.1.0-alpha.2 and NativeLog 0.0.2 published. VDS qualification: 85 Rust, 319 HTTP, 21+73 SQL tests and offline installation. Prior A26 passed Forgejo CI. COW remains research; not production-ready.
 
 ## A30 integrated platform
 
-[Project CLI](docs/PROJECT_CLI_A25.ru.md) · [Migration gate](docs/SCHEMA_MIGRATIONS_A24.ru.md) · [Offline distribution](docs/PLATFORM_DISTRIBUTION_A28.ru.md). Commands new/build/test/migrate/serve/package are available in alpha.3.
+[Project CLI](docs/PROJECT_CLI_A25.ru.md) · [Migration gate](docs/SCHEMA_MIGRATIONS_A24.ru.md) · [Offline distribution](docs/PLATFORM_RELEASE_A30.ru.md). Commands new/build/test/migrate/serve/package are available in alpha.3.

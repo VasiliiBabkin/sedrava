@@ -1,0 +1,1 @@
+A30 release tags: Sedrava 761213bfd0240ffc6a2390045c125def4b87e194; SedravaSQL b36a628c95598a3e8e04b40ebf9c86cdc20e0604. Archive SHA-256 438d8a974bd9edf3247da25d28fa76a96ad5e33a5d17554b3eec62b22a2f934f. Both GitHub prereleases and official download pages published. A30 VDS qualification; prior A26 Forgejo CI, not new independent A30 CI.

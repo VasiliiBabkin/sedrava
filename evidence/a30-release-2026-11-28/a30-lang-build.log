@@ -1,0 +1,4 @@
+   Compiling sedravasql-native-engine v0.0.2 (https://github.com/VasiliiBabkin/sedravasql.git?rev=b36a628c95598a3e8e04b40ebf9c86cdc20e0604#b36a628c)
+   Compiling sedravasql v0.1.0-alpha.2 (https://github.com/VasiliiBabkin/sedravasql.git?rev=b36a628c95598a3e8e04b40ebf9c86cdc20e0604#b36a628c)
+   Compiling sedrava-core v0.12.0-alpha.3 (/var/www/popizdim_tf7_usr/data/.sedrava-dev/a30-lang/rust/sedrava-core)
+    Finished `release` profile [optimized] target(s) in 3m 16s
