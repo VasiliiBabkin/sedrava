@@ -16,7 +16,9 @@ import re
 import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "0.12.0-alpha.3"
+VERSION = re.findall(r'(?m)^version = "([0-9]+\.[0-9]+\.[0-9]+-alpha\.[0-9]+)"$', (ROOT / "rust/sedrava-core/Cargo.toml").read_text())
+assert len(VERSION) == 1, "expected exactly one source alpha version"
+VERSION = VERSION[0]
 
 
 def invoke(binary: Path, *args: object, ok: bool = True, timeout: int = 30) -> subprocess.CompletedProcess[str]:
