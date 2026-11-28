@@ -8,6 +8,7 @@ enum Mode {
     Status(String),
     Filter(String, Ty),
     Count(String, Ty),
+    History(Vec<(String, String)>),
 }
 pub(super) struct View {
     name: String,
@@ -81,9 +82,29 @@ impl View {
                 }
                 (false, [_, "filter", id]) => {
                     let (c, t) = field(e, id, wf)
-                        .filter(|(c, _)| c != "w_status")
                         .ok_or_else(|| error(n, "unknown or ambiguous filter field"))?;
                     Mode::Filter(c, t)
+                }
+                (true, [_, "history", "sum", fields @ ..]) => {
+                    let w = wf
+                        .filter(|w| w.target == e.name)
+                        .ok_or_else(|| error(n, "history report requires workflow"))?;
+                    if fields.is_empty()
+                        || fields.len() > 3
+                        || fields.iter().collect::<BTreeSet<_>>().len() != fields.len()
+                    {
+                        return Err(error(n, "history sum needs unique numeric event fields"));
+                    }
+                    let metrics = fields
+                        .iter()
+                        .map(|f| {
+                            w.events
+                                .numeric(f)
+                                .map(|label| (f.to_string(), label.to_owned()))
+                                .ok_or_else(|| error(n, "unknown numeric event field"))
+                        })
+                        .collect::<Result<Vec<_>>>()?;
+                    Mode::History(metrics)
                 }
                 (true, [_, "group", id, "count"]) => {
                     let (c, t) = field(e, id, wf).ok_or_else(|| error(n, "unknown group field"))?;
@@ -126,11 +147,20 @@ impl View {
     }
     pub fn states(&self, app: &mut String) {
         let n = &self.name;
-        if !matches!(self.mode, Mode::Count(..)) {
+        if !matches!(self.mode, Mode::Count(..) | Mode::History(..)) {
             writeln!(app, "state va_{n} = \"\"").unwrap();
         }
         match &self.mode {
-            Mode::Filter(_, t) => writeln!(app, "state vf_{n} = {}", default(t)).unwrap(),
+            Mode::Filter(c, t) => writeln!(
+                app,
+                "state vf_{n} = {}",
+                if c == "w_status" {
+                    "\"\"".into()
+                } else {
+                    default(t)
+                }
+            )
+            .unwrap(),
             // POST uses a bounded fixed scalar to keep the existing read API body contract.
             Mode::Count(..) => writeln!(app, "state vq_{n} = \"\"").unwrap(),
             _ => {}
@@ -160,6 +190,18 @@ impl View {
         let path = format!("/view-{n}");
         writeln!(api, "route POST \"{path}\":").unwrap();
         writeln!(app,"service {service}:\n    origin self\n    path \"{path}\"\n    method POST\n    auth session").unwrap();
+        if let Mode::History(fields) = &self.mode {
+            let cols = fields
+                .iter()
+                .map(|(f, _)| format!(",SUM(ev_{f}) AS total_{f}"))
+                .collect::<String>();
+            writeln!(api,"    param subject: text\n    require subject key\n    query \"SELECT subject,COUNT(*) AS total{cols} FROM h_{} WHERE subject=? GROUP BY subject LIMIT 1\"",e.name).unwrap();
+            app.push_str("    body-field subject wf_selected\n    max-items 1\n    response sql-rows:\n        subject text\n        total int32\n");
+            for (f, _) in fields {
+                writeln!(app, "        total_{f} int32").unwrap();
+            }
+            return;
+        }
         if let Mode::Count(c, t) = &self.mode {
             // Fixed empty cursor: all valid nonempty primary keys, not a visible page.
             // LIMIT 21 is a sentinel; the UI only accepts <=20 groups, never a silently truncated report.
@@ -223,7 +265,11 @@ impl View {
         )
         .unwrap();
         if let Mode::Filter(c, t) = &self.mode {
-            let f = e.fields.iter().find(|f| col(f) == *c).unwrap();
+            let caption = if c == "w_status" {
+                "Статус"
+            } else {
+                &e.fields.iter().find(|f| col(f) == *c).unwrap().label
+            };
             let widget = if matches!(t, Ty::Bool) {
                 "checkbox"
             } else {
@@ -232,11 +278,11 @@ impl View {
             writeln!(
                 app,
                 "                        {widget} vf_{n} label \"{}\"",
-                f.label
+                caption
             )
             .unwrap();
         }
-        if !matches!(self.mode, Mode::Count(..)) {
+        if !matches!(self.mode, Mode::Count(..) | Mode::History(..)) {
             writeln!(
                 app,
                 "                        input va_{n} label \"После ID\" kind text"
@@ -244,7 +290,12 @@ impl View {
             .unwrap();
         }
         writeln!(app,"                        request \"Обновить\" service {service}\n                        remote {service}:").unwrap();
-        if let Mode::Count(c, _) = &self.mode {
+        if let Mode::History(fields) = &self.mode {
+            app.push_str("                            row gap 8:\n                                paragraph \"ID записи:\"\n                                field subject\n                            row gap 8:\n                                paragraph \"Событий:\"\n                                field total\n");
+            for (f, label) in fields {
+                writeln!(app,"                            row gap 8:\n                                paragraph \"{label} — итог:\"\n                                field total_{f}").unwrap();
+            }
+        } else if let Mode::Count(c, _) = &self.mode {
             let label = if c == "w_status" {
                 "Статус"
             } else {

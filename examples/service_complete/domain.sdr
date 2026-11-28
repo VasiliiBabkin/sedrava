@@ -1,0 +1,35 @@
+application "Сервисный журнал"
+access session read write
+
+entity client "Заказчики":
+    name: text 1 128 label "Название"
+    contact: text 0 128 label "Контакт"
+
+entity site "Объекты":
+    client: ref client label "Заказчик"
+    name: text 1 128 label "Название"
+    address: text 1 256 label "Адрес"
+
+entity asset "Оборудование":
+    site: ref site label "Объект"
+    name: text 1 128 label "Модель"
+    serial: text 0 128 label "Серийный номер"
+
+entity ticket "Заявки":
+    asset: ref asset label "Оборудование"
+    issue: text 1 256 label "Неисправность"
+    priority: int 1 3 label "Приоритет"
+
+workflow ticket:
+    initial open
+    event day: date label "Дата события"
+    event minutes: int 1 1440 otherwise 0 label "Минуты работы"
+    event cost: int 0 100000 otherwise 0 label "Стоимость (рубли)"
+    transition work "Записать работу" from open to open capture minutes cost
+    transition close "Закрыть" from open to closed
+    transition reopen "Открыть повторно" from closed to open
+
+view tickets "Заявки по статусу (open / closed)" from ticket filter status
+view equipment "Заявки оборудования" from ticket filter asset
+report statuses "Заявки по статусу" from ticket group status count
+report totals "Итоги выбранной заявки" from ticket history sum minutes cost

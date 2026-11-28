@@ -1,4 +1,5 @@
 //! A33: bounded declarative directory applications lowered to existing project DSLs.
+mod events;
 mod views;
 mod workflow;
 use crate::model::{Error, Result};
@@ -258,6 +259,9 @@ pub(super) fn lower(src: &str) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>)> {
         for f in &e.fields {
             writeln!(api, "    param {}: {}", col(f), param_type(&f.ty)).unwrap();
         }
+        if let Some(w) = wf {
+            w.events.params(&mut api, &BTreeSet::new());
+        }
         writeln!(api, "    require id key").unwrap();
         for f in &e.fields {
             let c = col(f);
@@ -274,6 +278,7 @@ pub(super) fn lower(src: &str) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>)> {
             }
         }
         if let Some(w) = wf {
+            w.events.guards(&mut api, &BTreeSet::new());
             w.create(&mut api, &columns);
         } else {
             writeln!(
@@ -300,6 +305,9 @@ pub(super) fn lower(src: &str) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>)> {
         writeln!(app,"service create_{n}:\n    origin self\n    path \"/domain-{n}-create\"\n    method POST\n    auth session\n    idempotency true\n    refresh {refresh}\n    body-field id id_{n}").unwrap();
         for f in &e.fields {
             writeln!(app, "    body-field {} {}", col(f), state(e, f)).unwrap();
+        }
+        if let Some(w) = wf {
+            w.events.body(&mut app, &BTreeSet::new());
         }
         app.push_str("    response one:\n        kind text\n        affected int32\n        sequence int32\n        replayed bool\n");
     }
@@ -361,6 +369,9 @@ pub(super) fn lower(src: &str) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>)> {
                 f.label
             )
             .unwrap();
+        }
+        if let Some(w) = workflow.as_ref().filter(|w| w.target == e.name) {
+            w.events.inputs(&mut app, None);
         }
         writeln!(app,"                        request \"Сохранить\" service create_{n}\n                        remote create_{n}:\n                            field affected\n                            field sequence\n                            field replayed").unwrap();
         if let Some(w) = workflow.as_ref().filter(|w| w.target == e.name) {

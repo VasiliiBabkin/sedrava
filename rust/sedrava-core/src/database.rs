@@ -20,6 +20,7 @@ enum Guard {
     TextLength(usize, usize, usize),
     NonBlank(usize),
     Key(usize),
+    Date(usize),
 }
 impl Guard {
     fn parse(raw: &str, params: &[(String, Type)]) -> Result<Self> {
@@ -42,6 +43,7 @@ impl Guard {
             }
             ("nonblank", [], Type::Text) => Ok(Self::NonBlank(index)),
             ("key", [], Type::Text) => Ok(Self::Key(index)),
+            ("date", [], Type::Text) => Ok(Self::Date(index)),
             _ => Err(invalid()),
         }
     }
@@ -50,9 +52,20 @@ impl Guard {
             Self::IntRange(i, lo, hi) => matches!(values.get(*i), Some(Cell::Int(n)) if (lo..=hi).contains(&n)),
             Self::TextLength(i, lo, hi) => matches!(values.get(*i), Some(Cell::Text(s)) if (*lo..=*hi).contains(&s.chars().count())),
             Self::NonBlank(i) => matches!(values.get(*i), Some(Cell::Text(s)) if !s.trim().is_empty()),
+            Self::Date(i) => matches!(values.get(*i), Some(Cell::Text(s)) if valid_date(s)),
             Self::Key(i) => matches!(values.get(*i), Some(Cell::Text(s)) if !s.is_empty() && s.len() <= 128 && s.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b,b'_'|b'-'|b'.'))),
         }
     }
+}
+// Gregorian calendar date, no timezone or implicit clock.
+fn valid_date(s: &str) -> bool {
+    let b=s.as_bytes();
+    if b.len()!=10 || b[4]!=b'-' || b[7]!=b'-' || b.iter().enumerate().any(|(i,c)| i!=4 && i!=7 && !c.is_ascii_digit()) {return false;}
+    let y:u32=s[..4].parse().unwrap();
+    let m:u32=s[5..7].parse().unwrap();
+    let d:u32=s[8..].parse().unwrap();
+    let max=match m {1|3|5|7|8|10|12=>31,4|6|9|11=>30,2 if y%4==0&&(y%100!=0||y%400==0)=>29,2=>28,_=>0};
+    y>0 && d>0 && d<=max
 }
 #[derive(serde::Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -203,6 +216,13 @@ mod guard_tests {
         for values in [bound(-1,"a","x"),bound(11,"a","x"),bound(1,"a/b","x"),bound(1,"a","   "),bound(1,"a","абв"),bound(1,"a","\u{2003}")] {
             assert!(p.validate_guards(&values).is_err());
         }
+    }
+    #[test]
+    fn calendar_guard() {
+        let p=program("    require title date\n").unwrap();
+        for s in ["2024-02-29","2000-02-29","0001-01-01","9999-12-31"] { assert!(p.validate_guards(&[Cell::Int(1),Cell::Text("a".into()),Cell::Text(s.into())]).is_ok()); }
+        for s in ["1900-02-29","2026-02-29","2026-04-31","0000-01-01","2026-00-01","2026-01-00","2026-1-01","２０２６-01-01","2026-01-01T00:00"] { assert!(!valid_date(s),"{s}"); }
+        assert!(program("    require amount date\n").is_err());
     }
     #[test]
     fn invalid_declarations_fail_at_check() {

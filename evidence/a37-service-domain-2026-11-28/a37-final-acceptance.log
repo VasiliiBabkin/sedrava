@@ -1,0 +1,2 @@
+PASS A37 generated complete DOM 21 real requests; event capture, automatic sums, defaults on close/reopen, lost-response replay and logout
+PASS A37 90 direct HTTP; calendar validation, typed event payload, defaults, atomic history, 105 minutes / 4000 RUB, reports, filters, replay, restart, immutable package

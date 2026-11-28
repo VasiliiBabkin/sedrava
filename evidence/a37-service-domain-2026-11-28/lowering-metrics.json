@@ -1,0 +1,46 @@
+{
+  "a32_manual": {
+    "app.sdr": {
+      "lines": 557,
+      "bytes": 25394,
+      "sha256": "a95c6c21542d998c05ac7203463a87fdda302bd71c45f2203fa6e213fd3576fb"
+    },
+    "api.sdr": {
+      "lines": 129,
+      "bytes": 5270,
+      "sha256": "cb51dc565b41bb8bc2b33ab40f784889643bbc694395ae53c031ef335bed96f9"
+    },
+    "migrations.json": {
+      "lines": 75,
+      "bytes": 2078,
+      "sha256": "e66b236a1befb16264b3ee1350b98bc0abee7eac2601988f220f871373875e00"
+    },
+    "total_lines": 761
+  },
+  "a37_domain": {
+    "domain.sdr": {
+      "lines": 35,
+      "bytes": 1562,
+      "sha256": "23a5f7b22d3e096716f157d4ef8ef95efcf65febd35d170e0a687b15e76b2d9e"
+    },
+    "total_lines": 35
+  },
+  "a37_generated": {
+    "app.sdr": {
+      "lines": 531,
+      "bytes": 20956,
+      "sha256": "5b8c5df2d6e492137be88267dcc559261f3e504942bef7e51b82aa6a85c47a51"
+    },
+    "api.sdr": {
+      "lines": 132,
+      "bytes": 5775,
+      "sha256": "3e617aced40523eb0a9a03362da5873cf389e47dba63d977573b97ed32af044c"
+    },
+    "migrations.json": {
+      "lines": 70,
+      "bytes": 2086,
+      "sha256": "4f6754fc752db1d5fc767045b5aea3a863dc95ec10b38352711bb18496513130"
+    },
+    "total_lines": 733
+  }
+}
