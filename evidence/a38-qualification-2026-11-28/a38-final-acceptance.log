@@ -1,0 +1,7 @@
+287cc4b4b8c4d79ea4495d6e2398c4cdf343f1755d927264ee9d513e3267c8a3  /var/www/popizdim_tf7_usr/data/.sedrava-sqlite-a5.auiH6QDN/sedrava/rust/target/release/sedrava
+3df4d956ec09cd81ecbde7a7e7e6922a29fcf81a15f90c638e1412278d55efba  /var/www/popizdim_tf7_usr/data/.sedrava-sqlite-a5.auiH6QDN/sedravasql/target/release/sedravasql-native-preview
+PASS A37 generated complete DOM 21 real requests; event capture, automatic sums, defaults on close/reopen, lost-response replay and logout
+PASS A38 real Chromium 141.0.7390.37 requests 27 desktop { width: 1366, scroll: 1366 } mobile { width: 390, scroll: 390 } roles, XSS-safe text, workflow and reactive totals, logout
+PASS A38 single-entity Chromium logout clears draft, requests 7
+PASS A38 semantic gate: seven same-DDL changes refused by migrate/status/serve, labels accepted, journal unchanged
+PASS A38 90 direct HTTP; calendar validation, typed event payload, defaults, atomic history, 105 minutes / 4000 RUB, reports, filters, replay, restart, immutable package

@@ -1,0 +1,19 @@
+{
+  "source_sha": "8b18aafab76e058fbc2b97c48800828fde159f07",
+  "compiler_sha256": "287cc4b4b8c4d79ea4495d6e2398c4cdf343f1755d927264ee9d513e3267c8a3",
+  "sql_sha": "b36a628c95598a3e8e04b40ebf9c86cdc20e0604",
+  "native_cli_sha256": "3df4d956ec09cd81ecbde7a7e7e6922a29fcf81a15f90c638e1412278d55efba",
+  "domain_sources_byte_identical": true,
+  "published": false,
+  "forgejo_ci_commit": "97ab401e4c75d64f006a42fc9dba572f0e6b60f4",
+  "forgejo_run": "https://git.virtreal.ru/kontinentus/sedrava-ci/actions/runs/5",
+  "local": {
+    "rust_tests": 92,
+    "direct_http": 90,
+    "jsdom_http": 21,
+    "chromium_requests": 27,
+    "single_entity_chromium_requests": 7,
+    "semantic_changes_rejected": 7,
+    "regression": "PASS"
+  }
+}

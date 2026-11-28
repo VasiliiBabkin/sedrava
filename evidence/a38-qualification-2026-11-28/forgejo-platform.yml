@@ -1,0 +1,62 @@
+name: Sedrava A38 platform qualification
+on: [push, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  platform:
+    runs-on: vds-rust
+    timeout-minutes: 40
+    env:
+      CARGO_BUILD_JOBS: '1'
+      CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      CARGO_TARGET_DIR: /tmp/a38-target
+      SOURCE_SHA: 8b18aafab76e058fbc2b97c48800828fde159f07
+      SQL_SHA: b36a628c95598a3e8e04b40ebf9c86cdc20e0604
+    steps:
+      - uses: https://data.forgejo.org/actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Verify source and isolated environment
+        run: |
+          set -eu
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD^)" = "$SOURCE_SHA"
+          test "$(git diff --name-only HEAD^ HEAD)" = .forgejo/workflows/platform.yml
+          test ! -e /var/lib/forgejo/data/forgejo.db
+          test ! -S /var/run/docker.sock
+          rustc --version
+          cargo --version
+          node --version
+          git rev-parse HEAD HEAD^
+      - name: Prepare test helpers inside job container
+        run: |
+          set -eu
+          if ! command -v python3 >/dev/null; then
+            apt-get update -qq
+            DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3
+          fi
+          python3 --version
+      - name: Build and test exact Rust sources
+        run: |
+          set -eu
+          cargo test --manifest-path rust/Cargo.toml --locked --all-targets
+          cargo build --manifest-path rust/Cargo.toml --locked --bin sedrava
+          git clone --no-checkout https://github.com/VasiliiBabkin/sedravasql.git /tmp/a38-sql
+          git -C /tmp/a38-sql checkout --detach "$SQL_SHA"
+          test "$(git -C /tmp/a38-sql rev-parse HEAD)" = "$SQL_SHA"
+          cargo build --manifest-path /tmp/a38-sql/native-engine/Cargo.toml --locked --bin sedravasql-native-preview
+      - name: Independent HTTP and project lifecycle acceptance
+        run: |
+          set -eu
+          export SEDRAVA_NATIVE_BIN="$CARGO_TARGET_DIR/debug/sedrava"
+          export SEDRAVASQL_NATIVE_BIN="$CARGO_TARGET_DIR/debug/sedravasql-native-preview"
+          unset SEDRAVA_A22_DOM SEDRAVA_A38_BROWSER
+          sha256sum "$SEDRAVA_NATIVE_BIN" "$SEDRAVASQL_NATIVE_BIN"
+          python3 -B scripts/verify_native_alpha_012.py --native "$SEDRAVA_NATIVE_BIN"
+          for f in verify_native_database_a16 verify_native_sql_api_a17 verify_native_sql_api_a18 verify_sales_demo_a19 verify_sales_demo_a20 verify_sales_demo_a21 verify_sales_web_a22 verify_sales_rules_a23 verify_sales_pages_a23b verify_sales_crud_a23c verify_sales_sessions_a23d verify_native_sales_a23e verify_migrations_a24 verify_project_a25 verify_service_desk_a31 verify_domain_a33 verify_workflow_a34 verify_workflow_a35 verify_views_a36 verify_complete_a37 verify_domain_a38; do
+            python3 -B "scripts/$f.py"
+          done
+          printf 'A38 HTTP and lifecycle qualification PASS\n'
