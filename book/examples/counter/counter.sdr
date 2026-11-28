@@ -1,0 +1,14 @@
+app "Sedrava Counter"
+state count = 0
+action increment: count = count + 1
+action decrement: count = count - 1
+action reset: count = 0
+rule count >= 0
+test increment: increment, increment -> count == 2
+test reset: increment, reset -> count == 0
+screen main:
+    text "Sedrava Counter"
+    value count
+    button "Add" -> increment
+    button "Subtract" -> decrement
+    button "Reset" -> reset

@@ -1,0 +1,6 @@
+application "Контакты"
+access session read write
+
+entity person "Контакты":
+    name: text 1 80 label "Имя"
+    phone: text 0 40 label "Телефон"
