@@ -116,6 +116,9 @@ impl Workflow {
             events,
         }))
     }
+    pub fn contract(&self) -> Value {
+        json!({"initial":self.initial,"events":self.events.contract(),"transitions":self.transitions.iter().map(|t|json!([t.name,t.from,t.to,t.capture])).collect::<Vec<_>>()})
+    }
     pub fn has_status(&self, s: &str) -> bool {
         self.initial == s || self.transitions.iter().any(|t| t.from == s || t.to == s)
     }

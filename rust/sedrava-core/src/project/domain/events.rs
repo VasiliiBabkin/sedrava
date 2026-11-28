@@ -4,6 +4,7 @@ use super::{error, label, name};
 use crate::model::Result;
 use std::{collections::BTreeSet, fmt::Write};
 
+#[derive(serde::Serialize)]
 enum Kind {
     Date,
     Int(i32, i32, i32),
@@ -35,7 +36,7 @@ impl Events {
                         .map_err(|_| error(line, "invalid event integer"))
                 };
                 let (lo, hi, other) = (parse(lo)?, parse(hi)?, parse(other)?);
-                // All reports fit int32 even at NativeLog's 4096-row scan budget.
+                // Bound individual values; SQL also rejects overflowing sums.
                 if lo > hi
                     || [lo, hi, other]
                         .iter()
@@ -183,6 +184,13 @@ impl Events {
         for e in &self.0 {
             writeln!(app,"                            row gap 8:\n                                paragraph \"{}:\"\n                                field ev_{}",e.label,e.name).unwrap();
         }
+    }
+    pub fn contract(&self) -> serde_json::Value {
+        serde_json::json!(self
+            .0
+            .iter()
+            .map(|e| serde_json::json!([e.name, e.kind]))
+            .collect::<Vec<_>>())
     }
     pub fn numeric(&self, n: &str) -> Option<&str> {
         self.0

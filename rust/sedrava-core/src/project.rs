@@ -296,9 +296,16 @@ fn verify_files(root: &Path, expected: &BTreeMap<String, Vec<u8>>) -> Result<()>
                 if !child.file_type().map_err(err)?.is_file() {
                     return fail("E_PROJECT: unexpected asset");
                 }
-                actual.insert(format!("ui/{name}"));
+                let path = format!("ui/{name}");
+                if !expected.contains_key(&path) {
+                    return fail("E_PROJECT: unexpected asset name");
+                }
+                actual.insert(path);
             }
         } else if entry.file_type().map_err(err)?.is_file() {
+            if !expected.contains_key(&name) {
+                return fail("E_PROJECT: unexpected output name");
+            }
             actual.insert(name);
         } else {
             return fail("E_PROJECT: unexpected output entry");

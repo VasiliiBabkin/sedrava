@@ -29,15 +29,19 @@ function clearSession(discardPending=false) {
     for(const [name,service] of Object.entries(services)) {
         if(serviceConfigs[name].session) service.resetAuth(discardPending,keepReadIntent);
     }
-    // Explicit logout clears all volatile state of remote-pick apps. On a 401
+    // Explicit logout clears volatile state of remote-pick and nonpersistent reactive apps. On a 401
     // preserve pending mutation parameters for same-principal retry, otherwise reset.
-    if (document.querySelector('[data-remote] template') &&
-        [...document.querySelectorAll('[data-remote] template')].some(t=>t.content.querySelector('[data-remote-pick]')) &&
-        (discardPending || !Object.values(services).some(s=>s.pending))) {
+    if ((!hasPersistence && Object.values(serviceConfigs).some(c=>c.refresh?.length)) ||
+        [...document.querySelectorAll('[data-remote] template')].some(t=>t.content.querySelector('[data-remote-pick]'))) {
+      if
+        (discardPending || !Object.values(services).some(s=>s.pending)) {
         state={...initialState};
         for (const input of inputs) { input.value=String(state[input.dataset.input]); setInvalid(input,false); }
         render();
-    } else renderRemote();
+        return;
+      }
+    }
+    renderRemote();
 }
 async function sessionCall(path,authorization) {
     if(!["http:","https:"].includes(location.protocol)) throw Error("HTTP origin required");

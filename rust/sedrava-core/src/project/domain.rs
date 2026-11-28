@@ -4,9 +4,10 @@ mod views;
 mod workflow;
 use crate::model::{Error, Result};
 use serde_json::json;
+use sha2::{Digest, Sha256};
 use std::{collections::BTreeSet, fmt::Write};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 enum Ty {
     Text(u32, u32),
     Int(i32, i32),
@@ -241,7 +242,17 @@ pub(super) fn lower(src: &str) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>)> {
         if wf.is_some() {
             ddl.extend(["w_status TEXT".into(), "w_revision TEXT".into()]);
         }
-        steps.push(json!({"version":steps.len()+1,"name":format!("table_{n}"),"sql":format!("CREATE TABLE {t} ({});",ddl.join(", "))}));
+        // Fingerprint the typed semantic contract, not labels or presentation.
+        // A digest in the existing migration name uses the NativeLog immutable
+        // history gate without changing its file format or introducing an extra write.
+        let contract = json!({"format":"domain-contract-v1","entity":n,"fields":e.fields.iter().map(|f|json!([f.name,f.ty])).collect::<Vec<_>>(),"workflow":wf.map(|w|w.contract())});
+        let hash = format!(
+            "{:x}",
+            Sha256::digest(
+                serde_json::to_vec(&contract).map_err(|_| error(1, "contract encoding"))?
+            )
+        );
+        steps.push(json!({"version":steps.len()+1,"name":format!("d{}",&hash[..63]),"sql":format!("CREATE TABLE {t} ({});",ddl.join(", "))}));
         // Declaration order is migration order; append-only entities preserve the prefix.
         for f in &e.fields {
             if let Ty::Ref(parent) = &f.ty {
