@@ -19,6 +19,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
+mod domain;
+
+const DOMAIN: &str = "domain.sdr";
 const MANIFEST: &str = "sedrava-project.json";
 const APP: &str = "app.sdr";
 const API: &str = "api.sdr";
@@ -154,17 +157,40 @@ impl Project {
     fn load(root: &Path) -> Result<Self> {
         directory(root)?;
         let mut sources = BTreeMap::new();
-        for (name, limit) in [
-            (MANIFEST, 4096),
-            (APP, LIMIT),
-            (API, 32768),
-            (MIGRATIONS, 65536),
-        ] {
-            sources.insert(name.to_owned(), read(&root.join(name), limit)?);
-        }
+        sources.insert(MANIFEST.to_owned(), read(&root.join(MANIFEST), 4096)?);
         let manifest: Manifest = serde_json::from_slice(&sources[MANIFEST]).map_err(err)?;
-        if manifest.format != 1 || !name_ok(&manifest.name) || !version_ok(&manifest.version) {
+        if !matches!(manifest.format, 1 | 2)
+            || !name_ok(&manifest.name)
+            || !version_ok(&manifest.version)
+        {
             return fail("E_PROJECT: invalid manifest");
+        }
+        if manifest.format == 1 {
+            if !absent(&root.join(DOMAIN))? {
+                return fail("E_PROJECT: ambiguous domain source in format 1");
+            }
+            for (name, limit) in [(APP, LIMIT), (API, 32768), (MIGRATIONS, 65536)] {
+                sources.insert(name.to_owned(), read(&root.join(name), limit)?);
+            }
+        } else {
+            let raw = read(&root.join(DOMAIN), 16384)?;
+            let (app, api, migrations) = domain::lower(text(&raw)?)?;
+            // Generated low-level files are part of verified bundles, never source overrides.
+            let packaged = !absent(&root.join("checksums.json"))?;
+            for (name, bytes, limit) in [
+                (APP, app, LIMIT),
+                (API, api, 32768),
+                (MIGRATIONS, migrations, 65536),
+            ] {
+                if bytes.len() as u64 > limit {
+                    return fail("E_PROJECT: generated source budget");
+                }
+                if !packaged && !absent(&root.join(name))? {
+                    return fail("E_PROJECT: domain source cannot be mixed with manual sources");
+                }
+                sources.insert(name.to_owned(), bytes);
+            }
+            sources.insert(DOMAIN.to_owned(), raw);
         }
         // Self-contained source-only projects for A25. Local imports/assets
         // are intentionally not supported by this package contract.

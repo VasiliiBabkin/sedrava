@@ -1,0 +1,2 @@
+PASS A33 generated DOM 12 real requests; generated forms, relations, role rejection, XSS-safe data and logout
+PASS A33 50 direct HTTP; one domain source, generated API/UI/schema, 7->10 additive migrations, drift/downgrade refusal, FK/roles/replay/pagination/restart, immutable bundle

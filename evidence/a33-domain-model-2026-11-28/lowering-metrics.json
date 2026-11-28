@@ -1,0 +1,22 @@
+{
+  "domain.sdr": {
+    "lines": 16,
+    "bytes": 561,
+    "sha256": "98a78fd4f76c46e26f72ce7cb7b8518f7a2c51e49ebd3bd5a8a8deaa43868820"
+  },
+  "app.sdr": {
+    "lines": 199,
+    "bytes": 7628,
+    "sha256": "ff26fbd28b003113eaf05f4e0771b76f21583df0ed504103bcd481bf49dee7be"
+  },
+  "api.sdr": {
+    "lines": 45,
+    "bytes": 1553,
+    "sha256": "c78765293c355e251894e9855a27f34010a030e8cc89dc2747245255df122ed9"
+  },
+  "migrations.json": {
+    "lines": 40,
+    "bytes": 1072,
+    "sha256": "62405de6271d7417a98d93c85105f9a93abbbf0c4c29f9a877029d76479c05d0"
+  }
+}

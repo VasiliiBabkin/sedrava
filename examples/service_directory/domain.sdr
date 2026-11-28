@@ -1,0 +1,16 @@
+application "Сервисный справочник"
+access session read write
+
+entity client "Заказчики":
+    name: text 1 128 label "Название"
+    contact: text 0 128 label "Контакт"
+
+entity site "Объекты":
+    client: ref client label "Заказчик"
+    name: text 1 128 label "Название"
+    address: text 1 256 label "Адрес"
+
+entity asset "Оборудование":
+    site: ref site label "Объект"
+    name: text 1 128 label "Модель"
+    serial: text 0 128 label "Серийный номер"
